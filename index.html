@@ -497,6 +497,13 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   <div style="text-align:center; margin-top:20px;">
     <p class="text-xs muted">Não tem conta? Fale com seu professor para receber acesso.</p>
   </div>
+  <div style="position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:11px;color:var(--text-3)">
+    <a href="#" onclick="event.preventDefault();openLegalModal('terms')" style="color:var(--text-3);text-decoration:none;margin:0 8px">Termos de Uso</a>
+    ·
+    <a href="#" onclick="event.preventDefault();openLegalModal('privacy')" style="color:var(--text-3);text-decoration:none;margin:0 8px">Privacidade</a>
+    ·
+    <a href="https://wa.me/5535988477254" target="_blank" style="color:var(--text-3);text-decoration:none;margin:0 8px">Suporte</a>
+  </div>
 </div>
 
 <!-- ============ CONFIG PAGE (no Supabase keys yet) ============ -->
@@ -1426,7 +1433,14 @@ async function completeSession() {
   showToast("Treino concluído! 🎯", "success");
   STATE.currentSession.status = "completed";
   await loadLastLoads();
-  navTo("feed");
+  // Animação de conclusão
+  if (typeof fireConfetti === "function") fireConfetti(2800);
+  // Mostra modal de "treino concluído" com stats e botão de compartilhar
+  if (typeof showWorkoutCompleteModal === "function") {
+    showWorkoutCompleteModal({ totalVolume, duration, sessionId: STATE.currentSession.id });
+  } else {
+    navTo("feed");
+  }
 }
 
 async function approveStudent(id, status) {
@@ -1875,6 +1889,9 @@ function renderCurrentView() {
   else if (v === "history") renderHistory && renderHistory();
   else if (v === "chat") renderChat && renderChat();
   else if (v === "ranking") renderRanking && renderRanking();
+  else if (v === "progress") renderProgress && renderProgress();
+  else if (v === "aero") renderAero && renderAero();
+  else if (v === "onerm") renderOneRM && renderOneRM();
 }
 
 function navTo(view) {
@@ -2047,7 +2064,29 @@ function renderHome() {
         <div style="font-weight:700;font-size:14px">Ranking semanal</div>
         <div style="font-size:11px;color:var(--text-3)">Top da semana</div>
       </button>
+      <button onclick="navTo('progress')" style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;cursor:pointer;color:var(--text);text-align:left">
+        <div style="font-size:24px">📸</div>
+        <div style="font-weight:700;font-size:14px">Foto de progresso</div>
+        <div style="font-size:11px;color:var(--text-3)">Antes & depois</div>
+      </button>
+      <button onclick="navTo('aero')" style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;cursor:pointer;color:var(--text);text-align:left">
+        <div style="font-size:24px">🏃</div>
+        <div style="font-weight:700;font-size:14px">Aeróbio</div>
+        <div style="font-size:11px;color:var(--text-3)">Cronômetro & log</div>
+      </button>
+      <button onclick="navTo('onerm')" style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;cursor:pointer;color:var(--text);text-align:left;grid-column:span 2">
+        <div style="display:flex;align-items:center;gap:10px;width:100%">
+          <div style="font-size:24px">💪</div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:14px">Calibração 1RM</div>
+            <div style="font-size:11px;color:var(--text-3)">Teste de força e PRs</div>
+          </div>
+          <div style="font-size:18px;color:var(--text-3)">›</div>
+        </div>
+      </button>
     </div>
+    <div id="weekly-volume-card"></div>
+    <div id="assessment-reminder-card"></div>
     <div class="section-title">Lembretes do treinador</div>
     <div class="note-box">
       <ul>
@@ -2924,16 +2963,29 @@ window.openHistorySheet = async function(name) {
    ============================================================================= */
 function renderFeed() {
   const el = document.getElementById("view-feed");
+  const filter = STATE.feedFilter || "ALL";
+  const filtered = filter === "ALL" ? STATE.feed : STATE.feed.filter(p => p.workout_code === filter);
+  const codes = ["ALL", "A", "B", "C", "D", "FLEX"];
   el.innerHTML = `
     <h1 class="view-title">Feed</h1>
     <p class="view-subtitle">Treinos da turma em tempo real</p>
-    ${STATE.feed.length === 0
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px;-webkit-overflow-scrolling:touch">
+      ${codes.map(c => `
+        <button onclick="setFeedFilter('${c}')" style="flex-shrink:0;padding:7px 14px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid ${filter===c?'var(--brand)':'var(--line)'};background:${filter===c?'var(--brand-soft)':'var(--bg-card)'};color:${filter===c?'var(--brand)':'var(--text-2)'};cursor:pointer">
+          ${c === "ALL" ? "Tudo" : c}
+        </button>
+      `).join("")}
+    </div>
+    ${filtered.length === 0
       ? `<div class="empty">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16h40M12 24h40M12 32h28"/></svg>
-          <h3>Sem posts ainda</h3><p>Conclua um treino para aparecer aqui.</p></div>`
-      : STATE.feed.map(p => feedPostHTML(p, false)).join("")}
+          <h3>${STATE.feed.length === 0 ? 'Sem posts ainda' : 'Sem posts nesse filtro'}</h3>
+          <p>${STATE.feed.length === 0 ? 'Conclua um treino para aparecer aqui.' : 'Mude o filtro acima.'}</p>
+        </div>`
+      : filtered.map(p => feedPostHTML(p, false)).join("")}
   `;
 }
+window.setFeedFilter = function(c) { STATE.feedFilter = c; renderFeed(); };
 function feedPostHTML(p, compact) {
   const liked = STATE.feedLikes[p.id];
   const isMine = STATE.profile && p.student_id === STATE.profile.id;
@@ -5113,6 +5165,740 @@ function closeChatThread() {
   if (el) el.remove();
 }
 window.closeChatThread = closeChatThread;
+
+/* =============================================================================
+   POLIMENTO UX — Foto de progresso, Aeróbio, 1RM, Volume semanal, Confete, etc.
+   ============================================================================= */
+
+/* ---------- HOME: cards extras (volume semanal + lembrete avaliação) ---------- */
+async function renderHomeExtras() {
+  if (!STATE.profile || STATE.profile.role !== "student") return;
+  const sid = STATE.profile.id;
+  // Volume semanal (últimas 8 semanas)
+  const { data: vols } = await sb.from("v_weekly_volume")
+    .select("*").eq("user_id", sid).order("week_start", { ascending: false }).limit(8);
+  const card = document.getElementById("weekly-volume-card");
+  if (card) {
+    const rows = (vols || []).reverse();
+    const total = rows.reduce((s,r)=>s + Number(r.total_volume_kg||0), 0);
+    const sessions = rows.reduce((s,r)=>s + Number(r.sessions||0), 0);
+    if (rows.length === 0) {
+      card.innerHTML = "";
+    } else {
+      const max = Math.max(...rows.map(r=>Number(r.total_volume_kg||0)), 1);
+      card.innerHTML = `
+        <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px">
+            <div>
+              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Volume nas últimas semanas</div>
+              <div style="font-size:18px;font-weight:800;margin-top:2px">${Math.round(total/1000)}t · ${sessions} sessões</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:6px;height:60px">
+            ${rows.map(r => {
+              const h = Math.max(4, Math.round((Number(r.total_volume_kg||0)/max)*60));
+              const isThisWeek = (new Date(r.week_start)).getTime() >= (new Date()).setDate(new Date().getDate()-7);
+              return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div style="width:100%;height:${h}px;background:${isThisWeek?'var(--brand)':'var(--brand-soft)'};border-radius:4px;transition:height .3s"></div>
+                <div style="font-size:9px;color:var(--text-3)">${formatBR(r.week_start).slice(0,5)}</div>
+              </div>`;
+            }).join("")}
+          </div>
+        </div>`;
+    }
+  }
+  // Lembrete avaliação (a cada 8 semanas)
+  const card2 = document.getElementById("assessment-reminder-card");
+  if (card2) {
+    const { data: lastPhoto } = await sb.from("progress_photos")
+      .select("date").eq("student_id", sid).order("date", { ascending: false }).limit(1).maybeSingle();
+    const last = lastPhoto ? new Date(lastPhoto.date) : null;
+    const days = last ? Math.floor((Date.now()-last.getTime())/86400000) : 999;
+    if (!last || days >= 56) {
+      card2.innerHTML = `
+        <div style="background:linear-gradient(135deg, rgba(0,180,255,0.15), transparent 60%), var(--bg-card);border:1px solid var(--brand);border-radius:14px;padding:14px;margin-bottom:14px;display:flex;gap:12px;align-items:center">
+          <div style="font-size:28px">📸</div>
+          <div style="flex:1">
+            <div style="font-weight:700">Hora de uma nova avaliação</div>
+            <div style="font-size:12px;color:var(--text-2)">${last ? `Última foto há ${days} dias` : 'Você ainda não tirou nenhuma foto de progresso'} — registre sua evolução.</div>
+          </div>
+          <button onclick="navTo('progress')" style="background:var(--brand);color:var(--brand-on);border:0;border-radius:10px;padding:10px 14px;font-weight:700;font-size:12px">Tirar foto</button>
+        </div>`;
+    } else {
+      card2.innerHTML = "";
+    }
+  }
+}
+// Plugar no renderHome existente (chamada após render):
+const _origRenderHome = window.renderHome || (typeof renderHome === "function" ? renderHome : null);
+if (_origRenderHome) {
+  window.renderHome = function(...args) {
+    const r = _origRenderHome.apply(this, args);
+    setTimeout(()=>renderHomeExtras().catch(()=>{}), 50);
+    return r;
+  };
+  // garantir referência local também
+  try { renderHome = window.renderHome; } catch(e){}
+}
+
+/* ---------- FOTO DE PROGRESSO ---------- */
+async function renderProgress() {
+  const el = document.getElementById("view-home");
+  if (!el) return;
+  const sid = STATE.profile.id;
+  const { data: photos } = await sb.from("progress_photos")
+    .select("*").eq("student_id", sid).order("date", { ascending: false }).limit(60);
+  el.innerHTML = `
+    <div style="padding:16px 16px 100px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Linha do tempo</div>
+          <div style="font-size:20px;font-weight:800">📸 Foto de progresso</div>
+        </div>
+        <button onclick="openProgressUpload()" style="background:var(--brand);color:var(--brand-on);border:0;border-radius:10px;padding:10px 14px;font-weight:700">+ Nova</button>
+      </div>
+      ${(!photos || photos.length === 0) ? `
+        <div style="text-align:center;padding:40px 20px;color:var(--text-2)">
+          <div style="font-size:48px;margin-bottom:12px">📷</div>
+          <div style="font-weight:700;color:var(--text);margin-bottom:6px">Sem fotos ainda</div>
+          <div style="font-size:13px">Tire a primeira pra acompanhar sua evolução</div>
+        </div>
+      ` : `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${photos.map(p => `
+            <div style="position:relative;border-radius:12px;overflow:hidden;background:var(--bg-card);border:1px solid var(--line);aspect-ratio:3/4">
+              <img src="${p.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onclick="openPhotoFull('${p.url}')">
+              <div style="position:absolute;left:0;right:0;bottom:0;padding:8px;background:linear-gradient(0deg,rgba(0,0,0,.85),transparent);color:#fff">
+                <div style="font-size:11px;font-weight:700">${formatBR(p.date)}</div>
+                ${p.weight ? `<div style="font-size:10px;opacity:.8">${p.weight}kg${p.body_fat ? ` · ${p.body_fat}%` : ''}</div>` : ''}
+              </div>
+              <button onclick="event.stopPropagation();deleteProgressPhoto('${p.id}','${p.url.split('/').slice(-2).join('/')}')" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:50%;width:26px;height:26px;font-size:14px">×</button>
+            </div>
+          `).join("")}
+        </div>
+      `}
+    </div>`;
+}
+
+window.openPhotoFull = (url) => {
+  const div = document.createElement("div");
+  div.id = "photo-full";
+  div.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9700;display:flex;align-items:center;justify-content:center;padding:20px;cursor:pointer";
+  div.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;border-radius:12px">`;
+  div.onclick = () => div.remove();
+  document.body.appendChild(div);
+};
+
+async function openProgressUpload() {
+  const sheet = document.createElement("div");
+  sheet.id = "pp-overlay";
+  sheet.innerHTML = `
+    <style>
+      #pp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9500;display:flex;align-items:flex-end}
+      #pp-overlay .pc{background:var(--bg);border-top-left-radius:18px;border-top-right-radius:18px;width:100%;max-height:85vh;overflow:auto;padding:16px}
+      #pp-overlay .row{display:flex;gap:8px;margin:10px 0}
+      #pp-overlay input{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg-card);color:var(--text)}
+      #pp-overlay textarea{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font:inherit;min-height:60px;margin:10px 0}
+      #pp-overlay .pp-up{background:var(--brand);color:var(--brand-on);padding:12px;border-radius:10px;border:0;font-weight:700;width:100%;margin-top:12px}
+      #pp-overlay label{font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-top:6px}
+    </style>
+    <div class="pc">
+      <div style="display:flex;align-items:center;margin-bottom:8px">
+        <div style="flex:1;font-weight:700;font-size:18px">Nova foto</div>
+        <button onclick="document.getElementById('pp-overlay').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
+      </div>
+      <input type="file" id="pp-file" accept="image/*" capture="user" style="margin-top:8px;width:100%;padding:11px;border-radius:10px;border:1px dashed var(--line);background:var(--bg-card);color:var(--text)">
+      <label>Peso (kg)</label>
+      <div class="row">
+        <input type="number" id="pp-weight" step="0.1" placeholder="Ex: 78.5">
+        <input type="number" id="pp-fat" step="0.1" placeholder="% gordura (opcional)">
+      </div>
+      <textarea id="pp-notes" placeholder="Notas (como está se sentindo, mudanças notadas…)" maxlength="500"></textarea>
+      <button class="pp-up" id="pp-submit">Enviar foto</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.remove(); });
+
+  document.getElementById("pp-submit").onclick = async () => {
+    const file = document.getElementById("pp-file").files[0];
+    if (!file) { showToast("Selecione uma foto", "error"); return; }
+    const btn = document.getElementById("pp-submit");
+    btn.disabled = true; btn.textContent = "Enviando…";
+    try {
+      const compressed = await compressImage(file, 1200, 0.85);
+      const path = `${STATE.profile.id}/${Date.now()}.jpg`;
+      const { error: upErr } = await sb.storage.from("progress").upload(path, compressed);
+      if (upErr) throw upErr;
+      const { data: pub } = sb.storage.from("progress").getPublicUrl(path);
+      const weight = document.getElementById("pp-weight").value;
+      const fat = document.getElementById("pp-fat").value;
+      const notes = document.getElementById("pp-notes").value || null;
+      const { error: insErr } = await sb.from("progress_photos").insert({
+        student_id: STATE.profile.id,
+        url: pub.publicUrl,
+        weight: weight ? Number(weight) : null,
+        body_fat: fat ? Number(fat) : null,
+        notes
+      });
+      if (insErr) throw insErr;
+      showToast("Foto registrada ✓", "success");
+      sheet.remove();
+      await renderProgress();
+    } catch (e) {
+      showToast(e.message || "Erro ao enviar", "error");
+      btn.disabled = false; btn.textContent = "Enviar foto";
+    }
+  };
+}
+window.openProgressUpload = openProgressUpload;
+
+async function deleteProgressPhoto(id, storagePath) {
+  if (!confirm("Apagar esta foto?")) return;
+  await sb.from("progress_photos").delete().eq("id", id);
+  if (storagePath) await sb.storage.from("progress").remove([storagePath]).catch(()=>null);
+  await renderProgress();
+}
+window.deleteProgressPhoto = deleteProgressPhoto;
+
+/* ---------- AERÓBIO ---------- */
+let AERO_TIMER = null;
+async function renderAero() {
+  const el = document.getElementById("view-home");
+  if (!el) return;
+  const sid = STATE.profile.id;
+  const { data: logs } = await sb.from("aero_logs")
+    .select("*").eq("student_id", sid).order("date", { ascending: false }).limit(20);
+  el.innerHTML = `
+    <div style="padding:16px 16px 100px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Cardio</div>
+          <div style="font-size:20px;font-weight:800">🏃 Aeróbio</div>
+        </div>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px">
+        <div id="aero-display" style="font-size:48px;font-weight:900;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:1px;color:var(--brand)">00:00</div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button id="aero-start" onclick="aeroStart()" style="flex:1;background:var(--brand);color:var(--brand-on);border:0;padding:12px;border-radius:10px;font-weight:700">Iniciar</button>
+          <button id="aero-pause" onclick="aeroPause()" style="flex:1;background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:12px;border-radius:10px;font-weight:700;display:none">Pausar</button>
+          <button id="aero-reset" onclick="aeroReset()" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line);padding:12px 16px;border-radius:10px">↺</button>
+        </div>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">Modalidade</div>
+            <select id="aero-modality" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+              <option value="corrida">Corrida</option>
+              <option value="bike">Bike</option>
+              <option value="esteira">Esteira</option>
+              <option value="escada">Escada</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">Intensidade</div>
+            <select id="aero-int" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+              <option value="leve">Leve</option>
+              <option value="moderado" selected>Moderado</option>
+              <option value="forte">Forte</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">Distância (km)</div>
+            <input id="aero-dist" type="number" step="0.1" placeholder="0" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">FC média</div>
+            <input id="aero-hr" type="number" placeholder="bpm" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
+        </div>
+        <button onclick="saveAeroLog()" style="width:100%;background:var(--brand);color:var(--brand-on);border:0;padding:12px;border-radius:10px;font-weight:700;margin-top:12px">Salvar treino</button>
+      </div>
+      <div class="section-title" style="margin:18px 0 8px">Histórico</div>
+      ${(!logs || logs.length === 0) ? `
+        <div style="text-align:center;padding:30px;color:var(--text-3);font-size:13px">Sem registros ainda</div>
+      ` : `
+        <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;overflow:hidden">
+          ${logs.map(l => `
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)">
+              <div style="font-size:24px">${l.modality === 'bike' ? '🚴' : l.modality === 'esteira' ? '🏃' : l.modality === 'escada' ? '🪜' : '🏃'}</div>
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:13px;text-transform:capitalize">${l.modality||'—'} · ${l.intensity||'—'}</div>
+                <div style="font-size:11px;color:var(--text-3)">${formatBR(l.date)} · ${fmtSec(l.duration_seconds||0)}${l.distance_km ? ` · ${l.distance_km}km` : ''}${l.hr_avg ? ` · ${l.hr_avg}bpm` : ''}</div>
+              </div>
+              <button onclick="deleteAeroLog('${l.id}')" style="background:transparent;border:0;color:var(--red);font-size:16px;padding:6px">×</button>
+            </div>
+          `).join("")}
+        </div>
+      `}
+    </div>`;
+}
+
+let AERO_SECS = 0;
+function aeroDisplay() {
+  const m = Math.floor(AERO_SECS/60), s = AERO_SECS%60;
+  const el = document.getElementById("aero-display");
+  if (el) el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function aeroStart() {
+  if (AERO_TIMER) return;
+  AERO_TIMER = setInterval(()=>{ AERO_SECS++; aeroDisplay(); }, 1000);
+  document.getElementById("aero-start").style.display = "none";
+  document.getElementById("aero-pause").style.display = "block";
+}
+function aeroPause() {
+  if (AERO_TIMER) { clearInterval(AERO_TIMER); AERO_TIMER = null; }
+  document.getElementById("aero-start").style.display = "block";
+  document.getElementById("aero-pause").style.display = "none";
+}
+function aeroReset() {
+  aeroPause();
+  AERO_SECS = 0;
+  aeroDisplay();
+}
+function fmtSec(s){ const m=Math.floor(s/60), ss=s%60; const h=Math.floor(m/60), mm=m%60; return h?`${h}h${String(mm).padStart(2,'0')}`:`${mm}min ${String(ss).padStart(2,'0')}s`; }
+window.aeroStart = aeroStart; window.aeroPause = aeroPause; window.aeroReset = aeroReset;
+
+async function saveAeroLog() {
+  const modality = document.getElementById("aero-modality").value;
+  const intensity = document.getElementById("aero-int").value;
+  const dist = document.getElementById("aero-dist").value;
+  const hr = document.getElementById("aero-hr").value;
+  if (AERO_SECS === 0 && !dist) { showToast("Inicie o cronômetro ou informe distância", "error"); return; }
+  const { error } = await sb.from("aero_logs").insert({
+    student_id: STATE.profile.id,
+    modality, intensity,
+    duration_seconds: AERO_SECS,
+    distance_km: dist ? Number(dist) : null,
+    hr_avg: hr ? Number(hr) : null
+  });
+  if (error) { showToast(error.message, "error"); return; }
+  showToast("Aeróbio registrado ✓", "success");
+  aeroReset();
+  await renderAero();
+}
+window.saveAeroLog = saveAeroLog;
+
+async function deleteAeroLog(id) {
+  if (!confirm("Apagar?")) return;
+  await sb.from("aero_logs").delete().eq("id", id);
+  await renderAero();
+}
+window.deleteAeroLog = deleteAeroLog;
+
+/* ---------- 1RM (calibração) ---------- */
+async function renderOneRM() {
+  const el = document.getElementById("view-home");
+  if (!el) return;
+  const sid = STATE.profile.id;
+  const { data: rms } = await sb.from("one_rep_max")
+    .select("*").eq("student_id", sid).order("date", { ascending: false }).limit(60);
+  // agrupa por exercício, pega o mais recente
+  const byEx = {};
+  (rms || []).forEach(r => {
+    if (!byEx[r.exercise_name]) byEx[r.exercise_name] = [];
+    byEx[r.exercise_name].push(r);
+  });
+  el.innerHTML = `
+    <div style="padding:16px 16px 100px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Calibração</div>
+          <div style="font-size:20px;font-weight:800">💪 Testes de força (1RM)</div>
+        </div>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px">
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:6px">Novo teste</div>
+        <input id="rm-ex" placeholder="Exercício (ex: Supino reto)" style="width:100%;padding:11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);margin-bottom:8px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <input id="rm-load" type="number" step="0.5" placeholder="Carga (kg)" style="padding:11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          <input id="rm-reps" type="number" placeholder="Reps (1 = 1RM)" value="1" style="padding:11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+        </div>
+        <button onclick="save1RM()" style="width:100%;background:var(--brand);color:var(--brand-on);border:0;padding:12px;border-radius:10px;font-weight:700;margin-top:10px">Registrar</button>
+        <div style="font-size:11px;color:var(--text-3);margin-top:8px">Para mais de 1 rep, calculamos automaticamente o 1RM estimado (Epley).</div>
+      </div>
+      ${Object.keys(byEx).length === 0 ? `
+        <div style="text-align:center;padding:30px;color:var(--text-3);font-size:13px">Nenhum teste ainda — registre seu primeiro acima</div>
+      ` : Object.entries(byEx).map(([name, arr]) => {
+        const latest = arr[0];
+        const max = arr.reduce((m,r)=> Math.max(m, Number(r.estimated_1rm||r.load_kg||0)), 0);
+        return `
+          <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <div>
+                <div style="font-weight:700">${escapeHtml(name)}</div>
+                <div style="font-size:11px;color:var(--text-3)">${arr.length} teste(s)</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:22px;font-weight:900;color:var(--brand)">${max}kg</div>
+                <div style="font-size:10px;color:var(--text-3)">1RM máx</div>
+              </div>
+            </div>
+            ${arr.slice(0,3).map(r => `
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:12px">
+                <div style="color:var(--text-2)">${formatBR(r.date)}</div>
+                <div>${r.load_kg}kg × ${r.reps} → <b>${r.estimated_1rm||r.load_kg}kg</b></div>
+                <button onclick="delete1RM('${r.id}')" style="background:transparent;border:0;color:var(--red);font-size:13px;padding:0 6px">×</button>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }).join("")}
+    </div>`;
+}
+
+async function save1RM() {
+  const exercise = document.getElementById("rm-ex").value.trim();
+  const load = document.getElementById("rm-load").value;
+  const reps = document.getElementById("rm-reps").value || 1;
+  if (!exercise || !load) { showToast("Preencha exercício e carga", "error"); return; }
+  const { error } = await sb.from("one_rep_max").insert({
+    student_id: STATE.profile.id,
+    exercise_name: exercise,
+    load_kg: Number(load),
+    reps: Number(reps)
+  });
+  if (error) { showToast(error.message, "error"); return; }
+  showToast("Teste registrado ✓", "success");
+  await renderOneRM();
+}
+window.save1RM = save1RM;
+
+async function delete1RM(id) {
+  if (!confirm("Apagar este teste?")) return;
+  await sb.from("one_rep_max").delete().eq("id", id);
+  await renderOneRM();
+}
+window.delete1RM = delete1RM;
+
+/* ---------- CONFETE (animação fim de treino) ---------- */
+function fireConfetti(durationMs = 2500) {
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:10000";
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  const colors = ["#00b4ff","#ffd60a","#2ecc71","#ff3b3b","#ff9500","#f4f7ff"];
+  const particles = Array.from({length: 140}, () => ({
+    x: Math.random()*canvas.width,
+    y: -20 - Math.random()*200,
+    vx: (Math.random()-0.5) * 6,
+    vy: 3 + Math.random()*5,
+    size: 6 + Math.random()*6,
+    rot: Math.random()*Math.PI*2,
+    vr: (Math.random()-0.5)*0.3,
+    color: colors[Math.floor(Math.random()*colors.length)]
+  }));
+  const start = performance.now();
+  function tick(t) {
+    const elapsed = t - start;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+      ctx.restore();
+    });
+    if (elapsed < durationMs) requestAnimationFrame(tick);
+    else canvas.remove();
+  }
+  requestAnimationFrame(tick);
+}
+window.fireConfetti = fireConfetti;
+
+/* ---------- WORKOUT COMPLETE MODAL ---------- */
+function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
+  const wname = STATE.selectedWorkout && STATE.workouts[STATE.selectedWorkout]?.name || "Treino";
+  const setsDone = (STATE.setLogs || []).filter(s => s.done).length;
+  const overlay = document.createElement("div");
+  overlay.id = "wc-overlay";
+  overlay.innerHTML = `
+    <style>
+      #wc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9800;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .3s}
+      #wc-overlay .wc-card{background:var(--bg);border:1px solid var(--brand);border-radius:18px;max-width:380px;width:100%;padding:28px 22px;text-align:center;animation:popIn .4s cubic-bezier(.2,.8,.4,1.2)}
+      @keyframes popIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+      #wc-overlay .wc-emoji{font-size:60px;margin-bottom:8px}
+      #wc-overlay h2{margin:0 0 6px;font-size:24px}
+      #wc-overlay .wc-sub{color:var(--text-2);margin:0 0 18px;font-size:14px}
+      #wc-overlay .wc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}
+      #wc-overlay .wc-stat{background:var(--bg-card);border:1px solid var(--line);border-radius:10px;padding:10px}
+      #wc-overlay .wc-val{font-size:20px;font-weight:900;color:var(--brand)}
+      #wc-overlay .wc-lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+      #wc-overlay .wc-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      #wc-overlay .wc-btn{padding:13px;border-radius:10px;font-weight:700;border:0;cursor:pointer;font-size:13px}
+      #wc-overlay .wc-share{background:var(--brand);color:var(--brand-on)}
+      #wc-overlay .wc-cont{background:var(--bg-card);color:var(--text);border:1px solid var(--line)}
+    </style>
+    <div class="wc-card">
+      <div class="wc-emoji">🎯</div>
+      <h2>Treino concluído!</h2>
+      <p class="wc-sub">${escapeHtml(wname)}</p>
+      <div class="wc-stats">
+        <div class="wc-stat">
+          <div class="wc-val">${setsDone}</div>
+          <div class="wc-lbl">Séries</div>
+        </div>
+        <div class="wc-stat">
+          <div class="wc-val">${Math.round(totalVolume)}</div>
+          <div class="wc-lbl">kg total</div>
+        </div>
+        <div class="wc-stat">
+          <div class="wc-val">${Math.floor(duration/60)}<span style="font-size:11px">min</span></div>
+          <div class="wc-lbl">Duração</div>
+        </div>
+      </div>
+      <div class="wc-buttons">
+        <button class="wc-btn wc-share" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone})">📤 Compartilhar</button>
+        <button class="wc-btn wc-cont" onclick="document.getElementById('wc-overlay').remove();navTo('feed')">Ver feed</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+window.showWorkoutCompleteModal = showWorkoutCompleteModal;
+
+async function shareWorkout(totalVolume, duration, name, setsDone) {
+  const text = `Acabei o treino de hoje 💪
+${name}
+${setsDone} séries · ${Math.round(totalVolume)}kg de volume · ${Math.floor(duration/60)}min
+#Treinova`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "Treino concluído", text, url: "https://www.treinovaapp.com" });
+    } catch(e){}
+  } else {
+    try {
+      await navigator.clipboard.writeText(text + "\nhttps://www.treinovaapp.com");
+      showToast("Texto copiado — cola onde quiser 📋", "success");
+    } catch(e) { showToast("Compartilhamento não suportado", "error"); }
+  }
+}
+window.shareWorkout = shareWorkout;
+
+/* ---------- TERMOS / PRIVACIDADE MODAIS ---------- */
+const TERMS_TXT = `<h2>Termos de Uso — Treinova</h2>
+<p><b>Última atualização:</b> ${new Date().toLocaleDateString('pt-BR')}</p>
+
+<h3>1. Sobre o Treinova</h3>
+<p>O Treinova é uma plataforma white-label que conecta treinadores e alunos para gestão de treinos, periodização, evolução de carga, comunicação e pagamentos.</p>
+
+<h3>2. Cadastro e acesso</h3>
+<p>O acesso é feito por convite do treinador ou administrador. Cada usuário é responsável pelas credenciais e pelas ações realizadas em sua conta.</p>
+
+<h3>3. Conteúdo enviado</h3>
+<p>Você é responsável pelo conteúdo que envia (fotos, vídeos, mensagens). Não é permitido conteúdo ilegal, ofensivo ou que viole direitos de terceiros.</p>
+
+<h3>4. Pagamentos</h3>
+<p>As mensalidades são processadas via Asaas. Em caso de inadimplência, o acesso pode ser bloqueado. O reembolso segue a política definida pelo seu treinador.</p>
+
+<h3>5. Limitação de responsabilidade</h3>
+<p>O Treinova é uma ferramenta de apoio. Não substitui orientação médica/profissional. Antes de iniciar qualquer atividade física, consulte um profissional de saúde.</p>
+
+<h3>6. Encerramento</h3>
+<p>O usuário pode solicitar o encerramento da conta a qualquer momento por suporte@treinovaapp.com.</p>
+
+<h3>7. Contato</h3>
+<p>Suporte: suporte@treinovaapp.com · WhatsApp: +55 35 98847-7254</p>`;
+
+const PRIVACY_TXT = `<h2>Política de Privacidade — Treinova</h2>
+<p><b>Última atualização:</b> ${new Date().toLocaleDateString('pt-BR')}</p>
+
+<h3>1. Dados que coletamos</h3>
+<ul>
+  <li>Identificação: nome, e-mail, telefone, foto</li>
+  <li>Treino: pesos, repetições, duração, frequência</li>
+  <li>Saúde (opcional): peso corporal, % gordura, fotos de progresso</li>
+  <li>Pagamento: status (não armazenamos dados de cartão — fica no Asaas)</li>
+  <li>Técnicos: IP, user-agent, push subscription</li>
+</ul>
+
+<h3>2. Como usamos</h3>
+<p>Para operar o app: mostrar treinos, gerar gráficos de evolução, enviar notificações, gerar cobranças, comunicação com seu treinador.</p>
+
+<h3>3. Compartilhamento</h3>
+<p>Não vendemos seus dados. Compartilhamos apenas com:</p>
+<ul>
+  <li>Seu treinador / administrador (visibilidade definida pelo papel)</li>
+  <li>Asaas (pagamentos)</li>
+  <li>Supabase (infraestrutura — banco e armazenamento)</li>
+</ul>
+
+<h3>4. Seus direitos (LGPD)</h3>
+<p>Você pode pedir acesso, correção ou exclusão dos seus dados a qualquer momento via suporte@treinovaapp.com. Também pode exportar seus dados pelo botão "Exportar meus dados" no perfil.</p>
+
+<h3>5. Segurança</h3>
+<p>Conexões em HTTPS. Senhas armazenadas com hash. Acesso ao banco controlado por Row Level Security (RLS) do Supabase.</p>
+
+<h3>6. Cookies</h3>
+<p>Usamos somente cookies/storage técnicos (sessão e preferências). Não fazemos rastreamento de terceiros.</p>
+
+<h3>7. Contato do encarregado</h3>
+<p>suporte@treinovaapp.com</p>`;
+
+function openLegalModal(kind) {
+  const html = kind === "terms" ? TERMS_TXT : PRIVACY_TXT;
+  const overlay = document.createElement("div");
+  overlay.id = "legal-overlay";
+  overlay.innerHTML = `
+    <style>
+      #legal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9700;display:flex;align-items:center;justify-content:center;padding:16px}
+      #legal-overlay .lg{background:var(--bg);border:1px solid var(--line);border-radius:14px;max-width:600px;width:100%;max-height:85vh;display:flex;flex-direction:column}
+      #legal-overlay .lg-h{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+      #legal-overlay .lg-b{flex:1;overflow:auto;padding:16px 20px;color:var(--text-2);line-height:1.55;font-size:13px}
+      #legal-overlay .lg-b h2{color:var(--text);margin-top:0}
+      #legal-overlay .lg-b h3{color:var(--text);font-size:14px;margin:18px 0 6px}
+      #legal-overlay .lg-b p, #legal-overlay .lg-b ul{margin:0 0 8px}
+    </style>
+    <div class="lg">
+      <div class="lg-h">
+        <div style="flex:1;font-weight:700">Documento legal</div>
+        <button onclick="this.closest('#legal-overlay').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
+      </div>
+      <div class="lg-b">${html}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+}
+window.openLegalModal = openLegalModal;
+
+/* ---------- EXPORT CSV (perfil aluno) ---------- */
+async function exportMyDataCSV() {
+  showToast("Preparando exportação…", "info");
+  const sid = STATE.profile.id;
+  // Sessions + set logs + aero + 1RM + progress photos
+  const [sess, sets, aero, rms, photos, payments] = await Promise.all([
+    sb.from("sessions").select("date, workout_code, intensity, status, completed_at, duration_seconds, total_volume_kg").eq("student_id", sid).order("date", { ascending: false }),
+    sb.from("set_logs").select("created_at, exercise_name, set_number, target_reps, load_kg, reps_done, done").eq("student_id", sid).order("created_at", { ascending: false }).limit(2000),
+    sb.from("aero_logs").select("date, modality, duration_seconds, distance_km, intensity, hr_avg").eq("student_id", sid).order("date", { ascending: false }),
+    sb.from("one_rep_max").select("date, exercise_name, load_kg, reps, estimated_1rm").eq("student_id", sid).order("date", { ascending: false }),
+    sb.from("progress_photos").select("date, weight, body_fat, notes, url").eq("student_id", sid).order("date", { ascending: false }),
+    sb.from("payments").select("due_date, amount, status, paid_at, method").eq("user_id", sid).order("due_date", { ascending: false })
+  ]);
+
+  function toCSV(rows) {
+    if (!rows || !rows.length) return "(vazio)\n";
+    const keys = Object.keys(rows[0]);
+    const esc = v => v == null ? "" : `"${String(v).replace(/"/g,'""')}"`;
+    return keys.join(",") + "\n" + rows.map(r => keys.map(k => esc(r[k])).join(",")).join("\n") + "\n";
+  }
+
+  const sections = [
+    "==== SESSÕES ====\n" + toCSV(sess.data),
+    "==== SÉRIES ====\n" + toCSV(sets.data),
+    "==== AERÓBIO ====\n" + toCSV(aero.data),
+    "==== 1RM ====\n" + toCSV(rms.data),
+    "==== FOTOS DE PROGRESSO ====\n" + toCSV(photos.data),
+    "==== PAGAMENTOS ====\n" + toCSV(payments.data),
+  ];
+  const blob = new Blob([sections.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `treinova-meusdados-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  showToast("CSV baixado ✓", "success");
+}
+window.exportMyDataCSV = exportMyDataCSV;
+
+/* ---------- INJETA BOTÃO "EXPORTAR DADOS" NO PROFILE ---------- */
+const _origRenderProfile = window.renderProfile || (typeof renderProfile === "function" ? renderProfile : null);
+if (_origRenderProfile) {
+  window.renderProfile = async function(...args) {
+    const r = await _origRenderProfile.apply(this, args);
+    setTimeout(() => {
+      const el = document.getElementById("view-profile");
+      if (!el || el.querySelector("#export-csv-btn")) return;
+      const role = STATE.profile && STATE.profile.role;
+      if (role !== "student") return;
+      const div = document.createElement("div");
+      div.style.cssText = "padding:14px 0";
+      div.innerHTML = `
+        <button id="export-csv-btn" onclick="exportMyDataCSV()" class="btn-ghost" style="width:100%">📥 Exportar meus dados (CSV — LGPD)</button>
+        <div style="text-align:center;font-size:11px;color:var(--text-3);margin-top:14px">
+          <a href="#" onclick="event.preventDefault();openLegalModal('terms')" style="color:var(--text-3);margin:0 6px">Termos de Uso</a>·
+          <a href="#" onclick="event.preventDefault();openLegalModal('privacy')" style="color:var(--text-3);margin:0 6px">Privacidade</a>
+        </div>`;
+      el.appendChild(div);
+    }, 100);
+    return r;
+  };
+  try { renderProfile = window.renderProfile; } catch(e){}
+}
+
+/* ---------- BOTÃO "COMPARTILHAR" NO TREINO DE HOJE ---------- */
+const _origRenderHome2 = window.renderHome;
+window.renderHome = function(...args) {
+  const r = _origRenderHome2.apply(this, args);
+  setTimeout(() => {
+    const today = document.querySelector("#view-home .today-card");
+    if (!today || today.querySelector(".today-share")) return;
+    const role = STATE.profile && STATE.profile.role;
+    if (role !== "student") return;
+    const info = findDayInfo(todayISO());
+    if (!info || info.workout_code === "OFF" || !info.workout_code) return;
+    const W = STATE.workouts[info.workout_code];
+    if (!W) return;
+    const share = document.createElement("button");
+    share.className = "today-share";
+    share.style.cssText = "background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--text-2);margin-left:8px";
+    share.innerHTML = "📤 Compartilhar";
+    share.onclick = (e) => {
+      e.stopPropagation();
+      const text = `Hoje: ${W.name}\n${W.focus || ''}\n#Treinova`;
+      if (navigator.share) navigator.share({ text, url: "https://www.treinovaapp.com" }).catch(()=>{});
+      else navigator.clipboard.writeText(text).then(()=>showToast("Copiado", "success"));
+    };
+    const btnEl = today.querySelector(".btn-primary");
+    if (btnEl && btnEl.parentElement) btnEl.parentElement.appendChild(share);
+  }, 50);
+  return r;
+};
+try { renderHome = window.renderHome; } catch(e){}
+
+/* ---------- MARCA D'ÁGUA NOS VÍDEOS DE EXERCÍCIO ---------- */
+async function watermarkVideo(file, brandName) {
+  // Se for vídeo, retorna o próprio arquivo (não dá pra remuxar no browser sem ffmpeg.wasm).
+  // Em vez disso, gera-se um THUMBNAIL com marca d'água que é salvo junto.
+  // Fica como TODO mais robusto. Por ora retorna o arquivo original.
+  return file;
+}
+async function generateVideoWatermarkPoster(videoFile, brandName = "Treinova") {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video");
+    v.preload = "metadata"; v.muted = true; v.playsInline = true;
+    v.src = URL.createObjectURL(videoFile);
+    v.onloadeddata = () => {
+      v.currentTime = Math.min(0.5, (v.duration || 1) / 2);
+    };
+    v.onseeked = () => {
+      const canvas = document.createElement("canvas");
+      const w = Math.min(720, v.videoWidth);
+      const h = Math.round(v.videoHeight * (w / v.videoWidth));
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(v, 0, 0, w, h);
+      // marca d'água
+      ctx.fillStyle = "rgba(0,0,0,.45)";
+      const txt = "▲ " + brandName;
+      ctx.font = "bold 16px -apple-system, sans-serif";
+      const tw = ctx.measureText(txt).width + 16;
+      ctx.fillRect(w - tw - 10, h - 36, tw, 26);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(txt, w - tw, h - 18);
+      canvas.toBlob(b => { URL.revokeObjectURL(v.src); resolve(b); }, "image/jpeg", 0.85);
+    };
+    v.onerror = (e) => { URL.revokeObjectURL(v.src); reject(e); };
+  });
+}
+window.watermarkVideo = watermarkVideo;
+window.generateVideoWatermarkPoster = generateVideoWatermarkPoster;
 
 boot();
 </script>
