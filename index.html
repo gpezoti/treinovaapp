@@ -525,9 +525,9 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 <div id="app" style="display:none">
   <header class="app-header">
     <div class="brand">
-      <div class="brand-logo" id="brand-logo">CO</div>
+      <div class="brand-logo" id="brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="" onerror="this.style.display='none'"></div>
       <div class="brand-name">
-        <span id="brand-name-text">COACH</span>
+        <span id="brand-name-text">TREINOVA</span>
         <small id="header-sub">Carregando...</small>
       </div>
     </div>
@@ -1062,6 +1062,7 @@ function showAuth() {
   document.getElementById("auth-page").style.display = "flex";
   document.getElementById("app").style.display = "none";
   document.getElementById("cfg-page").style.display = "none";
+  try { _BOOT_DONE = true; } catch(e){}
 }
 function showCfg() {
   document.getElementById("cfg-page").style.display = "block";
@@ -1072,6 +1073,7 @@ function showApp() {
   document.getElementById("app").style.display = "block";
   document.getElementById("auth-page").style.display = "none";
   document.getElementById("cfg-page").style.display = "none";
+  try { _BOOT_DONE = true; } catch(e){}
 }
 
 function setAuthMode(mode) {
@@ -4145,36 +4147,111 @@ function bindTimerHandlers() {
 /* =============================================================================
    BOOT
    ============================================================================= */
+/* ---------- BOOT TIMEOUT SAFETY ---------- */
+let _BOOT_DONE = false;
+function showStuckEscape(reason) {
+  if (_BOOT_DONE) return;
+  if (document.getElementById("stuck-overlay")) return;
+  const div = document.createElement("div");
+  div.id = "stuck-overlay";
+  div.innerHTML = `
+    <div style="position:fixed;inset:0;background:#0a0e1a;color:#e7ecf5;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:-apple-system,system-ui,sans-serif">
+      <div style="font-size:42px;margin-bottom:12px">⚠️</div>
+      <h2 style="margin:0 0 6px;font-size:20px">App travou no carregamento</h2>
+      <p style="color:#9aa6c0;margin:0 0 18px;max-width:340px;font-size:13px;line-height:1.45">${reason || 'Algo deu errado. Vamos tentar limpar o cache e recarregar.'}</p>
+      <button id="stuck-clear" style="background:#00b4ff;color:#001a2a;border:0;border-radius:10px;padding:13px 22px;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:8px">🗑️ Limpar cache e recarregar</button>
+      <button id="stuck-logout" style="background:transparent;color:#9aa6c0;border:1px solid #2a3654;border-radius:10px;padding:11px 20px;font-weight:600;font-size:13px;cursor:pointer">Sair da conta</button>
+      <div style="margin-top:18px;font-size:11px;color:#6b7892">Se persistir, abra em uma aba anônima ou desinstale o app da tela inicial.</div>
+    </div>`;
+  document.body.appendChild(div);
+  document.getElementById("stuck-clear").onclick = async () => {
+    try {
+      // Clear all caches
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      // Unregister service workers
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      // Clear localStorage do app (mantém só o tema pra não piscar)
+      const theme = localStorage.getItem('theme-pref');
+      try { localStorage.clear(); } catch(e){}
+      if (theme) try { localStorage.setItem('theme-pref', theme); } catch(e){}
+      // Hard reload
+      location.reload();
+    } catch(e) { location.reload(); }
+  };
+  document.getElementById("stuck-logout").onclick = async () => {
+    try {
+      if (window.sb && sb.auth) await sb.auth.signOut();
+    } catch(e){}
+    document.getElementById("stuck-clear").click();
+  };
+}
+
 async function boot() {
-  // tema salvo (preferência local)
-  let pref = null;
-  try { pref = localStorage.getItem('theme-pref'); } catch(e){}
-  applyTheme(pref || 'dark');
-  document.getElementById('btn-theme').addEventListener('click', toggleTheme);
+  // Timeout de segurança: se em 10s ainda não renderizou, mostra escape
+  const safetyTimer = setTimeout(() => {
+    if (!_BOOT_DONE) showStuckEscape("Carregamento demorou demais.");
+  }, 10000);
 
-  bindAuthHandlers();
-  bindTimerHandlers();
+  try {
+    // tema salvo (preferência local)
+    let pref = null;
+    try { pref = localStorage.getItem('theme-pref'); } catch(e){}
+    applyTheme(pref || 'dark');
+    document.getElementById('btn-theme').addEventListener('click', toggleTheme);
 
-  if (!SUPABASE_URL || !SUPABASE_ANON) { showCfg(); return; }
-  if (!window.supabase) { showToast("Falha ao carregar SDK", "error"); showCfg(); return; }
+    bindAuthHandlers();
+    bindTimerHandlers();
 
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    if (!SUPABASE_URL || !SUPABASE_ANON) { _BOOT_DONE = true; clearTimeout(safetyTimer); showCfg(); return; }
+    if (!window.supabase) { _BOOT_DONE = true; clearTimeout(safetyTimer); showToast("Falha ao carregar SDK", "error"); showCfg(); return; }
 
-  // Aplica branding do sistema (definido pelo admin) na tela de login
-  applyAuthBranding();
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-  sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-      if (session) await postSignIn();
-    } else if (event === "SIGNED_OUT") {
-      cleanupRealtime();
+    // Aplica branding do sistema (definido pelo admin) na tela de login
+    applyAuthBranding();
+
+    sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        if (session) await postSignIn();
+      } else if (event === "SIGNED_OUT") {
+        cleanupRealtime();
+        showAuth(); setAuthMode("signin");
+      }
+    });
+
+    // getSession com timeout próprio (evita travar em conexão ruim)
+    const sessionPromise = sb.auth.getSession();
+    const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("getSession timeout")), 8000));
+    let session = null;
+    try {
+      const r = await Promise.race([sessionPromise, timeoutPromise]);
+      session = r?.data?.session || null;
+    } catch(e) {
+      console.warn("getSession falhou:", e);
+      session = null;
+    }
+    if (session) {
+      try { await postSignIn(); }
+      catch(e) {
+        console.error("postSignIn falhou:", e);
+        showStuckEscape("Não foi possível carregar seu perfil. Talvez sua sessão expirou.");
+        return;
+      }
+    } else {
       showAuth(); setAuthMode("signin");
     }
-  });
-
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) await postSignIn();
-  else { showAuth(); setAuthMode("signin"); }
+    _BOOT_DONE = true;
+    clearTimeout(safetyTimer);
+  } catch(e) {
+    console.error("boot crashou:", e);
+    showStuckEscape("Erro ao iniciar o app. " + (e.message || ""));
+  }
 }
 
 async function postSignIn() {
