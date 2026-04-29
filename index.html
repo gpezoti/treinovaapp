@@ -3120,6 +3120,10 @@ async function renderProfile() {
       <div class="section-title">Histórico (últimos 20)</div>
       ${historyHTML}
     ` : `
+      <div class="section-title">Configurações</div>
+      <div class="card mb-8">
+        <button class="btn-ghost" style="width:100%" onclick="openPresetEditor()">⚙ Editar tipos de treino (reps, pausa)</button>
+      </div>
       <div class="section-title">Identidade do app (white-label)</div>
       ${renderBrandingPanel()}
     `}
@@ -3552,31 +3556,80 @@ window.deleteStudent = async function(id, email) {
 };
 
 /* ============ Editor de periodização individual do aluno ============ */
+/* ============================================================================
+   PERIODIZAÇÃO V2 — presets editáveis + múltiplos blocos por dia
+   ============================================================================ */
+
+// Cache de presets em memória (carrega ao logar; recarrega via reloadPresets)
+let _PRESETS = [];
+async function loadPresets() {
+  // pega presets do coach atual (se for staff) e fallback nos globais
+  const coachId = STATE.profile && (STATE.profile.role === "coach" ? STATE.profile.id : null);
+  const filters = coachId ? `coach_id.eq.${coachId},coach_id.is.null` : `coach_id.is.null`;
+  const { data, error } = await sb.from("intensity_presets")
+    .select("*").or(filters).order("position");
+  if (error) { console.warn("loadPresets:", error); _PRESETS = []; return; }
+  // mescla: se coach tem preset com mesmo code, usa o dele
+  const map = {};
+  (data || []).forEach(p => {
+    const cur = map[p.code];
+    if (!cur || (p.coach_id && !cur.coach_id)) map[p.code] = p;
+  });
+  _PRESETS = Object.values(map).sort((a,b)=>(a.position||0)-(b.position||0));
+}
+async function reloadPresets() { await loadPresets(); }
+window.reloadPresets = reloadPresets;
+function getPreset(code) { return _PRESETS.find(p => p.code === code) || null; }
+window.getPreset = getPreset;
+
+// Carrega blocos de um conjunto de dias
+async function loadBlocksForDays(dayIds) {
+  if (!dayIds || !dayIds.length) return {};
+  const { data } = await sb.from("periodization_blocks")
+    .select("*").in("day_id", dayIds).order("position");
+  const map = {};
+  (data || []).forEach(b => { (map[b.day_id] = map[b.day_id] || []).push(b); });
+  return map;
+}
+
 window.openStudentPeriodSheet = async function(id) {
-  openSheet(`<h3>Periodização do aluno</h3><div class="loading"><div class="spinner"></div></div>`);
+  openSheet(`<h3>Periodização</h3><div class="loading"><div class="spinner"></div></div>`);
+  if (!_PRESETS.length) await loadPresets();
   const { data: days } = await sb.from("periodization_days")
     .select("*").eq("student_id", id).order("date");
+  const dayIds = (days||[]).map(d => d.id);
+  const blocksByDay = await loadBlocksForDays(dayIds);
   const grouped = [];
   for (let i = 0; i < (days||[]).length; i += 7) grouped.push((days||[]).slice(i, i+7));
-  const codeOpts = ['OFF','A','B','C','D','FLEX'];
-  const intOpts = ['off','yellow','red','flex'];
+
   const html = `
     <h3>Periodização do aluno</h3>
-    <p>Toque em um dia para alterar treino e intensidade. As mudanças são salvas automaticamente.</p>
-    <div style="display:flex; gap:6px; margin-bottom:10px;">
-      <button class="mini-btn mini-btn-primary" onclick="reseedPeriod('${id}')">Recriar padrão (12 semanas)</button>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 10px">Toque em um dia para editar os blocos. Você pode ter <b>vários blocos por dia</b> (ex: aeróbio + hipertrofia).</p>
+    <div style="display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap">
+      <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ 1 Semana</button>
+      <button class="mini-btn" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line)" onclick="removePeriodWeek('${id}')">− 1 Semana</button>
+      <button class="mini-btn mini-btn-ghost" onclick="reseedPeriod('${id}')">Recriar padrão</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openPresetEditor()">⚙ Editar tipos</button>
     </div>
-    ${grouped.map((week, wi) => `
+    ${grouped.length === 0 ? `<div class="empty"><p>Nenhuma semana ainda. Clique em "+ 1 Semana".</p></div>` : grouped.map((week, wi) => `
       <div class="card mb-8">
         <div class="text-xs muted" style="margin-bottom:6px">Semana ${wi+1}</div>
         <div class="week-grid">
           ${week.map(d => {
             const dt = new Date(d.date+"T00:00:00");
-            const wp = workoutPretty(d.workout_code);
-            return `<div class="day-pill ${intensityClass(d.intensity)}" onclick="editPeriodDay('${d.id}','${id}')">
+            const blocks = blocksByDay[d.id] || [];
+            const labels = blocks.map(b => {
+              const p = getPreset(b.preset_code);
+              const lab = (p && p.label) || b.preset_code;
+              return b.workout_code ? `${b.workout_code} · ${lab.slice(0,5)}` : lab.slice(0,5);
+            });
+            const colors = blocks.map(b => (getPreset(b.preset_code)||{}).color || '#9aa6c0');
+            const stripe = colors.slice(0,3).map(c => `<span style="background:${c};width:6px;border-radius:2px"></span>`).join('');
+            return `<div class="day-pill" style="position:relative;cursor:pointer" onclick="editPeriodDay('${d.id}','${id}')">
+              <div style="position:absolute;top:4px;left:4px;right:4px;display:flex;gap:2px;height:4px">${stripe}</div>
               <span class="dp-day">${WEEKDAY_LABELS[dt.getDay()]}</span>
               <span class="dp-num">${dt.getDate()}</span>
-              <span class="dp-w">${wp === 'OFF'?'—':wp === 'FLEX'?'Flex':wp}</span>
+              <span class="dp-w" style="font-size:9px;line-height:1.2">${labels.length === 0 ? '—' : labels.slice(0,2).join('·')}</span>
             </div>`;
           }).join("")}
         </div>
@@ -3586,43 +3639,243 @@ window.openStudentPeriodSheet = async function(id) {
   `;
   openSheet(html);
 };
+
+window.addPeriodWeek = async function(studentId) {
+  const { error } = await sb.rpc("add_periodization_week", { p_student_id: studentId });
+  if (error) { showToast("Erro: "+error.message, "error"); return; }
+  showToast("Semana adicionada", "success");
+  openStudentPeriodSheet(studentId);
+};
+window.removePeriodWeek = async function(studentId) {
+  if (!confirm("Remover a última semana?")) return;
+  const { error } = await sb.rpc("remove_periodization_week", { p_student_id: studentId });
+  if (error) { showToast("Erro: "+error.message, "error"); return; }
+  showToast("Semana removida", "success");
+  openStudentPeriodSheet(studentId);
+};
+
 window.reseedPeriod = async function(id) {
-  if (!confirm("Recriar a periodização padrão de 12 semanas? (Histórico de treinos é preservado)")) return;
+  if (!confirm("Recriar a periodização padrão? Os blocos atuais serão substituídos. (Histórico de treinos é preservado)")) return;
   const { error } = await sb.rpc("seed_periodization_for_student", { p_student: id });
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Periodização recriada", "success");
   openStudentPeriodSheet(id);
 };
+
 window.editPeriodDay = async function(dayId, studentId) {
+  if (!_PRESETS.length) await loadPresets();
   const { data: d } = await sb.from("periodization_days").select("*").eq("id", dayId).single();
   if (!d) return;
+  const { data: blocks } = await sb.from("periodization_blocks")
+    .select("*").eq("day_id", dayId).order("position");
   const dt = new Date(d.date+"T00:00:00");
   const sheetEl = document.getElementById("sheet-content");
-  // overlay menor sobre a sheet atual
-  const codes = ['OFF','A','B','C','D','FLEX'];
-  const ints = ['off','yellow','red','flex'];
+
   const html = `
     <h3>${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}/${MONTH_SHORT[dt.getMonth()]}</h3>
-    <div class="form-group"><label class="form-label">Treino</label>
-      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px;">
-        ${codes.map(c => `<button class="mini-btn ${d.workout_code === c ? 'mini-btn-primary' : 'mini-btn-ghost'}" onclick="setPeriodField('${dayId}','workout_code','${c}','${studentId}')">${c}</button>`).join("")}
-      </div>
+    <p style="font-size:12px;color:var(--text-2);margin:0 0 12px">Pode ter mais de um bloco no dia.</p>
+    <div id="blocks-list">
+      ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId)).join("") || '<div class="empty"><p style="margin:8px 0">Nenhum bloco. Adicione abaixo.</p></div>'}
     </div>
-    <div class="form-group"><label class="form-label">Intensidade</label>
-      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px;">
-        ${ints.map(c => `<button class="mini-btn ${d.intensity === c ? 'mini-btn-primary' : 'mini-btn-ghost'}" onclick="setPeriodField('${dayId}','intensity','${c}','${studentId}')">${c === 'off' ? 'OFF' : c === 'yellow' ? 'Hipert.' : c === 'red' ? 'Força' : 'Flex'}</button>`).join("")}
-      </div>
+    <div class="section-title" style="margin:14px 0 8px">+ Adicionar bloco</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">
+      ${_PRESETS.map(p => `
+        <button class="mini-btn" style="background:${p.color}22;color:${p.color};border:1px solid ${p.color}55" onclick="addBlockToDay('${dayId}','${studentId}','${p.code}',${p.is_workout})">${p.label}</button>
+      `).join("")}
     </div>
-    <button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')">Voltar</button>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn-ghost" style="flex:1" onclick="openStudentPeriodSheet('${studentId}')">← Voltar</button>
+    </div>
   `;
   sheetEl.innerHTML = '<div class="sheet-handle"></div>' + html;
 };
-window.setPeriodField = async function(dayId, field, value, studentId) {
-  const patch = {}; patch[field] = value;
-  const { error } = await sb.from("periodization_days").update(patch).eq("id", dayId);
-  if (error) { showToast("Erro: "+error.message, "error"); return; }
-  // re-renderiza com novo valor
+
+window.renderBlockItem = function(b, idx, dayId, studentId) {
+  const preset = getPreset(b.preset_code) || { label: b.preset_code, color: '#9aa6c0', is_workout: !!b.workout_code };
+  const isWorkout = preset.is_workout || !!b.workout_code;
+  const codes = ['A','B','C','D'];
+  return `
+    <div style="background:var(--bg-card);border:1px solid var(--line);border-left:4px solid ${preset.color};border-radius:10px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:700;font-size:13px;color:${preset.color}">${preset.label}</div>
+        <div style="display:flex;gap:6px">
+          ${idx > 0 ? `<button class="mini-btn mini-btn-ghost" style="padding:2px 8px;font-size:11px" onclick="moveBlock('${b.id}','${dayId}','${studentId}',-1)">↑</button>` : ''}
+          <button class="mini-btn mini-btn-ghost" style="padding:2px 8px;font-size:11px;color:var(--red)" onclick="deleteBlock('${b.id}','${dayId}','${studentId}')">×</button>
+        </div>
+      </div>
+      ${isWorkout ? `
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${codes.map(c => `
+            <button class="mini-btn ${b.workout_code===c?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${c}')">${c}</button>
+          `).join("")}
+          <button class="mini-btn ${!b.workout_code?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','')">—</button>
+        </div>
+        ${preset.rep_min || preset.pause_seconds ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${preset.rep_min}-${preset.rep_max} reps · pausa ${Math.floor((preset.pause_seconds||0)/60)}:${String((preset.pause_seconds||0)%60).padStart(2,'0')}</div>` : ''}
+      ` : `<div style="font-size:11px;color:var(--text-3)">${preset.label} (sem treino vinculado)</div>`}
+    </div>`;
+};
+
+window.addBlockToDay = async function(dayId, studentId, presetCode, isWorkout) {
+  // calcula próxima position
+  const { data: existing } = await sb.from("periodization_blocks").select("position").eq("day_id", dayId).order("position", { ascending: false }).limit(1);
+  const pos = existing && existing.length ? (existing[0].position + 1) : 0;
+  const insert = { day_id: dayId, position: pos, preset_code: presetCode };
+  if (isWorkout) insert.workout_code = "A";
+  const { error } = await sb.from("periodization_blocks").insert(insert);
+  if (error) { showToast(error.message, "error"); return; }
+  // atualiza periodization_days legacy pra compat (primeiro bloco vira o "principal")
+  await syncDayLegacy(dayId);
   editPeriodDay(dayId, studentId);
+};
+
+window.deleteBlock = async function(blockId, dayId, studentId) {
+  await sb.from("periodization_blocks").delete().eq("id", blockId);
+  await syncDayLegacy(dayId);
+  editPeriodDay(dayId, studentId);
+};
+
+window.moveBlock = async function(blockId, dayId, studentId, dir) {
+  const { data: blocks } = await sb.from("periodization_blocks").select("id, position").eq("day_id", dayId).order("position");
+  if (!blocks) return;
+  const idx = blocks.findIndex(b => b.id === blockId);
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= blocks.length) return;
+  const a = blocks[idx], b = blocks[newIdx];
+  await sb.from("periodization_blocks").update({ position: b.position }).eq("id", a.id);
+  await sb.from("periodization_blocks").update({ position: a.position }).eq("id", b.id);
+  await syncDayLegacy(dayId);
+  editPeriodDay(dayId, studentId);
+};
+
+window.setBlockWorkout = async function(blockId, dayId, studentId, workout) {
+  await sb.from("periodization_blocks").update({ workout_code: workout || null }).eq("id", blockId);
+  await syncDayLegacy(dayId);
+  editPeriodDay(dayId, studentId);
+};
+
+// Mantém periodization_days.workout_code/intensity em sync com o primeiro bloco (compat com app legado)
+async function syncDayLegacy(dayId) {
+  const { data: blocks } = await sb.from("periodization_blocks").select("*").eq("day_id", dayId).order("position");
+  if (!blocks || !blocks.length) {
+    await sb.from("periodization_days").update({ workout_code: 'OFF', intensity: 'off', aero: false }).eq("id", dayId);
+    return;
+  }
+  const first = blocks[0];
+  const aero = blocks.some(b => b.preset_code === 'aero');
+  // legacy intensity: hipertrofia→yellow, forca→red, deload→white, flex→flex, off→off
+  const intMap = { hipertrofia: 'yellow', forca: 'red', deload: 'white', flex: 'flex', off: 'off', aero: 'flex' };
+  const intensity = intMap[first.preset_code] || 'yellow';
+  const workout_code = first.workout_code || (first.preset_code === 'off' ? 'OFF' : (first.preset_code === 'flex' ? 'FLEX' : null));
+  await sb.from("periodization_days").update({
+    workout_code: workout_code,
+    intensity: intensity,
+    aero: aero
+  }).eq("id", dayId);
+}
+window.syncDayLegacy = syncDayLegacy;
+
+window.setPeriodField = async function(dayId, field, value, studentId) {
+  // legacy support — não usar mais, mas mantido pra não quebrar caso algum código antigo chame
+  const patch = {}; patch[field] = value;
+  await sb.from("periodization_days").update(patch).eq("id", dayId);
+  editPeriodDay(dayId, studentId);
+};
+
+/* ---------- EDITOR DE PRESETS (coach) ---------- */
+window.openPresetEditor = async function() {
+  if (!_PRESETS.length) await loadPresets();
+  const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
+  const html = `
+    <h3>⚙ Tipos de treino</h3>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 14px">Personalize repetições e tempo de pausa de cada tipo. ${myCoachId ? 'Suas alterações afetam apenas seus alunos.' : 'Você está editando os defaults globais (admin).'}</p>
+    ${_PRESETS.map(p => renderPresetItem(p)).join("")}
+    <button class="btn-ghost" style="margin-top:14px" onclick="closeSheet()">Fechar</button>
+  `;
+  openSheet(html);
+};
+
+window.renderPresetItem = function(p) {
+  const isWorkout = p.is_workout;
+  return `
+    <div data-code="${p.code}" style="background:var(--bg-card);border:1px solid var(--line);border-left:4px solid ${p.color};border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-weight:700;color:${p.color}">${p.label}</div>
+        <div style="font-size:11px;color:var(--text-3)">${isWorkout ? 'com treino' : 'standalone'}</div>
+      </div>
+      ${isWorkout ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div>
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Reps min</div>
+            <input type="number" id="pr-min-${p.code}" value="${p.rep_min||''}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Reps max</div>
+            <input type="number" id="pr-max-${p.code}" value="${p.rep_max||''}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Pausa (s)</div>
+            <input type="number" id="pr-pause-${p.code}" value="${p.pause_seconds||''}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
+        </div>
+        <button class="mini-btn mini-btn-primary" style="margin-top:8px;width:100%" onclick="savePreset('${p.code}')">Salvar</button>
+      ` : `<div style="font-size:11px;color:var(--text-3)">Não usa repetições/pausa.</div>`}
+    </div>`;
+};
+
+/* Carrega blocos da periodização (próximos 30 dias) — usado pelo card "Hoje" */
+async function loadTodayBlocks() {
+  if (!STATE.profile) return;
+  const sid = STATE.profile.id;
+  const today = todayISO();
+  const future = new Date(); future.setDate(future.getDate()+30);
+  const futureISO = future.toISOString().slice(0,10);
+  const { data: days } = await sb.from("periodization_days")
+    .select("id, date").eq("student_id", sid).gte("date", today).lte("date", futureISO);
+  if (!days || !days.length) { STATE.dayBlocks = {}; return; }
+  const ids = days.map(d => d.id);
+  const { data: blocks } = await sb.from("periodization_blocks")
+    .select("*").in("day_id", ids).order("position");
+  const byDate = {};
+  const idToDate = {};
+  days.forEach(d => idToDate[d.id] = d.date);
+  (blocks || []).forEach(b => {
+    const date = idToDate[b.day_id];
+    if (!date) return;
+    (byDate[date] = byDate[date] || []).push(b);
+  });
+  STATE.dayBlocks = byDate;
+}
+window.loadTodayBlocks = loadTodayBlocks;
+
+window.savePreset = async function(code) {
+  const min = document.getElementById(`pr-min-${code}`).value;
+  const max = document.getElementById(`pr-max-${code}`).value;
+  const pause = document.getElementById(`pr-pause-${code}`).value;
+  const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
+  const existing = _PRESETS.find(p => p.code === code);
+  const patch = {
+    rep_min: min ? Number(min) : null,
+    rep_max: max ? Number(max) : null,
+    pause_seconds: pause ? Number(pause) : null
+  };
+  // Se for coach editando preset global, cria override
+  if (myCoachId && (!existing.coach_id)) {
+    const { error } = await sb.from("intensity_presets").insert({
+      coach_id: myCoachId,
+      code: existing.code,
+      label: existing.label,
+      color: existing.color,
+      is_workout: existing.is_workout,
+      position: existing.position,
+      ...patch
+    });
+    if (error) { showToast(error.message, "error"); return; }
+  } else {
+    const { error } = await sb.from("intensity_presets").update(patch).eq("id", existing.id);
+    if (error) { showToast(error.message, "error"); return; }
+  }
+  showToast("Salvo ✓", "success");
+  await reloadPresets();
 };
 window.onApprove = async (id) => {
   await approveStudent(id, "approved");
@@ -4268,6 +4521,8 @@ async function postSignIn() {
   await loadWorkouts();
   await loadExerciseLibrary();
   await loadFollows();
+  try { await loadPresets(); } catch(e){ console.warn(e); }
+  try { await loadTodayBlocks(); } catch(e){ console.warn(e); }
   // Todos os roles podem ter periodização própria e treinar
   await loadPeriodization();
   await loadLastLoads();
@@ -4310,6 +4565,21 @@ async function postSignIn() {
 
   // Onboarding + push + chat unread + load history/ranking
   try { await postLoginInit(); } catch(e) { console.error("postLoginInit", e); }
+
+  // Deep-link via query string (?chat=USER_ID, ?view=feed, etc)
+  try {
+    const qs = new URLSearchParams(location.search);
+    const chatId = qs.get("chat");
+    const view = qs.get("view");
+    if (chatId && typeof openChatThread === "function") {
+      setTimeout(() => openChatThread(chatId), 250);
+      // limpa query string
+      try { history.replaceState({}, "", location.pathname); } catch(e){}
+    } else if (view) {
+      navTo(view);
+      try { history.replaceState({}, "", location.pathname); } catch(e){}
+    }
+  } catch(e){ console.warn("deep-link", e); }
 }
 
 /* =============================================================================
@@ -5233,6 +5503,18 @@ async function sendChatMessage(otherUserId, reload) {
     from_user: STATE.profile.id, to_user: otherUserId, content
   });
   if (error) { showToast(error.message, "error"); return; }
+  // dispara push pro destinatário (silencioso — não bloqueia UI)
+  try {
+    sb.functions.invoke("send-push", {
+      body: {
+        user_ids: [otherUserId],
+        title: STATE.profile.full_name || "Nova mensagem",
+        body: content.slice(0, 120),
+        url: "/app/?chat=" + STATE.profile.id,
+        tag: "chat-" + STATE.profile.id
+      }
+    }).catch(()=>{});
+  } catch(e) {}
   if (reload) await reload();
 }
 
@@ -5909,35 +6191,97 @@ if (_origRenderProfile) {
   try { renderProfile = window.renderProfile; } catch(e){}
 }
 
-/* ---------- BOTÃO "COMPARTILHAR" NO TREINO DE HOJE ---------- */
+/* ---------- HOME: múltiplos blocos do dia + botão compartilhar ---------- */
 const _origRenderHome2 = window.renderHome;
 window.renderHome = function(...args) {
   const r = _origRenderHome2.apply(this, args);
   setTimeout(() => {
-    const today = document.querySelector("#view-home .today-card");
-    if (!today || today.querySelector(".today-share")) return;
-    const role = STATE.profile && STATE.profile.role;
-    if (role !== "student") return;
-    const info = findDayInfo(todayISO());
-    if (!info || info.workout_code === "OFF" || !info.workout_code) return;
-    const W = STATE.workouts[info.workout_code];
-    if (!W) return;
-    const share = document.createElement("button");
-    share.className = "today-share";
-    share.style.cssText = "background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--text-2);margin-left:8px";
-    share.innerHTML = "📤 Compartilhar";
-    share.onclick = (e) => {
-      e.stopPropagation();
-      const text = `Hoje: ${W.name}\n${W.focus || ''}\n#Treinova`;
-      if (navigator.share) navigator.share({ text, url: "https://www.treinovaapp.com" }).catch(()=>{});
-      else navigator.clipboard.writeText(text).then(()=>showToast("Copiado", "success"));
-    };
-    const btnEl = today.querySelector(".btn-primary");
-    if (btnEl && btnEl.parentElement) btnEl.parentElement.appendChild(share);
+    if (STATE.profile && STATE.profile.role === "student") {
+      renderTodayBlocksCard();
+    }
   }, 50);
   return r;
 };
 try { renderHome = window.renderHome; } catch(e){}
+
+function renderTodayBlocksCard() {
+  const today = todayISO();
+  const blocks = (STATE.dayBlocks || {})[today];
+  const card = document.querySelector("#view-home .today-card");
+  if (!card) return;
+  if (!blocks || !blocks.length) return; // mantém o card legado se sem blocos
+
+  const eyebrow = card.querySelector(".today-eyebrow");
+  const eyebrowText = eyebrow ? eyebrow.textContent : `Hoje · ${fmtFullDateBR ? fmtFullDateBR(today) : today}`;
+
+  const blocksHTML = blocks.map(b => {
+    const p = (typeof getPreset === "function" && getPreset(b.preset_code)) || { label: b.preset_code, color: '#9aa6c0', is_workout: !!b.workout_code };
+    const W = b.workout_code ? STATE.workouts[b.workout_code] : null;
+    const hasRepRange = p.rep_min && p.rep_max;
+    return `
+      <div style="background:var(--bg-2);border:1px solid var(--line);border-left:4px solid ${p.color};border-radius:12px;padding:14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:800;color:${p.color};font-size:11px;text-transform:uppercase;letter-spacing:.6px">${escape(p.label)}</div>
+            <div style="font-size:16px;color:var(--text);font-weight:700;margin-top:3px">${W ? escape(W.name) : (p.is_workout ? '— sem treino atribuído —' : escape(p.label))}</div>
+            ${hasRepRange ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px">${p.rep_min}-${p.rep_max} reps · pausa ${Math.floor((p.pause_seconds||0)/60)}:${String((p.pause_seconds||0)%60).padStart(2,'0')}</div>` : ''}
+            ${W && W.focus ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px">${escape(W.focus)}</div>` : ''}
+          </div>
+          ${b.workout_code && p.is_workout && W ? `
+            <button class="btn-primary" style="padding:9px 14px;font-size:12px;width:auto;flex-shrink:0" onclick="openWorkoutWithPreset('${today}','${b.workout_code}','${b.preset_code}')">
+              Iniciar
+            </button>
+          ` : (b.preset_code === 'aero' ? `
+            <button class="btn-ghost" style="padding:9px 14px;font-size:12px;width:auto;flex-shrink:0" onclick="navTo('aero')">
+              Cardio →
+            </button>
+          ` : '')}
+        </div>
+      </div>`;
+  }).join("");
+
+  card.classList.remove("intensity-yellow","intensity-red","intensity-white","intensity-flex","intensity-off");
+  card.innerHTML = `
+    <div class="today-eyebrow">${escape(eyebrowText)}</div>
+    <div style="font-weight:900;font-size:24px;margin:4px 0 14px">Hoje · ${blocks.length} ${blocks.length > 1 ? 'blocos' : 'bloco'}</div>
+    ${blocksHTML}`;
+}
+window.renderTodayBlocksCard = renderTodayBlocksCard;
+
+/* Abre treino com o preset selecionado (rep range + pause vêm do preset) */
+window.openWorkoutWithPreset = function(date, code, presetCode) {
+  STATE.selectedPresetCode = presetCode;
+  // mapeia preset → intensity legacy pra UI atual
+  const intMap = { hipertrofia: 'yellow', forca: 'red', deload: 'white', flex: 'flex', off: 'off', aero: 'flex' };
+  STATE.selectedDate = date;
+  STATE.selectedWorkout = code;
+  STATE.selectedIntensity = intMap[presetCode] || 'yellow';
+  STATE.expandedEx = null;
+  navTo("workout");
+};
+
+/* Banner com preset info no topo do treino */
+const _origRenderWorkout = window.renderWorkout;
+if (_origRenderWorkout) {
+  window.renderWorkout = async function(...args) {
+    const r = await _origRenderWorkout.apply(this, args);
+    setTimeout(() => {
+      if (!STATE.selectedPresetCode) return;
+      const p = (typeof getPreset === "function") ? getPreset(STATE.selectedPresetCode) : null;
+      if (!p || !(p.rep_min || p.pause_seconds)) return;
+      const banner = document.querySelector("#view-workout .intensity-banner");
+      if (banner && !banner.dataset.presetEnhanced) {
+        banner.dataset.presetEnhanced = "1";
+        const extra = document.createElement("div");
+        extra.style.cssText = "margin-top:6px;font-size:11px;color:var(--text-2)";
+        extra.textContent = `${p.rep_min}-${p.rep_max} reps · pausa ${Math.floor((p.pause_seconds||0)/60)}:${String((p.pause_seconds||0)%60).padStart(2,'0')}`;
+        banner.appendChild(extra);
+      }
+    }, 50);
+    return r;
+  };
+  try { renderWorkout = window.renderWorkout; } catch(e){}
+}
 
 /* ---------- MARCA D'ÁGUA NOS VÍDEOS DE EXERCÍCIO ---------- */
 async function watermarkVideo(file, brandName) {
