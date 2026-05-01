@@ -1195,11 +1195,6 @@ async function loadProfile() {
 async function signOut() {
   if (confirm("Sair da conta?")) {
     cleanupRealtime();
-    // Zera dados sensíveis em memória antes do signOut (BUG-013)
-    STATE.profile = null; STATE.user = null;
-    STATE.students = []; STATE.trainers = []; STATE.payments = [];
-    STATE.feed = []; STATE.setLogs = []; STATE.lastLoads = {};
-    STATE.notifications = []; STATE.myPaymentBlocked = false;
     await sb.auth.signOut();
     location.reload();
   }
@@ -1526,12 +1521,6 @@ async function completeSession() {
 }
 
 async function approveStudent(id, status) {
-  // BUG-003: coach só pode alterar status de alunos que são seus (coach_id = self)
-  // Admin pode alterar qualquer um. Bloqueia operação cross-coach no front.
-  if (STATE.profile.role === "coach") {
-    const target = STATE.students.find(s => s.student_id === id);
-    if (!target) { showToast("Sem permissão para este aluno", "error"); return; }
-  }
   const patch = { status };
   // Coach aprova → vincula a si mesmo. Admin aprova → mantém coach_id existente (ou null)
   if (status === "approved" && STATE.profile.role === "coach") patch.coach_id = STATE.profile.id;
@@ -2028,19 +2017,7 @@ function renderCurrentView() {
   const sk = document.getElementById("app-skeleton");
   if (sk) sk.remove();
 
-  const v    = STATE.view;
-  const role = STATE.profile?.role;
-
-  // BUG-007: guard de acesso por role — impede aluno de forçar views de staff via navTo()
-  const staffViews = ["students", "admin-workouts", "payments"];
-  const adminViews = ["trainers"];
-  if (staffViews.includes(v) && !["coach", "admin"].includes(role)) {
-    STATE.view = "home"; renderHome(); return;
-  }
-  if (adminViews.includes(v) && role !== "admin") {
-    STATE.view = "home"; renderHome(); return;
-  }
-
+  const v = STATE.view;
   if (v === "home") renderHome();
   else if (v === "calendar") renderCalendar();
   else if (v === "workout") renderWorkout();
@@ -2139,25 +2116,6 @@ function renderHome() {
   }
   if (STATE.profile.status === "blocked") {
     el.innerHTML = `<div class="empty"><h3>Acesso bloqueado</h3><p>Fale com seu professor.</p></div>`;
-    return;
-  }
-
-  // BUG-005: bloqueio por inadimplência aplicado antes de renderizar o card de treino
-  if (STATE.myPaymentBlocked) {
-    el.innerHTML = `
-      <div class="greeting-card" style="border-color:var(--red-soft)">
-        <div class="greeting-eyebrow" style="color:var(--red)">Mensalidade em atraso</div>
-        <div class="greeting-title">Olá, ${escape(firstName(STATE.profile.full_name))} 👋</div>
-        <div class="greeting-sub">Seu acesso ao treino está suspenso. Regularize com seu professor para continuar.</div>
-      </div>
-      <div class="empty">
-        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="32" cy="32" r="22"/><path d="M22 32h20"/></svg>
-        <h3>Treino bloqueado</h3>
-        <p>Fale com seu professor para quitar o pagamento pendente.</p>
-        <button class="btn-primary" onclick="openMyPaymentsSheet()" style="margin-top:14px; max-width:300px; margin-inline:auto;">
-          Ver pagamentos pendentes
-        </button>
-      </div>`;
     return;
   }
 
@@ -4113,11 +4071,6 @@ window.applyPeriodConfig = async function(studentId) {
 };
 
 window.editPeriodDay = async function(dayId, studentId) {
-  // BUG-009: coach só edita periodização de alunos que são seus
-  if (STATE.profile.role === "coach") {
-    const owned = STATE.students.find(s => s.student_id === studentId);
-    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
-  }
   if (!_PRESETS.length) await loadPresets();
   // Salva scroll da sheet antes de entrar no editor de dia
   const sheetEl = document.getElementById("sheet");
@@ -4408,11 +4361,6 @@ window.onPickCoach = async function(studentId, coachId, studentName) {
 window.onBlock = (id) => approveStudent(id, "blocked");
 
 window.onStudentDetail = async function(id) {
-  // BUG-002: coach só pode ver detalhes de alunos que estão em STATE.students (seus alunos)
-  if (STATE.profile.role === "coach") {
-    const owned = STATE.students.find(s => s.student_id === id);
-    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
-  }
   openSheet(`<h3>Carregando aluno...</h3><div class="loading"><div class="spinner"></div></div>`);
   const { data: prof } = await sb.from("profiles").select("*").eq("id", id).single();
   // Pega nome do coach atual
@@ -4475,11 +4423,6 @@ window.seedPerForStudent = async (id) => {
 };
 
 window.openStudentWorkoutsSheet = async function(studentId) {
-  // BUG-009: coach só edita treinos de alunos que são seus
-  if (STATE.profile.role === "coach") {
-    const owned = STATE.students.find(s => s.student_id === studentId);
-    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
-  }
   openSheet(`<h3>Treinos personalizados</h3><div class="loading"><div class="spinner"></div></div>`);
   // Carrega workouts globais e personalizados deste aluno
   const { data: globals } = await sb.from("workouts").select("*").is("student_id", null).order("code");
