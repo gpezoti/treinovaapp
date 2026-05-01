@@ -1195,6 +1195,11 @@ async function loadProfile() {
 async function signOut() {
   if (confirm("Sair da conta?")) {
     cleanupRealtime();
+    // Zera dados sensíveis em memória antes do signOut (BUG-013)
+    STATE.profile = null; STATE.user = null;
+    STATE.students = []; STATE.trainers = []; STATE.payments = [];
+    STATE.feed = []; STATE.setLogs = []; STATE.lastLoads = {};
+    STATE.notifications = []; STATE.myPaymentBlocked = false;
     await sb.auth.signOut();
     location.reload();
   }
@@ -1521,6 +1526,12 @@ async function completeSession() {
 }
 
 async function approveStudent(id, status) {
+  // BUG-003: coach só pode alterar status de alunos que são seus (coach_id = self)
+  // Admin pode alterar qualquer um. Bloqueia operação cross-coach no front.
+  if (STATE.profile.role === "coach") {
+    const target = STATE.students.find(s => s.student_id === id);
+    if (!target) { showToast("Sem permissão para este aluno", "error"); return; }
+  }
   const patch = { status };
   // Coach aprova → vincula a si mesmo. Admin aprova → mantém coach_id existente (ou null)
   if (status === "approved" && STATE.profile.role === "coach") patch.coach_id = STATE.profile.id;
@@ -1724,6 +1735,8 @@ function closeFsTimer() { document.getElementById("timer-fs").classList.remove("
 let _sheetInHistory = false;
 let _studentSelected = new Set();   // ids selecionados em bulk
 let _trainerSelected = new Set();
+let _periodScrollTop = 0;           // preservar scroll da sheet de periodização
+let _editingStudentId = null;       // aluno sendo editado na periodização
 
 function openSheet(html) {
   const root = document.getElementById("sheet-content");
@@ -2015,7 +2028,19 @@ function renderCurrentView() {
   const sk = document.getElementById("app-skeleton");
   if (sk) sk.remove();
 
-  const v = STATE.view;
+  const v    = STATE.view;
+  const role = STATE.profile?.role;
+
+  // BUG-007: guard de acesso por role — impede aluno de forçar views de staff via navTo()
+  const staffViews = ["students", "admin-workouts", "payments"];
+  const adminViews = ["trainers"];
+  if (staffViews.includes(v) && !["coach", "admin"].includes(role)) {
+    STATE.view = "home"; renderHome(); return;
+  }
+  if (adminViews.includes(v) && role !== "admin") {
+    STATE.view = "home"; renderHome(); return;
+  }
+
   if (v === "home") renderHome();
   else if (v === "calendar") renderCalendar();
   else if (v === "workout") renderWorkout();
@@ -2114,6 +2139,25 @@ function renderHome() {
   }
   if (STATE.profile.status === "blocked") {
     el.innerHTML = `<div class="empty"><h3>Acesso bloqueado</h3><p>Fale com seu professor.</p></div>`;
+    return;
+  }
+
+  // BUG-005: bloqueio por inadimplência aplicado antes de renderizar o card de treino
+  if (STATE.myPaymentBlocked) {
+    el.innerHTML = `
+      <div class="greeting-card" style="border-color:var(--red-soft)">
+        <div class="greeting-eyebrow" style="color:var(--red)">Mensalidade em atraso</div>
+        <div class="greeting-title">Olá, ${escape(firstName(STATE.profile.full_name))} 👋</div>
+        <div class="greeting-sub">Seu acesso ao treino está suspenso. Regularize com seu professor para continuar.</div>
+      </div>
+      <div class="empty">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="32" cy="32" r="22"/><path d="M22 32h20"/></svg>
+        <h3>Treino bloqueado</h3>
+        <p>Fale com seu professor para quitar o pagamento pendente.</p>
+        <button class="btn-primary" onclick="openMyPaymentsSheet()" style="margin-top:14px; max-width:300px; margin-inline:auto;">
+          Ver pagamentos pendentes
+        </button>
+      </div>`;
     return;
   }
 
@@ -2638,16 +2682,17 @@ window.openMyPaymentsSheet = async function() {
 };
 
 window.openNewPaymentSheet = function(userId, name) {
-  const today = todayISO();
   const next = new Date(); next.setDate(next.getDate()+30);
   const future = next.toISOString().slice(0,10);
+  const safeId = userId;
+  const safeName = escape(name);
   openSheet(`
     <h3>Novo lançamento</h3>
-    <p>Pagamento para ${escape(name)}</p>
-    <div class="form-group"><label class="form-label">Valor (R$)</label><input class="input" id="pay-amount" type="number" step="0.01" placeholder="150,00" /></div>
-    <div class="form-group"><label class="form-label">Vencimento</label><input class="input" id="pay-due" type="date" value="${future}" /></div>
-    <div class="form-group"><label class="form-label">Referência (ex.: Mensalidade abril)</label><input class="input" id="pay-ref" placeholder="Mensalidade" /></div>
-    <div class="form-group"><label class="form-label">Método preferido</label>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:14px">Para: <b>${safeName}</b></p>
+    <div class="form-group"><label class="form-label">Valor (R$)</label><input class="input" id="pay-amount" type="number" step="0.01" min="0.01" placeholder="150.00" /></div>
+    <div class="form-group"><label class="form-label">Primeiro vencimento</label><input class="input" id="pay-due" type="date" value="${future}" /></div>
+    <div class="form-group"><label class="form-label">Referência (ex.: Mensalidade maio)</label><input class="input" id="pay-ref" placeholder="Mensalidade" /></div>
+    <div class="form-group"><label class="form-label">Método</label>
       <select class="input" id="pay-method">
         <option value="pix">PIX</option>
         <option value="credit">Crédito</option>
@@ -2657,37 +2702,77 @@ window.openNewPaymentSheet = function(userId, name) {
         <option value="other">Outro</option>
       </select>
     </div>
-    <label class="row-flex" style="margin-bottom:12px;">
+    <div class="form-group">
+      <label class="form-label">Repetir mensalmente</label>
+      <select class="input" id="pay-recurrence">
+        <option value="1">Sem repetição (1 lançamento)</option>
+        <option value="2">2 meses</option>
+        <option value="3">3 meses</option>
+        <option value="6">6 meses</option>
+        <option value="12">12 meses (1 ano)</option>
+      </select>
+    </div>
+    <label class="row-flex" style="margin-bottom:12px;gap:8px">
       <input type="checkbox" id="pay-mark-paid" />
       <span class="text-sm">Já foi pago (registra como pago hoje)</span>
     </label>
     <div class="form-group"><label class="form-label">Observação</label><input class="input" id="pay-notes" placeholder="opcional" /></div>
-    <button class="btn-primary" onclick="submitNewPayment('${userId}','${escape(name).replace(/'/g,"\\'")}')">Salvar lançamento</button>
-    <button class="btn-ghost" onclick="openPaymentSheet('${userId}','${escape(name).replace(/'/g,"\\'")}')" style="margin-top:8px">Voltar</button>
+    <button class="btn-primary" id="pay-save-btn" onclick="submitNewPayment('${safeId}','${safeName}')">Salvar lançamento</button>
+    <div id="pay-save-err" style="display:none;margin-top:8px;padding:10px;border-radius:8px;background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);color:#ffaaaa;font-size:12px"></div>
+    <button class="btn-ghost" onclick="openPaymentSheet('${safeId}','${safeName}')" style="margin-top:8px">Voltar</button>
   `);
 };
 
 window.submitNewPayment = async function(userId, name) {
   const get = id => document.getElementById(id);
-  const amount = parseFloat((get("pay-amount").value || "").replace(",", "."));
+  const amountStr = (get("pay-amount").value || "").replace(",", ".");
+  const amount = parseFloat(amountStr);
   const due = get("pay-due").value;
   const ref = get("pay-ref").value.trim();
   const method = get("pay-method").value;
   const notes = get("pay-notes").value.trim();
   const mark = get("pay-mark-paid").checked;
-  if (!amount || !due) { showToast("Preencha valor e vencimento", "error"); return; }
-  // Receiver = staff atual
+  const recur = parseInt(get("pay-recurrence").value) || 1;
+
+  const errEl = get("pay-save-err");
+  const btn = get("pay-save-btn");
+
+  if (!amount || isNaN(amount) || amount <= 0) {
+    if (errEl) { errEl.textContent = "Informe um valor válido (ex: 150.00)"; errEl.style.display = "block"; }
+    return;
+  }
+  if (!due) {
+    if (errEl) { errEl.textContent = "Informe a data de vencimento"; errEl.style.display = "block"; }
+    return;
+  }
+  if (errEl) errEl.style.display = "none";
+  if (btn) { btn.disabled = true; btn.textContent = "Salvando…"; }
+
   const receiverId = STATE.profile.id;
   try {
-    await recordPayment(userId, receiverId, {
-      amount, due_date: due, reference: ref || null,
-      method, notes, markPaid: mark
-    });
-    showToast("Lançamento criado", "success");
+    for (let i = 0; i < recur; i++) {
+      const dueDate = new Date(due + "T00:00:00");
+      dueDate.setMonth(dueDate.getMonth() + i);
+      const dueDateStr = dueDate.toISOString().slice(0, 10);
+      const refStr = recur > 1 ? `${ref || 'Mensalidade'} (${i+1}/${recur})` : (ref || null);
+      await recordPayment(userId, receiverId, {
+        amount, due_date: dueDateStr,
+        reference: refStr,
+        method, notes: notes || null,
+        markPaid: mark && i === 0  // só marca pago o primeiro se checkbox marcado
+      });
+    }
+    const msg = recur > 1 ? `${recur} lançamentos criados` : "Lançamento criado";
+    showToast(msg, "success");
     if (STATE.profile.role === 'admin') await loadAdminPayments();
     if (STATE.profile.role === 'coach') await loadCoachPayments();
     openPaymentSheet(userId, name);
-  } catch (e) { showToast("Erro: " + e.message, "error"); }
+  } catch (e) {
+    console.error("submitNewPayment:", e);
+    const msg = e.message || "Erro desconhecido — verifique as permissões (RLS) na tabela payments";
+    if (errEl) { errEl.textContent = "Erro: " + msg; errEl.style.display = "block"; }
+    if (btn) { btn.disabled = false; btn.textContent = "Salvar lançamento"; }
+  }
 };
 
 window.onMarkPaid = async function(paymentId, userId, name) {
@@ -3910,11 +3995,11 @@ window.openStudentPeriodSheet = async function(id) {
   const html = `
     <h3>Periodização do aluno</h3>
     <p style="font-size:13px;color:var(--text-2);margin:0 0 10px">Toque em um dia para editar os blocos. Você pode ter <b>vários blocos por dia</b> (ex: aeróbio + hipertrofia).</p>
-    <div style="display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap">
-      <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ 1 Semana</button>
-      <button class="mini-btn" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line)" onclick="removePeriodWeek('${id}')">− 1 Semana</button>
-      <button class="mini-btn mini-btn-ghost" onclick="reseedPeriod('${id}')">Recriar padrão</button>
-      <button class="mini-btn mini-btn-ghost" onclick="openPresetEditor()">⚙ Editar tipos</button>
+    <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap">
+      <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ Semana</button>
+      <button class="mini-btn" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line)" onclick="removePeriodWeek('${id}')">− Semana</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openPeriodConfig('${id}')">📅 Configurar período</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openPresetEditor()">⚙ Tipos</button>
     </div>
     ${grouped.length === 0 ? `<div class="empty"><p>Nenhuma semana ainda. Clique em "+ 1 Semana".</p></div>` : grouped.map((week, wi) => `
       <div class="card mb-8">
@@ -3967,37 +4052,112 @@ window.reseedPeriod = async function(id) {
   openStudentPeriodSheet(id);
 };
 
+window.openPeriodConfig = function(studentId) {
+  const today = todayISO();
+  // Pega data de início e número de semanas atuais
+  const days = STATE.periodization && STATE.periodization.length > 0 ? STATE.periodization : [];
+  const currentStart = days.length > 0 ? days[0].date : today;
+  const currentWeeks = Math.ceil(days.length / 7) || 12;
+  const sheetContent = document.getElementById("sheet-content");
+  sheetContent.innerHTML = `<div class="sheet-handle"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button class="mini-btn" onclick="openStudentPeriodSheet('${studentId}')" style="padding:6px 12px">← Voltar</button>
+      <div style="font-weight:700;font-size:15px">Configurar período</div>
+    </div>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Define o início e a duração do ciclo. Os dias existentes serão recriados a partir da nova data.</p>
+    <div class="form-group">
+      <label class="form-label">Data de início</label>
+      <input class="input" type="date" id="pc-start" value="${currentStart}" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Número de semanas</label>
+      <select class="input" id="pc-weeks">
+        ${[4,8,12,16,20,24].map(n => `<option value="${n}" ${n === currentWeeks ? 'selected' : ''}>${n} semanas</option>`).join('')}
+      </select>
+    </div>
+    <div style="padding:10px;border-radius:8px;background:rgba(255,200,0,0.08);border:1px solid rgba(255,200,0,0.2);color:var(--text-2);font-size:12px;margin-bottom:14px">
+      ⚠ Isso recria todos os dias do ciclo. Os blocos de cada dia e o histórico de treinos não são afetados.
+    </div>
+    <button class="btn-primary" onclick="applyPeriodConfig('${studentId}')">Aplicar configuração</button>
+  `;
+};
+
+window.applyPeriodConfig = async function(studentId) {
+  const startDate = document.getElementById("pc-start").value;
+  const numWeeks = parseInt(document.getElementById("pc-weeks").value);
+  if (!startDate || !numWeeks) { showToast("Preencha os campos", "error"); return; }
+  const btn = document.querySelector('#sheet-content .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = "Aplicando…"; }
+  try {
+    // Deleta dias existentes (mantém blocks e set_logs via FK com ON DELETE CASCADE)
+    const { error: delErr } = await sb.from("periodization_days").delete().eq("student_id", studentId);
+    if (delErr) throw delErr;
+    // Cria novos dias (sem blocos — coach edita depois)
+    const rows = [];
+    const start = new Date(startDate + "T00:00:00");
+    for (let i = 0; i < numWeeks * 7; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      rows.push({ student_id: studentId, date: d.toISOString().slice(0, 10), workout_code: 'OFF', intensity: 'off', aero: false });
+    }
+    // Insere em batches de 200 para evitar limite de payload
+    for (let i = 0; i < rows.length; i += 200) {
+      const { error } = await sb.from("periodization_days").insert(rows.slice(i, i + 200));
+      if (error) throw error;
+    }
+    showToast(`Período de ${numWeeks} semanas criado a partir de ${fmtDateBR(startDate)}`, "success");
+    await openStudentPeriodSheet(studentId);
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = "Aplicar configuração"; }
+    showToast("Erro: " + e.message, "error");
+  }
+};
+
 window.editPeriodDay = async function(dayId, studentId) {
+  // BUG-009: coach só edita periodização de alunos que são seus
+  if (STATE.profile.role === "coach") {
+    const owned = STATE.students.find(s => s.student_id === studentId);
+    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
+  }
   if (!_PRESETS.length) await loadPresets();
+  // Salva scroll da sheet antes de entrar no editor de dia
+  const sheetEl = document.getElementById("sheet");
+  if (sheetEl) _periodScrollTop = sheetEl.scrollTop;
+  _editingStudentId = studentId;
+
   const { data: d } = await sb.from("periodization_days").select("*").eq("id", dayId).single();
   if (!d) return;
   const { data: blocks } = await sb.from("periodization_blocks")
     .select("*").eq("day_id", dayId).order("position");
   const dt = new Date(d.date+"T00:00:00");
-  const sheetEl = document.getElementById("sheet-content");
+  const sheetContent = document.getElementById("sheet-content");
 
   const html = `
-    <h3>${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}/${MONTH_SHORT[dt.getMonth()]}</h3>
-    <p style="font-size:12px;color:var(--text-2);margin:0 0 12px">Pode ter mais de um bloco no dia.</p>
-    <div id="blocks-list">
-      ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId)).join("") || '<div class="empty"><p style="margin:8px 0">Nenhum bloco. Adicione abaixo.</p></div>'}
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <button class="mini-btn" onclick="backToPeriodSheet('${studentId}')" style="padding:6px 12px">← Voltar</button>
+      <div>
+        <div style="font-weight:700;font-size:15px">${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}/${MONTH_SHORT[dt.getMonth()]}</div>
+        <div style="font-size:11px;color:var(--text-3)">Alterações salvas automaticamente</div>
+      </div>
     </div>
-    <div class="section-title" style="margin:14px 0 8px">+ Adicionar bloco</div>
+    <div id="blocks-list">
+      ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId)).join("") || '<div style="padding:14px;text-align:center;color:var(--text-3);font-size:13px">Nenhum bloco. Adicione abaixo.</div>'}
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">+ Adicionar bloco</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">
       ${_PRESETS.map(p => `
-        <button class="mini-btn" style="background:${p.color}22;color:${p.color};border:1px solid ${p.color}55" onclick="addBlockToDay('${dayId}','${studentId}','${p.code}',${p.is_workout})">${p.label}</button>
+        <button class="mini-btn" style="background:${p.color}22;color:${p.color};border:1px solid ${p.color}55;font-size:11px" onclick="addBlockToDay('${dayId}','${studentId}','${p.code}',${p.is_workout})">${p.label}</button>
       `).join("")}
     </div>
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-ghost" style="flex:1" onclick="openStudentPeriodSheet('${studentId}')">← Voltar</button>
-    </div>
   `;
-  sheetEl.innerHTML = '<div class="sheet-handle"></div>' + html;
+  sheetContent.innerHTML = '<div class="sheet-handle"></div>' + html;
 };
+
+const AERO_MODALITIES = ['Corrida','Caminhada','Bike','Elíptico','Natação','Remo','Pular corda','Outro'];
 
 window.renderBlockItem = function(b, idx, dayId, studentId) {
   const preset = getPreset(b.preset_code) || { label: b.preset_code, color: '#9aa6c0', is_workout: !!b.workout_code };
   const isWorkout = preset.is_workout || !!b.workout_code;
+  const isAero = b.preset_code === 'aero' || preset.label?.toLowerCase().includes('aero');
   const codes = ['A','B','C','D'];
   return `
     <div style="background:var(--bg-card);border:1px solid var(--line);border-left:4px solid ${preset.color};border-radius:10px;padding:12px;margin-bottom:8px">
@@ -4008,7 +4168,7 @@ window.renderBlockItem = function(b, idx, dayId, studentId) {
           <button class="mini-btn mini-btn-ghost" style="padding:2px 8px;font-size:11px;color:var(--red)" onclick="deleteBlock('${b.id}','${dayId}','${studentId}')">×</button>
         </div>
       </div>
-      ${isWorkout ? `
+      ${isWorkout && !isAero ? `
         <div style="display:flex;gap:5px;flex-wrap:wrap">
           ${codes.map(c => `
             <button class="mini-btn ${b.workout_code===c?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${c}')">${c}</button>
@@ -4016,20 +4176,36 @@ window.renderBlockItem = function(b, idx, dayId, studentId) {
           <button class="mini-btn ${!b.workout_code?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','')">—</button>
         </div>
         ${preset.rep_min || preset.pause_seconds ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${preset.rep_min}-${preset.rep_max} reps · pausa ${Math.floor((preset.pause_seconds||0)/60)}:${String((preset.pause_seconds||0)%60).padStart(2,'0')}</div>` : ''}
-      ` : `<div style="font-size:11px;color:var(--text-3)">${preset.label} (sem treino vinculado)</div>`}
+      ` : isAero ? `
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Modalidade aeróbia</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${AERO_MODALITIES.map(m => `
+            <button class="mini-btn ${b.workout_code===m?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 10px;font-size:11px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${m}')">${m}</button>
+          `).join("")}
+        </div>
+        ${b.workout_code ? `<div style="font-size:11px;color:var(--brand);margin-top:6px">✓ ${b.workout_code}</div>` : `<div style="font-size:11px;color:var(--text-3);margin-top:6px">Selecione a modalidade acima</div>`}
+      ` : `<div style="font-size:11px;color:var(--text-3)">${preset.label}</div>`}
     </div>`;
 };
 
+// Volta da edição de dia para a sheet de periodização, restaurando scroll
+window.backToPeriodSheet = async function(studentId) {
+  await openStudentPeriodSheet(studentId);
+  requestAnimationFrame(() => {
+    const sheet = document.getElementById("sheet");
+    if (sheet && _periodScrollTop > 0) sheet.scrollTop = _periodScrollTop;
+  });
+};
+
 window.addBlockToDay = async function(dayId, studentId, presetCode, isWorkout) {
-  // calcula próxima position
   const { data: existing } = await sb.from("periodization_blocks").select("position").eq("day_id", dayId).order("position", { ascending: false }).limit(1);
   const pos = existing && existing.length ? (existing[0].position + 1) : 0;
   const insert = { day_id: dayId, position: pos, preset_code: presetCode };
   if (isWorkout) insert.workout_code = "A";
   const { error } = await sb.from("periodization_blocks").insert(insert);
   if (error) { showToast(error.message, "error"); return; }
-  // atualiza periodization_days legacy pra compat (primeiro bloco vira o "principal")
   await syncDayLegacy(dayId);
+  showToast("Bloco adicionado ✓", "success");
   editPeriodDay(dayId, studentId);
 };
 
@@ -4232,6 +4408,11 @@ window.onPickCoach = async function(studentId, coachId, studentName) {
 window.onBlock = (id) => approveStudent(id, "blocked");
 
 window.onStudentDetail = async function(id) {
+  // BUG-002: coach só pode ver detalhes de alunos que estão em STATE.students (seus alunos)
+  if (STATE.profile.role === "coach") {
+    const owned = STATE.students.find(s => s.student_id === id);
+    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
+  }
   openSheet(`<h3>Carregando aluno...</h3><div class="loading"><div class="spinner"></div></div>`);
   const { data: prof } = await sb.from("profiles").select("*").eq("id", id).single();
   // Pega nome do coach atual
@@ -4294,6 +4475,11 @@ window.seedPerForStudent = async (id) => {
 };
 
 window.openStudentWorkoutsSheet = async function(studentId) {
+  // BUG-009: coach só edita treinos de alunos que são seus
+  if (STATE.profile.role === "coach") {
+    const owned = STATE.students.find(s => s.student_id === studentId);
+    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
+  }
   openSheet(`<h3>Treinos personalizados</h3><div class="loading"><div class="spinner"></div></div>`);
   // Carrega workouts globais e personalizados deste aluno
   const { data: globals } = await sb.from("workouts").select("*").is("student_id", null).order("code");
@@ -4888,11 +5074,9 @@ async function postSignIn() {
   }, 1000);
   setupRealtime();
 
-  // Default view
-  const initialView = "home";
-  STATE.view = initialView;
+  // Default view — navTo() adiciona .active na view e chama renderCurrentView()
   renderBottomNav();
-  renderCurrentView();
+  navTo("home");
   renderHeaderBell();
 
   // Pré-seleciona treino do dia se for aluno
@@ -5741,28 +5925,37 @@ async function renderChat() {
   const ths = STATE.chatThreads || [];
   el.innerHTML = `
     <div style="padding:16px 16px 100px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
-        <div style="flex:1">
-          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Mensagens</div>
-          <div style="font-size:20px;font-weight:800">💬 Chat</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <h1 class="view-title" style="margin:0">Mensagens</h1>
+          <p class="view-subtitle" style="margin:2px 0 0">${ths.length} conversa${ths.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onclick="openChatNewSheet()" style="background:var(--brand);color:var(--brand-on);border:0;border-radius:10px;padding:10px 12px;font-weight:700">+ Novo</button>
+        <button onclick="openChatNewSheet()" style="background:var(--brand);color:var(--brand-on);border:0;border-radius:12px;padding:10px 16px;font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova
+        </button>
       </div>
-      ${ths.length === 0 ? `<div style="padding:40px;text-align:center;color:var(--text-3)">Nenhuma conversa ainda. Toque em "+ Novo" pra começar.</div>` : `
-        <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;overflow:hidden">
+      ${ths.length === 0
+        ? `<div class="empty"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12h24a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H36l-8 8v-8h-8a4 4 0 0 1-4-4V16a4 4 0 0 1 4-4z"/></svg><h3>Nenhuma conversa</h3><p>Toque em "Nova" para iniciar um chat.</p></div>`
+        : `<div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;overflow:hidden">
           ${ths.map(t => {
             const me = STATE.profile.id;
             const isMine = t.last_from === me;
             const unread = !t.last_read_at && t.last_to === me;
             const o = t.other || {};
-            return `<div onclick="openChatThread('${o.id}')" style="display:flex;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;${unread?'background:var(--brand-soft)':''}">
-              <div style="width:44px;height:44px;border-radius:50%;background:var(--bg-2);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:20px">${o.avatar_url?`<img src="${o.avatar_url}" style="width:100%;height:100%;object-fit:cover">`:(o.avatar_emoji||'👤')}</div>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:14px;font-weight:700;color:var(--text)">${escapeHtml(o.full_name||'')}</div>
-                <div style="font-size:12px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isMine?'Você: ':''}${escapeHtml((t.last_content||'').slice(0,80))}</div>
+            return `<div onclick="openChatThread('${o.id}')" style="display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;${unread ? 'background:rgba(var(--brand-rgb,99,102,241),0.08);' : ''}align-items:center">
+              <div style="position:relative;flex:0 0 auto">
+                <div style="width:46px;height:46px;border-radius:50%;background:var(--bg-2);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:20px">${o.avatar_url ? `<img src="${o.avatar_url}" style="width:100%;height:100%;object-fit:cover">` : (o.avatar_emoji || '👤')}</div>
+                ${unread ? `<span style="position:absolute;top:0;right:0;width:10px;height:10px;background:var(--brand);border-radius:50%;border:2px solid var(--bg-card)"></span>` : ''}
               </div>
-              <div style="font-size:11px;color:var(--text-3);align-self:flex-start;margin-top:4px">${timeAgo(t.last_at)}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14px;font-weight:${unread ? '800' : '600'};color:var(--text)">${escapeHtml(o.full_name || '')}</div>
+                <div style="font-size:12px;color:${unread ? 'var(--text)' : 'var(--text-3)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${isMine ? 'Você: ' : ''}${escapeHtml((t.last_content || '').slice(0, 60))}</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-3);flex:0 0 auto;text-align:right">
+                <div>${timeAgo(t.last_at)}</div>
+                ${unread ? `<div style="font-weight:700;color:var(--brand);margin-top:2px">Novo</div>` : ''}
+              </div>
             </div>`;
           }).join('')}
         </div>`}
@@ -5883,10 +6076,12 @@ async function openChatThread(otherUserId) {
       </div>`;
     }).join('');
     list.scrollTop = list.scrollHeight;
-    // Marca todas as recebidas como lidas
+    // Marca todas as recebidas como lidas e atualiza contador
     const unreadIds = (data||[]).filter(m => m.to_user === me && !m.read_at).map(m => m.id);
     if (unreadIds.length) {
       await sb.from("messages").update({ read_at: new Date().toISOString() }).in("id", unreadIds);
+      STATE.chatUnread = Math.max(0, (STATE.chatUnread || 0) - unreadIds.length);
+      renderHeaderBell();
     }
   }
   await load();
@@ -5955,10 +6150,13 @@ function closeChatThread() {
   CHAT_ACTIVE_OTHER = null;
   const el = document.getElementById("chat-thread-overlay");
   if (el) el.remove();
+  // Limpa o history state sem navegar — evita sair do app
   if (_chatThreadInHistory) {
     _chatThreadInHistory = false;
-    try { history.back(); } catch(e){}
+    try { history.replaceState(null, ''); } catch(e){}
   }
+  // Atualiza a lista de chats (marca como lido visualmente)
+  if (STATE.view === "chat") renderChat().catch(() => {});
 }
 window.closeChatThread = closeChatThread;
 
@@ -6496,19 +6694,128 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
 window.showWorkoutCompleteModal = showWorkoutCompleteModal;
 
 async function shareWorkout(totalVolume, duration, name, setsDone) {
-  const text = `Acabei o treino de hoje 💪
-${name}
-${setsDone} séries · ${Math.round(totalVolume)}kg de volume · ${Math.floor(duration/60)}min
-#Treinova`;
-  if (navigator.share) {
-    try {
-      await navigator.share({ title: "Treino concluído", text, url: "https://www.treinovaapp.com" });
-    } catch(e){}
-  } else {
-    try {
-      await navigator.clipboard.writeText(text + "\nhttps://www.treinovaapp.com");
-      showToast("Texto copiado — cola onde quiser 📋", "success");
-    } catch(e) { showToast("Compartilhamento não suportado", "error"); }
+  try {
+    const blob = await generateWorkoutCard(name, totalVolume, duration, setsDone);
+    if (blob && navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'treino.png', { type: 'image/png' })] })) {
+      const file = new File([blob], 'treino.png', { type: 'image/png' });
+      await navigator.share({ files: [file], title: "Treino concluído 💪" });
+      return;
+    }
+    if (blob) {
+      // Fallback: abre a imagem em nova aba para o usuário salvar
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "treino.png"; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      showToast("Imagem salva — compartilhe onde quiser 📤", "success");
+      return;
+    }
+  } catch(e) { console.warn("shareWorkout:", e); }
+  // Último fallback: texto
+  const text = `Acabei o treino de hoje 💪\n${name}\n${setsDone} séries · ${Math.round(totalVolume)}kg · ${Math.floor(duration/60)}min\n#Treinova`;
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("Texto copiado — cola onde quiser 📋", "success");
+  } catch(e) { showToast("Compartilhamento não suportado", "error"); }
+}
+
+async function generateWorkoutCard(wname, totalVolume, duration, setsDone) {
+  try {
+    const W = 1080, H = 1080;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    // Fundo gradiente escuro
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, "#0a0e1a");
+    bg.addColorStop(1, "#141928");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Glow de fundo
+    const brand = STATE.branding && STATE.branding.brand_color || "#6366f1";
+    const glow = ctx.createRadialGradient(W * 0.15, H * 0.15, 0, W * 0.15, H * 0.15, W * 0.55);
+    glow.addColorStop(0, brand + "33");
+    glow.addColorStop(1, "transparent");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Borda colorida no topo
+    ctx.fillStyle = brand;
+    ctx.fillRect(0, 0, W, 8);
+
+    // Logo/nome do app
+    const appName = (STATE.branding && STATE.branding.app_name) || "TREINOVA";
+    ctx.fillStyle = "#ffffff99";
+    ctx.font = "bold 36px -apple-system, system-ui, sans-serif";
+    ctx.letterSpacing = "4px";
+    ctx.fillText(appName.toUpperCase(), 72, 108);
+
+    // Ícone de check grande
+    ctx.fillStyle = brand;
+    ctx.font = "bold 120px sans-serif";
+    ctx.fillText("✓", W/2 - 60, 340);
+
+    // Nome do treino
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 72px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    // Quebra de linha se necessário
+    const words = wname.split(" ");
+    let line = ""; const lines = [];
+    for (const w of words) {
+      const test = line + (line ? " " : "") + w;
+      if (ctx.measureText(test).width > W - 140) { lines.push(line); line = w; }
+      else line = test;
+    }
+    lines.push(line);
+    const lineH = 84;
+    const startY = 450 - ((lines.length - 1) * lineH) / 2;
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, startY + i * lineH));
+
+    // Linha separadora
+    ctx.strokeStyle = brand + "55";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(72, 560); ctx.lineTo(W - 72, 560); ctx.stroke();
+
+    // Stats
+    const stats = [
+      { icon: "🔥", label: "Séries", value: String(setsDone) },
+      { icon: "⚡", label: "Volume", value: `${Math.round(totalVolume)}kg` },
+      { icon: "⏱", label: "Tempo", value: `${Math.floor(duration/60)}min` },
+    ];
+    const colW = (W - 144) / 3;
+    ctx.textAlign = "center";
+    stats.forEach((s, i) => {
+      const cx = 72 + colW * i + colW / 2;
+      ctx.font = "48px sans-serif";
+      ctx.fillText(s.icon, cx, 660);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 60px -apple-system, system-ui, sans-serif";
+      ctx.fillText(s.value, cx, 760);
+      ctx.fillStyle = "#ffffff66";
+      ctx.font = "32px -apple-system, system-ui, sans-serif";
+      ctx.fillText(s.label, cx, 810);
+      ctx.fillStyle = "#ffffff";
+    });
+
+    // Mensagem motivacional
+    ctx.fillStyle = "#ffffff55";
+    ctx.font = "italic 34px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Missão cumprida 💪", W / 2, 930);
+
+    // Data
+    const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+    ctx.fillStyle = "#ffffff33";
+    ctx.font = "28px -apple-system, system-ui, sans-serif";
+    ctx.fillText(today, W / 2, 990);
+
+    return await new Promise(res => canvas.toBlob(res, "image/png"));
+  } catch(e) {
+    console.warn("generateWorkoutCard:", e);
+    return null;
   }
 }
 window.shareWorkout = shareWorkout;
