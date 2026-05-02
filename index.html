@@ -1195,11 +1195,6 @@ async function loadProfile() {
 async function signOut() {
   if (confirm("Sair da conta?")) {
     cleanupRealtime();
-    // Zera dados sensíveis em memória antes do signOut (BUG-013)
-    STATE.profile = null; STATE.user = null;
-    STATE.students = []; STATE.trainers = []; STATE.payments = [];
-    STATE.feed = []; STATE.setLogs = []; STATE.lastLoads = {};
-    STATE.notifications = []; STATE.myPaymentBlocked = false;
     await sb.auth.signOut();
     location.reload();
   }
@@ -1358,13 +1353,25 @@ function isFollowing(userId) {
 }
 
 async function searchPeople(query) {
+  // [C-03] Fix: filtrar por coach/escopo + remover email da seleção (LGPD)
   if (!query || query.length < 2) return [];
-  const { data } = await sb.from("profiles")
-    .select("id, full_name, email, avatar_emoji, avatar_url, role, status")
+  const role = STATE.profile.role;
+  let q = sb.from("profiles")
+    .select("id, full_name, avatar_emoji, avatar_url, role") // sem email — dados pessoais
     .neq("id", STATE.profile.id)
     .eq("status", "approved")
-    .or("full_name.ilike.%" + query + "%,email.ilike.%" + query + "%")
+    .ilike("full_name", `%${query}%`)
     .limit(20);
+  if (role === "student") {
+    // Aluno só encontra pessoas do mesmo coach
+    if (STATE.profile.coach_id) q = q.eq("coach_id", STATE.profile.coach_id);
+    else return []; // sem coach → sem busca
+  } else if (role === "coach") {
+    // Coach só encontra seus próprios alunos
+    q = q.eq("coach_id", STATE.profile.id);
+  }
+  // Admin: sem filtro adicional — vê toda a plataforma
+  const { data } = await q;
   return data || [];
 }
 
@@ -1464,9 +1471,11 @@ async function toggleSetDone(exercise, position, setIdx) {
       }
       const isLast = setIdx + 1 >= target;
       const label = isLast ? "Próximo exercício" : `Série ${setIdx + 2} de ${target}`;
-      startTimer(pauseSec, label, () => { if (navigator.vibrate) navigator.vibrate([200,100,200]); });
+      // Mostrar modal de conclusão de série com input de carga e auto-timer
+      onSerieCompleted(exercise, log, setIdx, target, pauseSec, label, isLast);
+    } else {
+      showToast(`Série ${setIdx+1} concluída ✓`, "success");
     }
-    showToast(`Série ${setIdx+1} concluída ✓`, "success");
     if (STATE.lastLoads[exercise.name] !== log.load_kg && log.load_kg) {
       STATE.lastLoads[exercise.name] = log.load_kg;
     }
@@ -1475,6 +1484,110 @@ async function toggleSetDone(exercise, position, setIdx) {
   }
   renderWorkout();
 }
+
+function onSerieCompleted(exercise, log, setIdx, totalSets, pauseSec, nextLabel, isLast) {
+  // Remover modal anterior se existir
+  const prev = document.getElementById("serie-done-modal");
+  if (prev) prev.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "serie-done-modal";
+  const currentLoad = log.load_kg != null ? log.load_kg : (STATE.lastLoads[exercise.name] || "");
+  const pauseMin = Math.floor(pauseSec / 60);
+  const pauseSecs = pauseSec % 60;
+  const pauseTxt = pauseMin > 0 ? `${pauseMin}min${pauseSecs > 0 ? pauseSecs + "s" : ""}` : `${pauseSec}s`;
+
+  modal.innerHTML = `
+    <style>
+      #serie-done-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;display:flex;align-items:flex-end;animation:fadeIn .2s}
+      #serie-done-modal .sdm-card{background:var(--bg-card);border-radius:20px 20px 0 0;padding:24px;width:100%;animation:slideUp .25s}
+      #serie-done-modal .sdm-title{font-size:18px;font-weight:800;color:var(--text);margin-bottom:4px}
+      #serie-done-modal .sdm-sub{font-size:13px;color:var(--text-2);margin-bottom:18px}
+      #serie-done-modal .sdm-load-row{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+      #serie-done-modal .sdm-load-row input{flex:1;font-size:24px;font-weight:800;text-align:center;border:2px solid var(--brand);border-radius:12px;padding:12px;background:var(--bg);color:var(--text)}
+      #serie-done-modal .sdm-load-row .sdm-unit{font-size:15px;font-weight:700;color:var(--text-2)}
+      #serie-done-modal .sdm-timer-info{display:flex;align-items:center;gap:8px;padding:12px;background:var(--bg);border-radius:12px;margin-bottom:18px;font-size:13px;color:var(--text-2)}
+      #serie-done-modal .sdm-timer-info strong{color:var(--brand)}
+      #serie-done-modal .sdm-actions{display:flex;gap:8px}
+      #serie-done-modal .sdm-actions button{flex:1;padding:14px;border-radius:12px;border:0;font-weight:700;font-size:15px;cursor:pointer}
+      #serie-done-modal .sdm-prim{background:var(--brand);color:var(--brand-on)}
+      #serie-done-modal .sdm-skip{background:var(--bg);color:var(--text-2);border:1px solid var(--line) !important}
+    </style>
+    <div class="sdm-card">
+      <div class="sdm-title">Série ${setIdx + 1} de ${totalSets} concluída ✓</div>
+      <div class="sdm-sub">${escape(exercise.name)} · ${isLast ? "último exercício desta sessão" : nextLabel}</div>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:12px">Confirme ou ajuste a carga desta série:</div>
+      <div class="sdm-load-row">
+        <button onclick="adjustLoad(-2.5)" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-size:20px;cursor:pointer;color:var(--text)">−</button>
+        <input type="number" inputmode="decimal" id="sdm-load-input" value="${currentLoad}" placeholder="0" />
+        <button onclick="adjustLoad(2.5)" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-size:20px;cursor:pointer;color:var(--text)">+</button>
+        <span class="sdm-unit">kg</span>
+      </div>
+      <div class="sdm-timer-info">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Timer de descanso: <strong>${pauseTxt}</strong> será iniciado ao confirmar
+      </div>
+      <div class="sdm-actions">
+        <button class="sdm-skip" onclick="confirmSerieDone(true)">Pular timer</button>
+        <button class="sdm-prim" id="sdm-confirm-btn" onclick="confirmSerieDone(false)">
+          ${isLast ? "Confirmar e continuar" : `OK · Descanso ${pauseTxt}`}
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  // Fechar ao clicar fora do card
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) confirmSerieDone(true);
+  });
+
+  // Salvar referência para uso em confirmSerieDone
+  modal._exerciseName = exercise.name;
+  modal._logId = log.id;
+  modal._pauseSec = pauseSec;
+  modal._nextLabel = nextLabel;
+  modal._isLast = isLast;
+  window._sdmModal = modal;
+}
+
+window.adjustLoad = function(delta) {
+  const inp = document.getElementById("sdm-load-input");
+  if (!inp) return;
+  const cur = parseFloat(inp.value) || 0;
+  inp.value = Math.max(0, Math.round((cur + delta) * 10) / 10);
+};
+
+window.confirmSerieDone = async function(skipTimer) {
+  const modal = window._sdmModal;
+  if (!modal) return;
+  const inp = document.getElementById("sdm-load-input");
+  const loadVal = inp ? parseFloat(inp.value) : null;
+  const logId = modal._logId;
+  const exName = modal._exerciseName;
+  const pauseSec = modal._pauseSec;
+  const nextLabel = modal._nextLabel;
+
+  // Salvar carga ajustada
+  if (logId && loadVal != null && !isNaN(loadVal)) {
+    try {
+      await sb.from("set_logs").update({ load_kg: loadVal }).eq("id", logId);
+      const local = STATE.setLogs.find(s => s.id === logId);
+      if (local) local.load_kg = loadVal;
+      STATE.lastLoads[exName] = loadVal;
+    } catch(e) { console.warn("load save err:", e); }
+  }
+
+  modal.style.opacity = "0";
+  setTimeout(() => modal.remove(), 200);
+  window._sdmModal = null;
+
+  if (!skipTimer) {
+    startTimer(pauseSec, nextLabel, () => { if (navigator.vibrate) navigator.vibrate([200,100,200]); });
+  } else {
+    showToast("Timer pulado", null);
+  }
+  renderWorkout();
+};
 
 async function toggleMobilityDone(exercise, position) {
   const target = exercise.sets_count || 1;
@@ -1526,12 +1639,6 @@ async function completeSession() {
 }
 
 async function approveStudent(id, status) {
-  // BUG-003: coach só pode alterar status de alunos que são seus (coach_id = self)
-  // Admin pode alterar qualquer um. Bloqueia operação cross-coach no front.
-  if (STATE.profile.role === "coach") {
-    const target = STATE.students.find(s => s.student_id === id);
-    if (!target) { showToast("Sem permissão para este aluno", "error"); return; }
-  }
   const patch = { status };
   // Coach aprova → vincula a si mesmo. Admin aprova → mantém coach_id existente (ou null)
   if (status === "approved" && STATE.profile.role === "coach") patch.coach_id = STATE.profile.id;
@@ -1639,12 +1746,51 @@ function startTimer(sec, label, onDone) {
   STATE.timer.paused = false;
   STATE.timer.label = label || "Próxima série";
   STATE.timer.onDone = onDone || null;
+  // [M-04] Fix: persistir timer no localStorage para sobreviver a ligações/saída do app
+  try {
+    localStorage.setItem("timer_start", String(STATE.timer.startedAt));
+    localStorage.setItem("timer_duration", String(sec));
+    localStorage.setItem("timer_label", STATE.timer.label);
+  } catch(e) {}
   document.getElementById("timer-bar").classList.add("active");
   document.getElementById("timer-fs-label").textContent = STATE.timer.label;
   document.getElementById("timer-fs-eyebrow").textContent = "Descanso";
   setTimerIcon(false);
   tickTimer();
   openFsTimer();
+}
+
+function restoreTimerIfActive() {
+  // [M-04] Fix: ao voltar ao app, restaurar timer se ainda estiver dentro do tempo
+  try {
+    const start = parseInt(localStorage.getItem("timer_start") || "0");
+    const duration = parseInt(localStorage.getItem("timer_duration") || "0");
+    const label = localStorage.getItem("timer_label") || "Próxima série";
+    if (!start || !duration) return;
+    const elapsed = Math.floor((Date.now() - start) / 1000);
+    const remaining = duration - elapsed;
+    if (remaining > 1) {
+      // Reconstruir o timer com o tempo correto
+      STATE.timer.secondsTotal = duration;
+      STATE.timer.secondsLeft = remaining;
+      STATE.timer.startedAt = start;
+      STATE.timer.running = true;
+      STATE.timer.paused = false;
+      STATE.timer.label = label;
+      STATE.timer.onDone = null;
+      document.getElementById("timer-bar").classList.add("active");
+      document.getElementById("timer-fs-label").textContent = label;
+      document.getElementById("timer-fs-eyebrow").textContent = "Descanso";
+      setTimerIcon(false);
+      tickTimer();
+      // Não abre o fullscreen automaticamente ao restaurar — apenas mantém a barra
+    } else {
+      // Timer expirou enquanto estava fora
+      localStorage.removeItem("timer_start");
+      localStorage.removeItem("timer_duration");
+      localStorage.removeItem("timer_label");
+    }
+  } catch(e) {}
 }
 function tickTimer() {
   if (!STATE.timer.running) return;
@@ -1698,6 +1844,12 @@ function finishTimer() {
 function cancelTimer() {
   if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
   STATE.timer.running = false; STATE.timer.paused = false;
+  // [M-04] Limpar persistência ao cancelar
+  try {
+    localStorage.removeItem("timer_start");
+    localStorage.removeItem("timer_duration");
+    localStorage.removeItem("timer_label");
+  } catch(e) {}
 }
 function closeTimer() {
   cancelTimer();
@@ -1734,6 +1886,8 @@ function closeFsTimer() { document.getElementById("timer-fs").classList.remove("
    ============================================================================= */
 let _sheetInHistory = false;
 let _studentSelected = new Set();   // ids selecionados em bulk
+let _studentSearch = "";            // busca de alunos
+let _studentTab = "all";            // aba ativa: all | active | inactive | overdue
 let _trainerSelected = new Set();
 let _periodScrollTop = 0;           // preservar scroll da sheet de periodização
 let _editingStudentId = null;       // aluno sendo editado na periodização
@@ -1843,6 +1997,15 @@ async function recordPayment(payerId, receiverId, payload) {
 }
 
 async function markPaymentPaid(paymentId, method) {
+  // [A-03] Fix: verificar ownership antes de marcar como pago
+  if (STATE.profile.role !== "admin") {
+    const { data: p } = await sb.from("payments").select("user_id").eq("id", paymentId).single();
+    const myStudentIds = (STATE.students || []).map(s => s.student_id);
+    if (!p || !myStudentIds.includes(p.user_id)) {
+      showToast("Sem permissão para este pagamento", "error");
+      return;
+    }
+  }
   const { error } = await sb.from("payments").update({
     status: 'paid',
     paid_at: new Date().toISOString(),
@@ -1852,6 +2015,15 @@ async function markPaymentPaid(paymentId, method) {
 }
 
 async function deletePayment(paymentId) {
+  // [A-03] Fix: verificar ownership antes de deletar
+  if (STATE.profile.role !== "admin") {
+    const { data: p } = await sb.from("payments").select("user_id").eq("id", paymentId).single();
+    const myStudentIds = (STATE.students || []).map(s => s.student_id);
+    if (!p || !myStudentIds.includes(p.user_id)) {
+      showToast("Sem permissão para este pagamento", "error");
+      return;
+    }
+  }
   const { error } = await sb.from("payments").delete().eq("id", paymentId);
   if (error) throw error;
 }
@@ -2028,19 +2200,7 @@ function renderCurrentView() {
   const sk = document.getElementById("app-skeleton");
   if (sk) sk.remove();
 
-  const v    = STATE.view;
-  const role = STATE.profile?.role;
-
-  // BUG-007: guard de acesso por role — impede aluno de forçar views de staff via navTo()
-  const staffViews = ["students", "admin-workouts", "payments"];
-  const adminViews = ["trainers"];
-  if (staffViews.includes(v) && !["coach", "admin"].includes(role)) {
-    STATE.view = "home"; renderHome(); return;
-  }
-  if (adminViews.includes(v) && role !== "admin") {
-    STATE.view = "home"; renderHome(); return;
-  }
-
+  const v = STATE.view;
   if (v === "home") renderHome();
   else if (v === "calendar") renderCalendar();
   else if (v === "workout") renderWorkout();
@@ -2142,25 +2302,6 @@ function renderHome() {
     return;
   }
 
-  // BUG-005: bloqueio por inadimplência aplicado antes de renderizar o card de treino
-  if (STATE.myPaymentBlocked) {
-    el.innerHTML = `
-      <div class="greeting-card" style="border-color:var(--red-soft)">
-        <div class="greeting-eyebrow" style="color:var(--red)">Mensalidade em atraso</div>
-        <div class="greeting-title">Olá, ${escape(firstName(STATE.profile.full_name))} 👋</div>
-        <div class="greeting-sub">Seu acesso ao treino está suspenso. Regularize com seu professor para continuar.</div>
-      </div>
-      <div class="empty">
-        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="32" cy="32" r="22"/><path d="M22 32h20"/></svg>
-        <h3>Treino bloqueado</h3>
-        <p>Fale com seu professor para quitar o pagamento pendente.</p>
-        <button class="btn-primary" onclick="openMyPaymentsSheet()" style="margin-top:14px; max-width:300px; margin-inline:auto;">
-          Ver pagamentos pendentes
-        </button>
-      </div>`;
-    return;
-  }
-
   const today = todayISO();
   const info = findDayInfo(today);
   const hour = new Date().getHours();
@@ -2196,10 +2337,24 @@ function renderHome() {
           <span class="today-pill ${pillCls}">${pillTxt}</span>
           ${info.aero ? `<span class="today-pill pill-flex" style="margin-left:6px">+ Aeróbio 35'</span>` : ""}
           <div style="margin-top:14px">
-            <button class="btn-primary" onclick="openWorkout('${today}','${info.workout_code}','${info.intensity}')">
+            <button class="btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px" onclick="openWorkout('${today}','${info.workout_code}','${info.intensity}')">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               Iniciar treino
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <div style="flex:1;background:rgba(0,0,0,.15);border-radius:10px;padding:10px;text-align:center">
+                <div style="font-size:18px;font-weight:800;color:var(--brand-on)">${W.exercises ? W.exercises.length : 0}</div>
+                <div style="font-size:11px;opacity:.75">exercícios</div>
+              </div>
+              <div style="flex:1;background:rgba(0,0,0,.15);border-radius:10px;padding:10px;text-align:center">
+                <div style="font-size:18px;font-weight:800;color:var(--brand-on)">${W.exercises ? W.exercises.reduce((a,e)=>a+(e.sets_count||0),0) : 0}</div>
+                <div style="font-size:11px;opacity:.75">séries</div>
+              </div>
+              <div style="flex:1;background:rgba(0,0,0,.15);border-radius:10px;padding:10px;text-align:center">
+                <div style="font-size:18px;font-weight:800;color:var(--brand-on)">~${W.exercises ? Math.round(W.exercises.reduce((a,e)=>a+(e.sets_count||0),0)*2.5) : 45}'</div>
+                <div style="font-size:11px;opacity:.75">estimado</div>
+              </div>
+            </div>
           </div>
         </div>`;
     }
@@ -2306,6 +2461,45 @@ function renderCoachHome(el) {
   const totalSessions7d = STATE.students.reduce((a,s) => a + (s.sessions_last_7d || 0), 0);
   const hour = new Date().getHours();
   const greet = hour < 5 ? "Boa madrugada" : hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+
+  // Empty state: coach sem alunos e já onboarded
+  if (STATE.students.length === 0 && STATE.profile.onboarded === true) {
+    el.innerHTML = `
+      <div class="greeting-card">
+        <div class="greeting-eyebrow">Painel do Treinador</div>
+        <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
+        <div class="greeting-sub">Vamos começar! 🚀</div>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:16px;padding:24px;text-align:center;margin-bottom:12px">
+        <div style="font-size:48px;margin-bottom:12px">🏋️</div>
+        <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px">Nenhum aluno ainda</div>
+        <div style="font-size:14px;color:var(--text-2);margin-bottom:20px;line-height:1.5">Adicione seu primeiro aluno para começar a treinar com ele e acompanhar o progresso.</div>
+        <button class="btn-primary" onclick="navTo('students'); setTimeout(openNewStudentSheet, 200);" style="max-width:280px;margin:0 auto 10px">
+          + Adicionar primeiro aluno
+        </button>
+        <button class="btn-ghost" onclick="openShareLinkSheet()" style="max-width:280px;margin:0 auto">
+          🔗 Compartilhar link de cadastro
+        </button>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">Próximos passos</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">1</div>
+            <div><div style="font-size:13px;font-weight:600;color:var(--text)">Adicione um aluno</div><div style="font-size:12px;color:var(--text-3)">Crie a conta dele direto aqui</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">2</div>
+            <div><div style="font-size:13px;font-weight:600;color:var(--text)">Atribua um treino</div><div style="font-size:12px;color:var(--text-3)">Monte a periodização na aba Alunos</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">3</div>
+            <div><div style="font-size:13px;font-weight:600;color:var(--text)">Acompanhe o progresso</div><div style="font-size:12px;color:var(--text-3)">Feed, cargas e atividade em tempo real</div></div>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
 
   el.innerHTML = `
     <div class="greeting-card">
@@ -3716,6 +3910,21 @@ function attachBrandingPickerSync() {
 /* =============================================================================
    RENDER — COACH: STUDENTS
    ============================================================================= */
+function applyStudentFilters(students) {
+  const q = _studentSearch.toLowerCase().trim();
+  const cutoff7d = new Date(Date.now() - 7 * 86400000).toISOString();
+  return students.filter(s => {
+    if (q) {
+      const haystack = `${s.full_name || ""} ${s.email || ""}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    if (_studentTab === "active")   return s.status === "approved";
+    if (_studentTab === "inactive") return s.status === "approved" && (!s.last_session_at || s.last_session_at < cutoff7d);
+    if (_studentTab === "overdue")  return s.payment_status === "overdue" || s.payment_status === "pending_overdue";
+    return true; // "all"
+  });
+}
+
 function renderStudents() {
   const el = document.getElementById("view-students");
   // Bloqueio para coach inadimplente
@@ -3729,18 +3938,48 @@ function renderStudents() {
       </div>`;
     return;
   }
-  const pending = STATE.students.filter(s => s.status === "pending");
-  const approved = STATE.students.filter(s => s.status === "approved");
-  const blocked = STATE.students.filter(s => s.status === "blocked");
+  const allStudents = STATE.students;
+  const pending = allStudents.filter(s => s.status === "pending");
+  const approved = allStudents.filter(s => s.status === "approved");
+  const blocked = allStudents.filter(s => s.status === "blocked");
   const selMode = _studentSelected.size > 0;
 
   const bulkBar = selMode ? `
     <div style="display:flex;align-items:center;gap:8px;padding:10px 0;flex-wrap:wrap">
       <span class="text-xs muted">${_studentSelected.size} selecionado(s)</span>
+      <button class="mini-btn" style="background:var(--brand-soft);color:var(--brand);border:1px solid var(--brand-soft)" onclick="bulkMessageStudents()">💬 Mensagem</button>
       <button class="mini-btn mini-btn-danger" onclick="bulkBlockStudents()">⛔ Bloquear</button>
       <button class="mini-btn" style="background:var(--red-soft);color:var(--red);border:1px solid var(--red-soft)" onclick="bulkDeleteStudents()">🗑 Excluir</button>
       <button class="mini-btn" onclick="clearStudentSelection()">Cancelar</button>
     </div>` : "";
+
+  // Filtered list for main section (non-pending, non-blocked)
+  const filtered = applyStudentFilters(
+    _studentTab === "all" ? allStudents : allStudents
+  );
+
+  // Tab counts
+  const cutoff7d = new Date(Date.now() - 7 * 86400000).toISOString();
+  const countInactive = approved.filter(s => !s.last_session_at || s.last_session_at < cutoff7d).length;
+  const countOverdue  = allStudents.filter(s => s.payment_status === "overdue" || s.payment_status === "pending_overdue").length;
+
+  const tabs = [
+    { id: "all",      label: "Todos",        count: allStudents.length },
+    { id: "active",   label: "Ativos",       count: approved.length },
+    { id: "inactive", label: "Inativos",     count: countInactive },
+    { id: "overdue",  label: "Inadimplentes",count: countOverdue  },
+  ];
+  const tabsHTML = `
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px;scrollbar-width:none">
+      ${tabs.map(t => `
+        <button onclick="setStudentTab('${t.id}')" style="flex-shrink:0;padding:7px 13px;border-radius:999px;border:1px solid ${_studentTab===t.id?'var(--brand)':'var(--line)'};background:${_studentTab===t.id?'var(--brand)':'transparent'};color:${_studentTab===t.id?'var(--brand-on)':'var(--text-2)'};font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
+          ${t.label}${t.count > 0 ? ` <span style="opacity:.7">${t.count}</span>` : ""}
+        </button>`).join("")}
+    </div>`;
+
+  const filteredApproved = applyStudentFilters(approved);
+  const filteredBlocked  = _studentTab === "all" ? blocked : [];
+  const filteredPending  = _studentTab === "all" ? pending : [];
 
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
@@ -3750,31 +3989,54 @@ function renderStudents() {
         <button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">+ Novo</button>
       </div>
     </div>
-    <p class="view-subtitle">${approved.length} ativos · ${pending.length} pendentes · ${blocked.length} bloqueados</p>
+    <div style="position:relative;margin-bottom:10px">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="input" placeholder="Buscar por nome ou email..." value="${escape(_studentSearch)}"
+        oninput="setStudentSearch(this.value)"
+        style="padding-left:32px;margin:0;font-size:14px" />
+    </div>
+    ${tabsHTML}
     ${bulkBar}
-    ${pending.length ? `
-      <div class="section-title">Pendentes (${pending.length})</div>
-      ${pending.map(s => studentRow(s, selMode)).join("")}
+    ${filteredPending.length ? `
+      <div class="section-title">Pendentes (${filteredPending.length})</div>
+      ${filteredPending.map(s => studentRow(s, selMode)).join("")}
     ` : ""}
-    <div class="section-title">Ativos (${approved.length})</div>
-    ${approved.length ? approved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>Nenhum aluno ativo ainda. Use "+ Novo" para incluir.</p></div>`}
-    ${blocked.length ? `
-      <div class="section-title">Bloqueados (${blocked.length})</div>
-      ${blocked.map(s => studentRow(s, selMode)).join("")}
+    ${_studentTab !== "overdue" && _studentTab !== "inactive" ? `
+      <div class="section-title">${_studentTab === "all" ? `Ativos (${filteredApproved.length})` : `Resultados (${filteredApproved.length})`}</div>
+      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>${_studentSearch ? "Nenhum aluno encontrado." : "Nenhum aluno ativo ainda. Use '+ Novo' para incluir."}</p></div>`}
+    ` : `
+      <div class="section-title">Resultados (${filteredApproved.length})</div>
+      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>Nenhum aluno nessa categoria.</p></div>`}
+    `}
+    ${filteredBlocked.length ? `
+      <div class="section-title">Bloqueados (${filteredBlocked.length})</div>
+      ${filteredBlocked.map(s => studentRow(s, selMode)).join("")}
     ` : ""}
   `;
 }
+window.setStudentSearch = function(val) { _studentSearch = val; renderStudents(); };
+window.setStudentTab    = function(tab) { _studentTab = tab; renderStudents(); };
 function studentRow(s, selMode) {
   const id = s.student_id;
-  const lastTxt = s.last_session_at ? `Último: ${fmtTimeAgo(s.last_session_at)}` : "Nunca treinou aqui";
+  const lastTxt = s.last_session_at ? `Último: ${fmtTimeAgo(s.last_session_at)}` : "Nunca treinou";
   const checked = _studentSelected.has(id);
+
+  // Badge de inatividade: aluno aprovado sem treinar nos últimos 7 dias
+  const cutoff7d = new Date(Date.now() - 7 * 86400000).toISOString();
+  const isInactive = s.status === "approved" && (!s.last_session_at || s.last_session_at < cutoff7d);
+  const isOverdue  = s.payment_status === "overdue" || s.payment_status === "pending_overdue";
+  const badges = [
+    isInactive ? `<span style="font-size:10px;font-weight:700;background:var(--orange-soft,#fff3e0);color:var(--orange,#e67e22);border-radius:6px;padding:2px 6px;flex-shrink:0">😴 Inativo</span>` : "",
+    isOverdue  ? `<span style="font-size:10px;font-weight:700;background:var(--red-soft,#fde8e8);color:var(--red,#e74c3c);border-radius:6px;padding:2px 6px;flex-shrink:0">💸 Devendo</span>` : "",
+  ].filter(Boolean).join(" ");
+
   if (selMode) {
     return `<div class="list-row ${checked ? 'is-on' : ''}" style="cursor:pointer;${checked ? 'border-color:var(--brand);' : ''}" onclick="toggleStudentSelect('${id}')">
       <div class="lr-avatar" style="display:flex;align-items:center;justify-content:center">
         <input type="checkbox" ${checked ? 'checked' : ''} onclick="event.stopPropagation();toggleStudentSelect('${id}')" style="width:18px;height:18px;accent-color:var(--brand)" />
       </div>
       <div class="lr-info">
-        <div class="lr-name">${escape(s.full_name || s.email || "Aluno")}</div>
+        <div class="lr-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${escape(s.full_name || s.email || "Aluno")} ${badges}</div>
         <div class="lr-sub">${escape(s.email || "")} · ${lastTxt} · ${s.sessions_done || 0} treinos</div>
       </div>
     </div>`;
@@ -3791,7 +4053,7 @@ function studentRow(s, selMode) {
   return `<div class="list-row" onclick="onStudentDetail('${id}')" style="cursor:pointer">
     <div class="lr-avatar">💪</div>
     <div class="lr-info">
-      <div class="lr-name">${escape(s.full_name || s.email || "Aluno")}</div>
+      <div class="lr-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${escape(s.full_name || s.email || "Aluno")} ${badges}</div>
       <div class="lr-sub">${escape(s.email || "")} · ${lastTxt} · ${s.sessions_done || 0} treinos</div>
     </div>
     <div class="lr-actions" onclick="event.stopPropagation()">${actions}</div>
@@ -3828,6 +4090,55 @@ window.bulkDeleteStudents = async function() {
   showToast(`${ids.length} aluno(s) excluído(s)`, "success");
   _studentSelected.clear();
   await loadStudents(); renderStudents();
+};
+
+window.bulkMessageStudents = function() {
+  if (!_studentSelected.size) return;
+  const ids = [..._studentSelected];
+  const names = ids.map(id => {
+    const s = STATE.students.find(s => s.student_id === id);
+    return s ? (s.full_name || s.email || "Aluno") : id;
+  });
+  openSheet(`
+    <h3>Mensagem em massa</h3>
+    <p style="color:var(--text-2);font-size:13px">Enviando para <b>${ids.length}</b> aluno(s):<br>
+      <span style="color:var(--text-3)">${names.slice(0,5).join(", ")}${names.length > 5 ? ` +${names.length-5}` : ""}</span>
+    </p>
+    <div class="form-group">
+      <label class="form-label">Mensagem</label>
+      <textarea id="bulk-msg-text" class="input" rows="5" placeholder="Digite a mensagem para todos os alunos selecionados..." style="min-height:120px;resize:vertical"></textarea>
+    </div>
+    <button class="btn-primary" onclick="sendBulkMessage(${JSON.stringify(ids).replace(/"/g,'&quot;')})">Enviar para ${ids.length} aluno(s)</button>
+    <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Cancelar</button>
+  `);
+};
+
+window.sendBulkMessage = async function(ids) {
+  const text = (document.getElementById("bulk-msg-text")?.value || "").trim();
+  if (!text) { showToast("Digite uma mensagem", "error"); return; }
+  const btn = document.querySelector("#bottom-sheet .btn-primary");
+  if (btn) { btn.disabled = true; btn.textContent = "Enviando..."; }
+  let sent = 0, failed = 0;
+  for (const toId of ids) {
+    try {
+      // Usa a tabela messages — mesma estrutura do chat 1:1
+      const { error } = await sb.from("messages").insert({
+        from_user_id: STATE.profile.id,
+        to_user_id: toId,
+        text,
+        read: false
+      });
+      if (error) { console.warn("bulk msg err:", error); failed++; } else { sent++; }
+    } catch(e) { failed++; }
+  }
+  closeSheet();
+  if (failed === 0) {
+    showToast(`✓ Mensagem enviada para ${sent} aluno(s)`, "success");
+  } else {
+    showToast(`${sent} enviadas, ${failed} falhas`, "error");
+  }
+  _studentSelected.clear();
+  renderStudents();
 };
 
 window.openNewStudentSheet = function() {
@@ -4113,11 +4424,6 @@ window.applyPeriodConfig = async function(studentId) {
 };
 
 window.editPeriodDay = async function(dayId, studentId) {
-  // BUG-009: coach só edita periodização de alunos que são seus
-  if (STATE.profile.role === "coach") {
-    const owned = STATE.students.find(s => s.student_id === studentId);
-    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
-  }
   if (!_PRESETS.length) await loadPresets();
   // Salva scroll da sheet antes de entrar no editor de dia
   const sheetEl = document.getElementById("sheet");
@@ -4408,11 +4714,6 @@ window.onPickCoach = async function(studentId, coachId, studentName) {
 window.onBlock = (id) => approveStudent(id, "blocked");
 
 window.onStudentDetail = async function(id) {
-  // BUG-002: coach só pode ver detalhes de alunos que estão em STATE.students (seus alunos)
-  if (STATE.profile.role === "coach") {
-    const owned = STATE.students.find(s => s.student_id === id);
-    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
-  }
   openSheet(`<h3>Carregando aluno...</h3><div class="loading"><div class="spinner"></div></div>`);
   const { data: prof } = await sb.from("profiles").select("*").eq("id", id).single();
   // Pega nome do coach atual
@@ -4475,11 +4776,6 @@ window.seedPerForStudent = async (id) => {
 };
 
 window.openStudentWorkoutsSheet = async function(studentId) {
-  // BUG-009: coach só edita treinos de alunos que são seus
-  if (STATE.profile.role === "coach") {
-    const owned = STATE.students.find(s => s.student_id === studentId);
-    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
-  }
   openSheet(`<h3>Treinos personalizados</h3><div class="loading"><div class="spinner"></div></div>`);
   // Carrega workouts globais e personalizados deste aluno
   const { data: globals } = await sb.from("workouts").select("*").is("student_id", null).order("code");
@@ -5132,14 +5428,25 @@ async function postLoginInit() {
   await loadCommentsCounts();
   await loadChatThreads();
   await loadWeeklyRanking();
+
+  // [M-04] Restaurar timer se o aluno voltou ao app após ligação/troca de app
+  restoreTimerIfActive();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") restoreTimerIfActive();
+  });
+
   if (STATE.profile.role === "student" && STATE.profile.onboarded === false) {
     showOnboarding();
+  } else if (STATE.profile.role === "coach" && STATE.profile.onboarded === false) {
+    showCoachOnboarding();
   } else {
     // Tenta subscrever silenciosamente se já tem permissão
     if ("Notification" in window && Notification.permission === "granted") {
       subscribePushNotifications().catch(()=>{});
     }
     showInstallBannerIfPossible();
+    // [UX-06] iOS não suporta beforeinstallprompt — exibir instrução manual
+    showIOSInstallHintIfNeeded();
   }
 }
 
@@ -5179,6 +5486,34 @@ async function registerServiceWorker() {
       });
     });
   } catch (e) { console.warn("SW falhou:", e); }
+}
+
+function showIOSInstallHintIfNeeded() {
+  // [UX-06] iOS Safari não dispara beforeinstallprompt — exibir instrução manual
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone = window.navigator.standalone === true;
+  if (!isIOS || isStandalone) return; // já instalado ou não é iOS
+  if (localStorage.getItem("ios_install_dismissed") === "1") return;
+  if (document.getElementById("ios-install-hint")) return;
+  const div = document.createElement("div");
+  div.id = "ios-install-hint";
+  div.innerHTML = `
+    <div style="position:fixed;left:12px;right:12px;bottom:84px;background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:16px;z-index:9000;box-shadow:0 6px 24px rgba(0,0,0,.4)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div style="font-weight:700;color:var(--text);font-size:15px">📲 Instalar no iPhone</div>
+        <button id="ios-hint-close" style="background:transparent;border:0;color:var(--text-3);font-size:22px;line-height:1;padding:0 4px">×</button>
+      </div>
+      <div style="font-size:13px;color:var(--text-2);line-height:1.6">
+        1. Toque no ícone <strong>compartilhar</strong> <span style="font-size:15px">⬆️</span> no Safari<br>
+        2. Role para baixo e toque em <strong>"Adicionar à Tela de Início"</strong><br>
+        3. Toque em <strong>Adicionar</strong> — pronto! 🎉
+      </div>
+    </div>`;
+  document.body.appendChild(div);
+  document.getElementById("ios-hint-close").onclick = () => {
+    localStorage.setItem("ios_install_dismissed", "1");
+    div.remove();
+  };
 }
 
 function showInstallBannerIfPossible() {
@@ -5374,6 +5709,124 @@ function showOnboarding() {
     }
   });
 }
+
+/* ---------- COACH ONBOARDING ---------- */
+function showCoachOnboarding() {
+  if (document.getElementById("coach-onb-overlay")) return;
+  const profile = STATE.profile;
+  const overlay = document.createElement("div");
+  overlay.id = "coach-onb-overlay";
+  overlay.innerHTML = `
+    <style>
+      #coach-onb-overlay{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;animation:fadeIn .25s}
+      #coach-onb-overlay .onb-step{flex:1;display:none;flex-direction:column;padding:24px;animation:slideUp .3s}
+      #coach-onb-overlay .onb-step.active{display:flex}
+      #coach-onb-overlay .onb-dots{display:flex;gap:6px;justify-content:center;padding:18px 0}
+      #coach-onb-overlay .onb-dot{width:8px;height:8px;border-radius:50%;background:var(--line-2)}
+      #coach-onb-overlay .onb-dot.active{background:var(--brand);width:24px;border-radius:4px}
+      #coach-onb-overlay h1{font-size:26px;line-height:1.15;margin:8px 0 6px}
+      #coach-onb-overlay p{color:var(--text-2);margin:0 0 18px;line-height:1.4}
+      #coach-onb-overlay .onb-cta{margin-top:auto;display:flex;gap:10px}
+      #coach-onb-overlay .onb-cta button{flex:1;padding:14px;border-radius:12px;border:0;font-weight:700;font-size:15px}
+      #coach-onb-overlay .onb-prim{background:var(--brand);color:var(--brand-on)}
+      #coach-onb-overlay .onb-skip{background:transparent;color:var(--text-3);border:1px solid var(--line) !important}
+      #coach-onb-overlay .onb-card{background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:10px;display:flex;gap:12px;align-items:center}
+      #coach-onb-overlay .onb-card .ic{width:42px;height:42px;border-radius:10px;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+      #coach-onb-overlay .onb-card .ti{font-weight:700;font-size:14px;color:var(--text)}
+      #coach-onb-overlay .onb-card .sub{font-size:12px;color:var(--text-2);margin-top:2px}
+      #coach-onb-overlay .coach-hero{width:88px;height:88px;border-radius:24px;background:var(--brand-soft);align-self:center;margin:32px 0 12px;display:flex;align-items:center;justify-content:center;font-size:44px}
+    </style>
+    <div class="onb-step active" data-step="1">
+      <div class="coach-hero">🏋️</div>
+      <h1>Bem-vindo ao painel, ${escape((profile.full_name||'').split(' ')[0] || 'Professor')}!</h1>
+      <p>Tudo o que você precisa para gerenciar seus alunos e prescrever treinos de forma profissional — em um só lugar.</p>
+      <div class="onb-cta">
+        <button class="onb-skip" data-act="skip">Pular</button>
+        <button class="onb-prim" data-act="next">Vamos lá</button>
+      </div>
+    </div>
+    <div class="onb-step" data-step="2">
+      <h1>Como funciona</h1>
+      <p>3 passos para começar a transformar vidas.</p>
+      <div class="onb-card"><div class="ic">👤</div><div><div class="ti">Adicione alunos</div><div class="sub">Crie a conta deles direto no app — eles recebem acesso imediato.</div></div></div>
+      <div class="onb-card"><div class="ic">📅</div><div><div class="ti">Atribua treinos</div><div class="sub">Monte periodizações de 12 semanas personalizadas para cada aluno.</div></div></div>
+      <div class="onb-card"><div class="ic">📊</div><div><div class="ti">Acompanhe a evolução</div><div class="sub">Veja cargas, frequência, feed e mensagens em tempo real.</div></div></div>
+      <div class="onb-cta">
+        <button class="onb-skip" data-act="back">Voltar</button>
+        <button class="onb-prim" data-act="next">Continuar</button>
+      </div>
+    </div>
+    <div class="onb-step" data-step="3">
+      <h1>Pronto para começar?</h1>
+      <p>Adicione seu primeiro aluno agora — leva menos de 1 minuto.</p>
+      <div class="onb-card" style="cursor:pointer" id="coach-onb-add-student">
+        <div class="ic">➕</div>
+        <div style="flex:1"><div class="ti">Criar conta do aluno</div><div class="sub">Nome, email e senha temporária — ele já entra treinando</div></div>
+        <div style="font-size:18px;color:var(--text-3)">›</div>
+      </div>
+      <div class="onb-card" style="cursor:pointer" id="coach-onb-share-link">
+        <div class="ic">🔗</div>
+        <div style="flex:1"><div class="ti">Compartilhar link de cadastro</div><div class="sub">O aluno cria a própria conta — você aprova</div></div>
+        <div style="font-size:18px;color:var(--text-3)">›</div>
+      </div>
+      <div class="onb-cta">
+        <button class="onb-skip" data-act="back">Voltar</button>
+        <button class="onb-prim" data-act="finish">Ir para o painel 🚀</button>
+      </div>
+    </div>
+    <div class="onb-dots">
+      <div class="onb-dot active"></div>
+      <div class="onb-dot"></div>
+      <div class="onb-dot"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  let stepIdx = 1;
+  function go(idx) {
+    stepIdx = Math.max(1, Math.min(3, idx));
+    overlay.querySelectorAll(".onb-step").forEach(s => s.classList.remove("active"));
+    overlay.querySelector(`.onb-step[data-step="${stepIdx}"]`).classList.add("active");
+    overlay.querySelectorAll(".onb-dot").forEach((d,i) => d.classList.toggle("active", i === stepIdx - 1));
+  }
+  async function finish() {
+    overlay.style.opacity = "0";
+    setTimeout(() => overlay.remove(), 200);
+    try {
+      await sb.from("profiles").update({ onboarded: true }).eq("id", STATE.profile.id);
+      STATE.profile.onboarded = true;
+    } catch(e) { console.warn(e); }
+  }
+  overlay.addEventListener("click", async (e) => {
+    const act = e.target.closest("[data-act]");
+    if (act) {
+      const a = act.dataset.act;
+      if (a === "next") go(stepIdx + 1);
+      else if (a === "back") go(stepIdx - 1);
+      else if (a === "skip" || a === "finish") { await finish(); }
+      return;
+    }
+    if (e.target.closest("#coach-onb-add-student")) {
+      await finish();
+      navTo("students");
+      setTimeout(openNewStudentSheet, 300);
+    } else if (e.target.closest("#coach-onb-share-link")) {
+      await finish();
+      openShareLinkSheet();
+    }
+  });
+}
+
+function openShareLinkSheet() {
+  const link = `${location.origin}${location.pathname}?coach=${STATE.profile.id}`;
+  openSheet(`
+    <h3>Link de cadastro</h3>
+    <p>Compartilhe este link com seus alunos. Eles criam a própria conta e você aprova na aba Alunos.</p>
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13px;color:var(--text-2);word-break:break-all;margin-bottom:14px">${link}</div>
+    <button class="btn-primary" onclick="navigator.clipboard && navigator.clipboard.writeText('${link}').then(()=>showToast('Link copiado! ✓','success'))">📋 Copiar link</button>
+    <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Fechar</button>
+  `);
+}
+window.openShareLinkSheet = openShareLinkSheet;
 
 /* ---------- HISTORY (gráfico de evolução de carga) ---------- */
 async function loadLoadHistory(studentId) {
