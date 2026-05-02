@@ -868,6 +868,14 @@ function updateFavicon() {
   const fav = document.getElementById('favicon');
   if (!fav) return;
   const b = STATE.branding;
+  // Usa logo_url se disponível (mesmo logo da tela de login)
+  if (b.logo_url) {
+    fav.href = b.logo_url;
+    // Atualiza também apple-touch-icon
+    document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(el => { el.href = b.logo_url; });
+    return;
+  }
+  // Fallback: SVG com iniciais e cor da marca
   const bg = STATE.theme === 'light' ? '%23f5f7fb' : '%230a0e1a';
   const fg = (b.primary_color || '#00b4ff').replace('#','%23');
   const txt = (b.logo_text || b.app_name.slice(0,2)).toUpperCase();
