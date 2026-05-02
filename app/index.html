@@ -2,11 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
 <meta name="theme-color" content="#0a0e1a" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Treinova" />
+<script>window.VAPID_PUBLIC_KEY="BJKGigAT91DUeib34dF-iA5nJWeTgK80dJeFPSNdim3QXqJUrc8pRb84wc5bK6RImztWBLpgsqJs85wgli6hi3c";</script>
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="application-name" content="Treinova" />
 <meta name="description" content="Treinova — seu app, seu treino, sua marca." />
@@ -468,6 +469,22 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 .cfg-page h2 { font-size: 22px; font-weight: 900; margin: 0 0 8px; }
 .cfg-page p { color: var(--text-2); font-size: 13px; line-height: 1.5; }
 .cfg-page code { background: var(--bg-3); padding: 2px 6px; border-radius: 4px; font-size: 12px; color: var(--brand); }
+
+/* Bloqueia modo paisagem em dispositivos móveis */
+@media screen and (orientation: landscape) and (max-height: 600px) {
+  body::before {
+    content: "";
+    position: fixed; inset: 0; z-index: 999999;
+    background: #0a0e1a;
+  }
+  body::after {
+    content: "Gire o celular para retrato";
+    position: fixed; inset: 0; z-index: 1000000;
+    display: flex; align-items: center; justify-content: center;
+    color: #9aa6c0; font-size: 16px; font-family: -apple-system, system-ui, sans-serif;
+    text-align: center; padding: 24px;
+  }
+}
 </style>
 </head>
 <body>
@@ -491,10 +508,31 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       </div>
       <button type="submit" class="btn-primary" id="auth-submit">Entrar</button>
       <div id="auth-error" style="display:none; margin-top:10px; padding:10px; border-radius:8px; background:rgba(255,59,59,0.1); border:1px solid rgba(255,59,59,0.3); color:#ffaaaa; font-size:12px;"></div>
+      <button type="button" style="background:none;border:none;color:var(--text-3);font-size:12px;margin-top:12px;cursor:pointer;text-decoration:underline;width:100%;text-align:center;" onclick="showForgotPanel()">Esqueci minha senha</button>
     </form>
+    <div id="forgot-panel" style="display:none">
+      <h3 style="margin:0 0 10px;font-size:16px;font-weight:700;color:var(--text)">Redefinir senha</h3>
+      <p style="font-size:12px;color:var(--text-3);margin-bottom:14px">Digite seu email e enviaremos um link para criar uma nova senha.</p>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="input" id="forgot-email" type="email" autocomplete="email" placeholder="voce@email.com" />
+      </div>
+      <div id="forgot-success" style="display:none;padding:10px;border-radius:8px;background:rgba(0,200,100,0.1);border:1px solid rgba(0,200,100,0.3);color:#5af0a0;font-size:12px;margin-bottom:10px">
+        ✓ Link enviado! Verifique sua caixa de entrada (e o spam).
+      </div>
+      <button type="button" class="btn-primary" id="forgot-submit" onclick="submitForgotPassword()">Enviar link</button>
+      <button type="button" class="btn-ghost" style="margin-top:8px" onclick="showAuthForm()">← Voltar ao login</button>
+    </div>
   </div>
   <div style="text-align:center; margin-top:20px;">
     <p class="text-xs muted">Não tem conta? Fale com seu professor para receber acesso.</p>
+  </div>
+  <div style="position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:11px;color:var(--text-3)">
+    <a href="#" onclick="event.preventDefault();openLegalModal('terms')" style="color:var(--text-3);text-decoration:none;margin:0 8px">Termos de Uso</a>
+    ·
+    <a href="#" onclick="event.preventDefault();openLegalModal('privacy')" style="color:var(--text-3);text-decoration:none;margin:0 8px">Privacidade</a>
+    ·
+    <a href="https://wa.me/5535988477254" target="_blank" style="color:var(--text-3);text-decoration:none;margin:0 8px">Suporte</a>
   </div>
 </div>
 
@@ -517,10 +555,10 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 <div id="app" style="display:none">
   <header class="app-header">
     <div class="brand">
-      <div class="brand-logo" id="brand-logo">CO</div>
+      <div class="brand-logo" id="brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="" onerror="this.style.display='none'"></div>
       <div class="brand-name">
-        <span id="brand-name-text">COACH</span>
-        <small id="header-sub">Carregando...</small>
+        <span id="brand-name-text">TREINOVA</span>
+        <small id="header-sub"></small>
       </div>
     </div>
     <div class="header-spacer"></div>
@@ -537,7 +575,20 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
     </button>
   </header>
 
-  <section id="view-home" class="view active"></section>
+  <!-- Skeleton de carregamento — visível até renderCurrentView() ser chamado -->
+  <div id="app-skeleton" style="padding:16px;animation:pulse 1.4s ease-in-out infinite">
+    <style>
+      @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+      .sk { background:var(--line); border-radius:10px; }
+    </style>
+    <div class="sk" style="height:22px;width:55%;margin-bottom:10px"></div>
+    <div class="sk" style="height:14px;width:38%;margin-bottom:24px"></div>
+    <div class="sk" style="height:100px;border-radius:16px;margin-bottom:12px"></div>
+    <div class="sk" style="height:100px;border-radius:16px;margin-bottom:12px"></div>
+    <div class="sk" style="height:100px;border-radius:16px"></div>
+  </div>
+
+  <section id="view-home" class="view"></section>
   <section id="view-calendar" class="view"></section>
   <section id="view-workout" class="view"></section>
   <section id="view-feed" class="view"></section>
@@ -549,6 +600,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   <section id="view-trainers" class="view"></section>
   <!-- payments (admin: pagamentos dos coaches; coach: pagamentos dos alunos) -->
   <section id="view-payments" class="view"></section>
+  <section id="view-chat" class="view"></section>
 
   <!-- Timer -->
   <div class="timer-overlay">
@@ -628,6 +680,16 @@ const ICONS = {
   calf: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="10" r="4"/><path d="M32 14v8M28 22h8l-1 14h-6zM28 36c-2 4-3 8-2 12l4 4M36 36c2 4 3 8 2 12l-4 4M22 50h20"/></svg>`
 };
 const iconFor = c => ICONS[c] || ICONS.mobility;
+
+// Retorna HTML de imagem para um exercício.
+// Prioridade: image_url própria → biblioteca com mesmo nome → ícone SVG por categoria
+function getExThumb(ex) {
+  const url = ex.image_url
+    || ((STATE.library || []).find(l => l.name === ex.name && l.image_url) || {}).image_url;
+  return url
+    ? `<img src="${escape(url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" />`
+    : iconFor(ex.cat);
+}
 
 const REP_SCHEMES = {
   yellow: { label: "12 a 15 reps máx.", reps: "12–15", pause: "1'00\"", pauseSec: 60 },
@@ -783,21 +845,16 @@ function applyBranding(b) {
   if (STATE.branding.primary_color) {
     root.style.setProperty('--brand-on', luminance(STATE.branding.primary_color) > 0.55 ? '#001a2a' : '#ffffff');
   }
-  // Title + favicon
+  // Title + favicon (usa o branding atual — app ou coach)
   document.title = STATE.branding.app_name;
   updateFavicon();
-  // Header brand
+  // Header do app (pós-login): sempre usa o branding corrente do usuário
   const logoEl = document.getElementById('brand-logo');
   const nameEl = document.getElementById('brand-name-text');
   if (logoEl) logoEl.innerHTML = brandLogoHTML();
   if (nameEl) nameEl.textContent = STATE.branding.app_name.toUpperCase();
-  // Auth page
-  const authLogo = document.getElementById('auth-brand-logo');
-  const authName = document.getElementById('auth-brand-name');
-  const authTag = document.getElementById('auth-brand-tagline');
-  if (authLogo) authLogo.innerHTML = brandLogoHTML();
-  if (authName) authName.textContent = STATE.branding.app_name.toUpperCase();
-  if (authTag) authTag.textContent = STATE.branding.app_tagline || '';
+  // Auth page: NÃO atualiza aqui — a tela de login usa sempre o branding Treinova
+  // (applyAuthBranding() é responsável exclusiva pelos elementos auth-brand-*)
 }
 
 function brandLogoHTML() {
@@ -1054,6 +1111,7 @@ function showAuth() {
   document.getElementById("auth-page").style.display = "flex";
   document.getElementById("app").style.display = "none";
   document.getElementById("cfg-page").style.display = "none";
+  try { _BOOT_DONE = true; } catch(e){}
 }
 function showCfg() {
   document.getElementById("cfg-page").style.display = "block";
@@ -1064,6 +1122,7 @@ function showApp() {
   document.getElementById("app").style.display = "block";
   document.getElementById("auth-page").style.display = "none";
   document.getElementById("cfg-page").style.display = "none";
+  try { _BOOT_DONE = true; } catch(e){}
 }
 
 function setAuthMode(mode) {
@@ -1094,6 +1153,32 @@ async function handleAuthSubmit(ev) {
   }
 }
 
+function showForgotPanel() {
+  document.getElementById("auth-form").style.display = "none";
+  document.getElementById("forgot-panel").style.display = "block";
+  document.getElementById("auth-error").style.display = "none";
+  document.getElementById("forgot-success").style.display = "none";
+  const fe = document.getElementById("forgot-email");
+  const ae = document.getElementById("auth-email");
+  if (fe && ae && ae.value) fe.value = ae.value;
+}
+function showAuthForm() {
+  document.getElementById("forgot-panel").style.display = "none";
+  document.getElementById("auth-form").style.display = "block";
+}
+async function submitForgotPassword() {
+  const email = document.getElementById("forgot-email").value.trim();
+  if (!email) { showToast("Digite seu email", "error"); return; }
+  const btn = document.getElementById("forgot-submit");
+  btn.disabled = true; btn.textContent = "Enviando...";
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+  btn.disabled = false; btn.textContent = "Enviar link";
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  document.getElementById("forgot-success").style.display = "block";
+  btn.style.display = "none";
+}
+
 async function loadProfile() {
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return null;
@@ -1110,6 +1195,11 @@ async function loadProfile() {
 async function signOut() {
   if (confirm("Sair da conta?")) {
     cleanupRealtime();
+    // Zera dados sensíveis em memória antes do signOut (BUG-013)
+    STATE.profile = null; STATE.user = null;
+    STATE.students = []; STATE.trainers = []; STATE.payments = [];
+    STATE.feed = []; STATE.setLogs = []; STATE.lastLoads = {};
+    STATE.notifications = []; STATE.myPaymentBlocked = false;
     await sb.auth.signOut();
     location.reload();
   }
@@ -1425,10 +1515,23 @@ async function completeSession() {
   showToast("Treino concluído! 🎯", "success");
   STATE.currentSession.status = "completed";
   await loadLastLoads();
-  navTo("feed");
+  // Animação de conclusão
+  if (typeof fireConfetti === "function") fireConfetti(2800);
+  // Mostra modal de "treino concluído" com stats e botão de compartilhar
+  if (typeof showWorkoutCompleteModal === "function") {
+    showWorkoutCompleteModal({ totalVolume, duration, sessionId: STATE.currentSession.id });
+  } else {
+    navTo("feed");
+  }
 }
 
 async function approveStudent(id, status) {
+  // BUG-003: coach só pode alterar status de alunos que são seus (coach_id = self)
+  // Admin pode alterar qualquer um. Bloqueia operação cross-coach no front.
+  if (STATE.profile.role === "coach") {
+    const target = STATE.students.find(s => s.student_id === id);
+    if (!target) { showToast("Sem permissão para este aluno", "error"); return; }
+  }
   const patch = { status };
   // Coach aprova → vincula a si mesmo. Admin aprova → mantém coach_id existente (ou null)
   if (status === "approved" && STATE.profile.role === "coach") patch.coach_id = STATE.profile.id;
@@ -1490,6 +1593,14 @@ function setupRealtime() {
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: "user_id=eq." + STATE.profile.id }, async () => {
       await loadNotifications();
       renderHeaderBell();
+    })
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: "to_user=eq." + STATE.profile.id }, async (payload) => {
+      // Nova mensagem recebida: atualiza badge e lista de threads
+      STATE.chatUnread = (STATE.chatUnread || 0) + 1;
+      renderHeaderBell();
+      // Se o chat já está aberto na thread certa, reload é feito pelo CHAT_RT_CHANNEL
+      // Se a lista de threads está visível, atualiza
+      if (STATE.view === "chat") renderChat().catch(()=>{});
     })
     .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, async () => {
       await checkMyPaymentStatus();
@@ -1621,13 +1732,65 @@ function closeFsTimer() { document.getElementById("timer-fs").classList.remove("
 /* =============================================================================
    SHEET (modal)
    ============================================================================= */
+let _sheetInHistory = false;
+let _studentSelected = new Set();   // ids selecionados em bulk
+let _trainerSelected = new Set();
+let _periodScrollTop = 0;           // preservar scroll da sheet de periodização
+let _editingStudentId = null;       // aluno sendo editado na periodização
+
 function openSheet(html) {
   const root = document.getElementById("sheet-content");
   root.innerHTML = '<div class="sheet-handle"></div>' + html;
   document.getElementById("sheet").classList.add("active");
+  // Empurra estado para que o botão voltar (hardware/browser) feche a sheet
+  if (!_sheetInHistory) {
+    _sheetInHistory = true;
+    try { history.pushState({ treinova: 'sheet' }, ''); } catch(e){}
+  }
 }
-function closeSheet() { document.getElementById("sheet").classList.remove("active"); }
+
+function closeSheet() {
+  const sheet = document.getElementById("sheet");
+  if (!sheet || !sheet.classList.contains("active")) return;
+  sheet.classList.remove("active");
+  // Se o estado da sheet está no histórico, volta para limpá-lo
+  if (_sheetInHistory) {
+    _sheetInHistory = false;
+    try { history.back(); } catch(e){}
+  }
+}
 window.closeSheet = closeSheet;
+
+// Botão voltar do hardware/browser fecha modais na seguinte prioridade:
+// 1. chat-thread-overlay (fullscreen)
+// 2. comments overlay
+// 3. sheet bottom
+window.addEventListener('popstate', (e) => {
+  // Chat thread overlay
+  const chatOverlay = document.getElementById("chat-thread-overlay");
+  if (chatOverlay) {
+    _chatThreadInHistory = false;
+    if (typeof CHAT_RT_CHANNEL !== 'undefined' && CHAT_RT_CHANNEL) {
+      sb.removeChannel(CHAT_RT_CHANNEL); CHAT_RT_CHANNEL = null;
+    }
+    CHAT_ACTIVE_OTHER = null;
+    chatOverlay.remove();
+    return;
+  }
+  // Comments overlay
+  const cmOverlay = document.getElementById("cm-overlay");
+  if (cmOverlay) {
+    _cmInHistory = false;
+    cmOverlay.remove();
+    return;
+  }
+  // Sheet bottom
+  _sheetInHistory = false;
+  const sheet = document.getElementById("sheet");
+  if (sheet && sheet.classList.contains("active")) {
+    sheet.classList.remove("active");
+  }
+});
 
 /* =============================================================================
    PAYMENTS + NOTIFICATIONS
@@ -1643,27 +1806,27 @@ async function loadCoachPayments() {
 }
 async function loadPaymentsForUser(userId) {
   const { data } = await sb.from("payments")
-    .select("*").eq("payer_id", userId).order("due_date", { ascending: false });
+    .select("*").eq("user_id", userId).order("due_date", { ascending: false });
   return data || [];
 }
 async function checkMyPaymentStatus() {
   if (!STATE.profile) return;
   // Busca atrasados
   const { data } = await sb.from("payments")
-    .select("id").eq("payer_id", STATE.profile.id)
+    .select("id").eq("user_id", STATE.profile.id)
     .in("status", ["pending","overdue"]).lt("due_date", new Date().toISOString().slice(0,10)).limit(1);
   STATE.myPaymentBlocked = (data && data.length > 0);
 }
 async function isUserPaymentBlocked(userId) {
   const { data } = await sb.from("payments")
-    .select("id").eq("payer_id", userId)
+    .select("id").eq("user_id", userId)
     .in("status", ["pending","overdue"]).lt("due_date", new Date().toISOString().slice(0,10)).limit(1);
   return data && data.length > 0;
 }
 
 async function recordPayment(payerId, receiverId, payload) {
   const insertData = {
-    payer_id: payerId,
+    user_id: payerId,      // coluna oficial: user_id (FK → profiles)
     receiver_id: receiverId,
     amount: parseFloat(payload.amount),
     due_date: payload.due_date,
@@ -1765,7 +1928,7 @@ async function generateOverduePaymentNotifications() {
   await sb.rpc("refresh_payment_status");
   // Pega meus atrasados
   const { data: mine } = await sb.from("payments")
-    .select("id, due_date").eq("payer_id", STATE.profile.id).eq("status","overdue");
+    .select("id, due_date").eq("user_id", STATE.profile.id).eq("status","overdue");
   for (const p of (mine||[])) {
     const { data: existing } = await sb.from("notifications")
       .select("id").eq("user_id", STATE.profile.id).eq("kind","payment_overdue")
@@ -1861,7 +2024,23 @@ window.onNotifClick = async function(id, kind, relatedId) {
    RENDER — ROUTING
    ============================================================================= */
 function renderCurrentView() {
-  const v = STATE.view;
+  // Remove skeleton na primeira renderização
+  const sk = document.getElementById("app-skeleton");
+  if (sk) sk.remove();
+
+  const v    = STATE.view;
+  const role = STATE.profile?.role;
+
+  // BUG-007: guard de acesso por role — impede aluno de forçar views de staff via navTo()
+  const staffViews = ["students", "admin-workouts", "payments"];
+  const adminViews = ["trainers"];
+  if (staffViews.includes(v) && !["coach", "admin"].includes(role)) {
+    STATE.view = "home"; renderHome(); return;
+  }
+  if (adminViews.includes(v) && role !== "admin") {
+    STATE.view = "home"; renderHome(); return;
+  }
+
   if (v === "home") renderHome();
   else if (v === "calendar") renderCalendar();
   else if (v === "workout") renderWorkout();
@@ -1874,6 +2053,9 @@ function renderCurrentView() {
   else if (v === "history") renderHistory && renderHistory();
   else if (v === "chat") renderChat && renderChat();
   else if (v === "ranking") renderRanking && renderRanking();
+  else if (v === "progress") renderProgress && renderProgress();
+  else if (v === "aero") renderAero && renderAero();
+  else if (v === "onerm") renderOneRM && renderOneRM();
 }
 
 function navTo(view) {
@@ -1957,6 +2139,25 @@ function renderHome() {
   }
   if (STATE.profile.status === "blocked") {
     el.innerHTML = `<div class="empty"><h3>Acesso bloqueado</h3><p>Fale com seu professor.</p></div>`;
+    return;
+  }
+
+  // BUG-005: bloqueio por inadimplência aplicado antes de renderizar o card de treino
+  if (STATE.myPaymentBlocked) {
+    el.innerHTML = `
+      <div class="greeting-card" style="border-color:var(--red-soft)">
+        <div class="greeting-eyebrow" style="color:var(--red)">Mensalidade em atraso</div>
+        <div class="greeting-title">Olá, ${escape(firstName(STATE.profile.full_name))} 👋</div>
+        <div class="greeting-sub">Seu acesso ao treino está suspenso. Regularize com seu professor para continuar.</div>
+      </div>
+      <div class="empty">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="32" cy="32" r="22"/><path d="M22 32h20"/></svg>
+        <h3>Treino bloqueado</h3>
+        <p>Fale com seu professor para quitar o pagamento pendente.</p>
+        <button class="btn-primary" onclick="openMyPaymentsSheet()" style="margin-top:14px; max-width:300px; margin-inline:auto;">
+          Ver pagamentos pendentes
+        </button>
+      </div>`;
     return;
   }
 
@@ -2046,7 +2247,29 @@ function renderHome() {
         <div style="font-weight:700;font-size:14px">Ranking semanal</div>
         <div style="font-size:11px;color:var(--text-3)">Top da semana</div>
       </button>
+      <button onclick="navTo('progress')" style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;cursor:pointer;color:var(--text);text-align:left">
+        <div style="font-size:24px">📸</div>
+        <div style="font-weight:700;font-size:14px">Foto de progresso</div>
+        <div style="font-size:11px;color:var(--text-3)">Antes & depois</div>
+      </button>
+      <button onclick="navTo('aero')" style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;cursor:pointer;color:var(--text);text-align:left">
+        <div style="font-size:24px">🏃</div>
+        <div style="font-weight:700;font-size:14px">Aeróbio</div>
+        <div style="font-size:11px;color:var(--text-3)">Cronômetro & log</div>
+      </button>
+      <button onclick="navTo('onerm')" style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;cursor:pointer;color:var(--text);text-align:left;grid-column:span 2">
+        <div style="display:flex;align-items:center;gap:10px;width:100%">
+          <div style="font-size:24px">💪</div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:14px">Calibração 1RM</div>
+            <div style="font-size:11px;color:var(--text-3)">Teste de força e PRs</div>
+          </div>
+          <div style="font-size:18px;color:var(--text-3)">›</div>
+        </div>
+      </button>
     </div>
+    <div id="weekly-volume-card"></div>
+    <div id="assessment-reminder-card"></div>
     <div class="section-title">Lembretes do treinador</div>
     <div class="note-box">
       <ul>
@@ -2183,20 +2406,46 @@ function renderTrainers() {
   const pending = STATE.trainers.filter(t => t.status === "pending");
   const approved = STATE.trainers.filter(t => t.status === "approved");
   const blocked = STATE.trainers.filter(t => t.status === "blocked");
+  const selMode = _trainerSelected.size > 0;
+
+  const bulkBar = selMode ? `
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 0;flex-wrap:wrap">
+      <span class="text-xs muted">${_trainerSelected.size} selecionado(s)</span>
+      <button class="mini-btn mini-btn-danger" onclick="bulkBlockTrainers()">⛔ Bloquear</button>
+      <button class="mini-btn" style="background:var(--red-soft);color:var(--red);border:1px solid var(--red-soft)" onclick="bulkDeleteTrainers()">🗑 Excluir</button>
+      <button class="mini-btn" onclick="clearTrainerSelection()">Cancelar</button>
+    </div>` : "";
+
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Treinadores</h1>
-      <button class="mini-btn mini-btn-primary" onclick="openNewTrainerSheet()">+ Novo</button>
+      <div style="display:flex;gap:6px">
+        <button class="mini-btn" onclick="toggleTrainerSelectAll()" title="Selecionar todos">☑</button>
+        <button class="mini-btn mini-btn-primary" onclick="openNewTrainerSheet()">+ Novo</button>
+      </div>
     </div>
     <p class="view-subtitle">${approved.length} ativos · ${pending.length} pendentes · ${blocked.length} bloqueados</p>
-    ${pending.length ? `<div class="section-title">Pendentes (${pending.length})</div>${pending.map(trainerRow).join("")}` : ""}
+    ${bulkBar}
+    ${pending.length ? `<div class="section-title">Pendentes (${pending.length})</div>${pending.map(t => trainerRow(t, selMode)).join("")}` : ""}
     <div class="section-title">Ativos (${approved.length})</div>
-    ${approved.length ? approved.map(trainerRow).join("") : `<div class="empty"><p>Nenhum treinador ativo</p></div>`}
-    ${blocked.length ? `<div class="section-title">Bloqueados (${blocked.length})</div>${blocked.map(trainerRow).join("")}` : ""}
+    ${approved.length ? approved.map(t => trainerRow(t, selMode)).join("") : `<div class="empty"><p>Nenhum treinador ativo</p></div>`}
+    ${blocked.length ? `<div class="section-title">Bloqueados (${blocked.length})</div>${blocked.map(t => trainerRow(t, selMode)).join("")}` : ""}
   `;
 }
-function trainerRow(t) {
+function trainerRow(t, selMode) {
   const studs = (t.students_approved != null) ? `${t.students_approved} aluno(s)` : "";
+  const checked = _trainerSelected.has(t.id);
+  if (selMode) {
+    return `<div class="list-row ${checked ? 'is-on' : ''}" style="cursor:pointer;${checked ? 'border-color:var(--brand);' : ''}" onclick="toggleTrainerSelect('${t.id}')">
+      <div class="lr-avatar" style="display:flex;align-items:center;justify-content:center">
+        <input type="checkbox" ${checked ? 'checked' : ''} onclick="event.stopPropagation();toggleTrainerSelect('${t.id}')" style="width:18px;height:18px;accent-color:var(--brand)" />
+      </div>
+      <div class="lr-info">
+        <div class="lr-name">${escape(t.full_name || t.email || "Treinador")}</div>
+        <div class="lr-sub">${escape(t.email || "")} ${studs ? "· " + studs : ""}</div>
+      </div>
+    </div>`;
+  }
   return `<div class="list-row" onclick="openEditTrainerSheet('${t.id}')" style="cursor:pointer">
     <div class="lr-avatar" style="overflow:hidden;">${t.avatar_url ? `<img src="${escape(t.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />` : escape(t.avatar_emoji || "🎯")}</div>
     <div class="lr-info">
@@ -2208,6 +2457,38 @@ function trainerRow(t) {
     </div>
   </div>`;
 }
+
+window.toggleTrainerSelect = function(id) {
+  if (_trainerSelected.has(id)) _trainerSelected.delete(id); else _trainerSelected.add(id);
+  renderTrainers();
+};
+window.toggleTrainerSelectAll = function() {
+  if (_trainerSelected.size > 0) { _trainerSelected.clear(); }
+  else { STATE.trainers.forEach(t => _trainerSelected.add(t.id)); }
+  renderTrainers();
+};
+window.clearTrainerSelection = function() { _trainerSelected.clear(); renderTrainers(); };
+
+window.bulkBlockTrainers = async function() {
+  if (!_trainerSelected.size) return;
+  if (!confirm(`Bloquear ${_trainerSelected.size} treinador(es)?`)) return;
+  const ids = [..._trainerSelected];
+  const { error } = await sb.from("profiles").update({ status: "blocked" }).in("id", ids);
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast(`${ids.length} treinador(es) bloqueado(s)`, "success");
+  _trainerSelected.clear();
+  await loadTrainers(); renderTrainers();
+};
+window.bulkDeleteTrainers = async function() {
+  if (!_trainerSelected.size) return;
+  if (!confirm(`Excluir permanentemente ${_trainerSelected.size} treinador(es)?\n\nIsso remove o perfil e todos os dados. A conta de autenticação permanece no Supabase.`)) return;
+  const ids = [..._trainerSelected];
+  const { error } = await sb.from("profiles").delete().in("id", ids);
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast(`${ids.length} treinador(es) excluído(s)`, "success");
+  _trainerSelected.clear();
+  await loadTrainers(); renderTrainers();
+};
 
 window.setTrainerStatus = async function(id, status) {
   const { error } = await sb.from("profiles").update({ status }).eq("id", id);
@@ -2401,16 +2682,17 @@ window.openMyPaymentsSheet = async function() {
 };
 
 window.openNewPaymentSheet = function(userId, name) {
-  const today = todayISO();
   const next = new Date(); next.setDate(next.getDate()+30);
   const future = next.toISOString().slice(0,10);
+  const safeId = userId;
+  const safeName = escape(name);
   openSheet(`
     <h3>Novo lançamento</h3>
-    <p>Pagamento para ${escape(name)}</p>
-    <div class="form-group"><label class="form-label">Valor (R$)</label><input class="input" id="pay-amount" type="number" step="0.01" placeholder="150,00" /></div>
-    <div class="form-group"><label class="form-label">Vencimento</label><input class="input" id="pay-due" type="date" value="${future}" /></div>
-    <div class="form-group"><label class="form-label">Referência (ex.: Mensalidade abril)</label><input class="input" id="pay-ref" placeholder="Mensalidade" /></div>
-    <div class="form-group"><label class="form-label">Método preferido</label>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:14px">Para: <b>${safeName}</b></p>
+    <div class="form-group"><label class="form-label">Valor (R$)</label><input class="input" id="pay-amount" type="number" step="0.01" min="0.01" placeholder="150.00" /></div>
+    <div class="form-group"><label class="form-label">Primeiro vencimento</label><input class="input" id="pay-due" type="date" value="${future}" /></div>
+    <div class="form-group"><label class="form-label">Referência (ex.: Mensalidade maio)</label><input class="input" id="pay-ref" placeholder="Mensalidade" /></div>
+    <div class="form-group"><label class="form-label">Método</label>
       <select class="input" id="pay-method">
         <option value="pix">PIX</option>
         <option value="credit">Crédito</option>
@@ -2420,37 +2702,77 @@ window.openNewPaymentSheet = function(userId, name) {
         <option value="other">Outro</option>
       </select>
     </div>
-    <label class="row-flex" style="margin-bottom:12px;">
+    <div class="form-group">
+      <label class="form-label">Repetir mensalmente</label>
+      <select class="input" id="pay-recurrence">
+        <option value="1">Sem repetição (1 lançamento)</option>
+        <option value="2">2 meses</option>
+        <option value="3">3 meses</option>
+        <option value="6">6 meses</option>
+        <option value="12">12 meses (1 ano)</option>
+      </select>
+    </div>
+    <label class="row-flex" style="margin-bottom:12px;gap:8px">
       <input type="checkbox" id="pay-mark-paid" />
       <span class="text-sm">Já foi pago (registra como pago hoje)</span>
     </label>
     <div class="form-group"><label class="form-label">Observação</label><input class="input" id="pay-notes" placeholder="opcional" /></div>
-    <button class="btn-primary" onclick="submitNewPayment('${userId}','${escape(name).replace(/'/g,"\\'")}')">Salvar lançamento</button>
-    <button class="btn-ghost" onclick="openPaymentSheet('${userId}','${escape(name).replace(/'/g,"\\'")}')" style="margin-top:8px">Voltar</button>
+    <button class="btn-primary" id="pay-save-btn" onclick="submitNewPayment('${safeId}','${safeName}')">Salvar lançamento</button>
+    <div id="pay-save-err" style="display:none;margin-top:8px;padding:10px;border-radius:8px;background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);color:#ffaaaa;font-size:12px"></div>
+    <button class="btn-ghost" onclick="openPaymentSheet('${safeId}','${safeName}')" style="margin-top:8px">Voltar</button>
   `);
 };
 
 window.submitNewPayment = async function(userId, name) {
   const get = id => document.getElementById(id);
-  const amount = parseFloat((get("pay-amount").value || "").replace(",", "."));
+  const amountStr = (get("pay-amount").value || "").replace(",", ".");
+  const amount = parseFloat(amountStr);
   const due = get("pay-due").value;
   const ref = get("pay-ref").value.trim();
   const method = get("pay-method").value;
   const notes = get("pay-notes").value.trim();
   const mark = get("pay-mark-paid").checked;
-  if (!amount || !due) { showToast("Preencha valor e vencimento", "error"); return; }
-  // Receiver = staff atual
+  const recur = parseInt(get("pay-recurrence").value) || 1;
+
+  const errEl = get("pay-save-err");
+  const btn = get("pay-save-btn");
+
+  if (!amount || isNaN(amount) || amount <= 0) {
+    if (errEl) { errEl.textContent = "Informe um valor válido (ex: 150.00)"; errEl.style.display = "block"; }
+    return;
+  }
+  if (!due) {
+    if (errEl) { errEl.textContent = "Informe a data de vencimento"; errEl.style.display = "block"; }
+    return;
+  }
+  if (errEl) errEl.style.display = "none";
+  if (btn) { btn.disabled = true; btn.textContent = "Salvando…"; }
+
   const receiverId = STATE.profile.id;
   try {
-    await recordPayment(userId, receiverId, {
-      amount, due_date: due, reference: ref || null,
-      method, notes, markPaid: mark
-    });
-    showToast("Lançamento criado", "success");
+    for (let i = 0; i < recur; i++) {
+      const dueDate = new Date(due + "T00:00:00");
+      dueDate.setMonth(dueDate.getMonth() + i);
+      const dueDateStr = dueDate.toISOString().slice(0, 10);
+      const refStr = recur > 1 ? `${ref || 'Mensalidade'} (${i+1}/${recur})` : (ref || null);
+      await recordPayment(userId, receiverId, {
+        amount, due_date: dueDateStr,
+        reference: refStr,
+        method, notes: notes || null,
+        markPaid: mark && i === 0  // só marca pago o primeiro se checkbox marcado
+      });
+    }
+    const msg = recur > 1 ? `${recur} lançamentos criados` : "Lançamento criado";
+    showToast(msg, "success");
     if (STATE.profile.role === 'admin') await loadAdminPayments();
     if (STATE.profile.role === 'coach') await loadCoachPayments();
     openPaymentSheet(userId, name);
-  } catch (e) { showToast("Erro: " + e.message, "error"); }
+  } catch (e) {
+    console.error("submitNewPayment:", e);
+    const msg = e.message || "Erro desconhecido — verifique as permissões (RLS) na tabela payments";
+    if (errEl) { errEl.textContent = "Erro: " + msg; errEl.style.display = "block"; }
+    if (btn) { btn.disabled = false; btn.textContent = "Salvar lançamento"; }
+  }
 };
 
 window.onMarkPaid = async function(paymentId, userId, name) {
@@ -2639,6 +2961,12 @@ function renderCalendar() {
       <span class="legend-item"><span class="legend-dot dot-off"></span> OFF</span>
     </div>
     ${html}`;
+
+  // Rola automaticamente para a semana atual
+  requestAnimationFrame(() => {
+    const current = el.querySelector(".week-card.is-current");
+    if (current) current.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 function weekIntensitySummary(week) {
   const reds = week.days.filter(d => d.intensity === "red").length;
@@ -2764,12 +3092,8 @@ function renderExerciseList(W, intensity, completed) {
     const repsTxt = ex.reps === "Seguir período" ? scheme.reps : ex.reps;
     const pauseTxt = ex.pause === "Seguir período" ? scheme.pause : ex.pause;
 
-    const thumbInner = ex.image_url
-      ? `<img src="${escape(ex.image_url)}" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />`
-      : iconFor(ex.cat);
-    const illustInner = ex.image_url
-      ? `<img src="${escape(ex.image_url)}" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;" />`
-      : iconFor(ex.cat);
+    const thumbInner = getExThumb(ex);
+    const illustInner = getExThumb(ex);
     return `<div class="exercise-card ${allDone ? "done" : ""} ${isMobility ? "is-mobility" : ""} ${expanded ? "expanded" : ""}" data-pos="${ex.position}">
       <div class="ex-head" onclick="toggleExercise(${ex.position})">
         <div class="ex-thumb" style="overflow:hidden;">${thumbInner}</div>
@@ -2923,16 +3247,29 @@ window.openHistorySheet = async function(name) {
    ============================================================================= */
 function renderFeed() {
   const el = document.getElementById("view-feed");
+  const filter = STATE.feedFilter || "ALL";
+  const filtered = filter === "ALL" ? STATE.feed : STATE.feed.filter(p => p.workout_code === filter);
+  const codes = ["ALL", "A", "B", "C", "D", "FLEX"];
   el.innerHTML = `
     <h1 class="view-title">Feed</h1>
     <p class="view-subtitle">Treinos da turma em tempo real</p>
-    ${STATE.feed.length === 0
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px;-webkit-overflow-scrolling:touch">
+      ${codes.map(c => `
+        <button onclick="setFeedFilter('${c}')" style="flex-shrink:0;padding:7px 14px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid ${filter===c?'var(--brand)':'var(--line)'};background:${filter===c?'var(--brand-soft)':'var(--bg-card)'};color:${filter===c?'var(--brand)':'var(--text-2)'};cursor:pointer">
+          ${c === "ALL" ? "Tudo" : c}
+        </button>
+      `).join("")}
+    </div>
+    ${filtered.length === 0
       ? `<div class="empty">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16h40M12 24h40M12 32h28"/></svg>
-          <h3>Sem posts ainda</h3><p>Conclua um treino para aparecer aqui.</p></div>`
-      : STATE.feed.map(p => feedPostHTML(p, false)).join("")}
+          <h3>${STATE.feed.length === 0 ? 'Sem posts ainda' : 'Sem posts nesse filtro'}</h3>
+          <p>${STATE.feed.length === 0 ? 'Conclua um treino para aparecer aqui.' : 'Mude o filtro acima.'}</p>
+        </div>`
+      : filtered.map(p => feedPostHTML(p, false)).join("")}
   `;
 }
+window.setFeedFilter = function(c) { STATE.feedFilter = c; renderFeed(); };
 function feedPostHTML(p, compact) {
   const liked = STATE.feedLikes[p.id];
   const isMine = STATE.profile && p.student_id === STATE.profile.id;
@@ -3053,6 +3390,19 @@ async function renderProfile() {
       <button class="btn-primary" onclick="saveProfile()">Salvar perfil</button>
     </div>
 
+    <div class="section-title">Segurança</div>
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">Nova senha</label>
+        <input class="input" id="prof-new-pass" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmar nova senha</label>
+        <input class="input" id="prof-conf-pass" type="password" placeholder="Confirmar nova senha" autocomplete="new-password" />
+      </div>
+      <button class="btn-ghost" onclick="saveNewPassword()">🔐 Alterar senha</button>
+    </div>
+
     ${!isStaff ? `
       <div class="section-title">Pessoas</div>
       <div class="card">
@@ -3065,6 +3415,24 @@ async function renderProfile() {
       <div class="section-title">Histórico (últimos 20)</div>
       ${historyHTML}
     ` : `
+      <div class="section-title">Configurações</div>
+      <div class="card mb-8">
+        <button class="btn-ghost" style="width:100%" onclick="openPresetEditor()">⚙ Editar tipos de treino (reps, pausa)</button>
+      </div>
+      ${isAdmin ? `
+        <div class="section-title">Vínculo como aluno</div>
+        <div class="card mb-8">
+          <p class="text-xs muted" style="margin-bottom:10px">Vincule sua conta a um treinador para ter sua própria periodização e aparecer como aluno.</p>
+          <div class="form-group">
+            <label class="form-label">Treinador</label>
+            <select class="input" id="admin-coach-select">
+              <option value="">— Nenhum —</option>
+              ${STATE.trainers.filter(t=>t.status==="approved").map(t => `<option value="${t.id}" ${p.coach_id === t.id ? 'selected' : ''}>${escape(t.full_name || t.email || t.id)}</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn-ghost" onclick="saveAdminCoachLink()">Salvar vínculo</button>
+        </div>
+      ` : ''}
       <div class="section-title">Identidade do app (white-label)</div>
       ${renderBrandingPanel()}
     `}
@@ -3092,6 +3460,29 @@ async function renderProfile() {
 }
 window.signOut = signOut;
 window.applyTheme = applyTheme;
+
+window.saveNewPassword = async function() {
+  const np = document.getElementById("prof-new-pass").value;
+  const cp = document.getElementById("prof-conf-pass").value;
+  if (!np || np.length < 6) { showToast("Senha deve ter pelo menos 6 caracteres", "error"); return; }
+  if (np !== cp) { showToast("As senhas não coincidem", "error"); return; }
+  const btn = document.querySelector('#view-profile button[onclick="saveNewPassword()"]');
+  if (btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
+  const { error } = await sb.auth.updateUser({ password: np });
+  if (btn) { btn.disabled = false; btn.textContent = "🔐 Alterar senha"; }
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast("Senha alterada com sucesso!", "success");
+  document.getElementById("prof-new-pass").value = "";
+  document.getElementById("prof-conf-pass").value = "";
+};
+
+window.saveAdminCoachLink = async function() {
+  const coachId = document.getElementById("admin-coach-select").value || null;
+  const { error } = await sb.from("profiles").update({ coach_id: coachId }).eq("id", STATE.profile.id);
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  STATE.profile.coach_id = coachId;
+  showToast(coachId ? "Vínculo salvo! Recarregue para ver sua periodização." : "Vínculo removido.", "success");
+};
 
 window.openPeopleSearch = function() {
   STATE._peopleResults = [];
@@ -3341,37 +3732,63 @@ function renderStudents() {
   const pending = STATE.students.filter(s => s.status === "pending");
   const approved = STATE.students.filter(s => s.status === "approved");
   const blocked = STATE.students.filter(s => s.status === "blocked");
+  const selMode = _studentSelected.size > 0;
+
+  const bulkBar = selMode ? `
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 0;flex-wrap:wrap">
+      <span class="text-xs muted">${_studentSelected.size} selecionado(s)</span>
+      <button class="mini-btn mini-btn-danger" onclick="bulkBlockStudents()">⛔ Bloquear</button>
+      <button class="mini-btn" style="background:var(--red-soft);color:var(--red);border:1px solid var(--red-soft)" onclick="bulkDeleteStudents()">🗑 Excluir</button>
+      <button class="mini-btn" onclick="clearStudentSelection()">Cancelar</button>
+    </div>` : "";
 
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Alunos</h1>
-      <button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">+ Novo</button>
+      <div style="display:flex;gap:6px">
+        <button class="mini-btn" onclick="toggleStudentSelectAll()" title="Selecionar todos">☑</button>
+        <button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">+ Novo</button>
+      </div>
     </div>
     <p class="view-subtitle">${approved.length} ativos · ${pending.length} pendentes · ${blocked.length} bloqueados</p>
+    ${bulkBar}
     ${pending.length ? `
       <div class="section-title">Pendentes (${pending.length})</div>
-      ${pending.map(studentRow).join("")}
+      ${pending.map(s => studentRow(s, selMode)).join("")}
     ` : ""}
     <div class="section-title">Ativos (${approved.length})</div>
-    ${approved.length ? approved.map(studentRow).join("") : `<div class="empty"><p>Nenhum aluno ativo ainda. Use "+ Novo" para incluir.</p></div>`}
+    ${approved.length ? approved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>Nenhum aluno ativo ainda. Use "+ Novo" para incluir.</p></div>`}
     ${blocked.length ? `
       <div class="section-title">Bloqueados (${blocked.length})</div>
-      ${blocked.map(studentRow).join("")}
+      ${blocked.map(s => studentRow(s, selMode)).join("")}
     ` : ""}
   `;
 }
-function studentRow(s) {
+function studentRow(s, selMode) {
+  const id = s.student_id;
   const lastTxt = s.last_session_at ? `Último: ${fmtTimeAgo(s.last_session_at)}` : "Nunca treinou aqui";
+  const checked = _studentSelected.has(id);
+  if (selMode) {
+    return `<div class="list-row ${checked ? 'is-on' : ''}" style="cursor:pointer;${checked ? 'border-color:var(--brand);' : ''}" onclick="toggleStudentSelect('${id}')">
+      <div class="lr-avatar" style="display:flex;align-items:center;justify-content:center">
+        <input type="checkbox" ${checked ? 'checked' : ''} onclick="event.stopPropagation();toggleStudentSelect('${id}')" style="width:18px;height:18px;accent-color:var(--brand)" />
+      </div>
+      <div class="lr-info">
+        <div class="lr-name">${escape(s.full_name || s.email || "Aluno")}</div>
+        <div class="lr-sub">${escape(s.email || "")} · ${lastTxt} · ${s.sessions_done || 0} treinos</div>
+      </div>
+    </div>`;
+  }
   let actions = "";
   if (s.status === "pending") {
-    actions = `<button class="mini-btn mini-btn-success" onclick="onApprove('${s.student_id}')">Aprovar</button>
-               <button class="mini-btn mini-btn-danger" onclick="onBlock('${s.student_id}')">Recusar</button>`;
+    actions = `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Aprovar</button>
+               <button class="mini-btn mini-btn-danger" onclick="onBlock('${id}')">Recusar</button>`;
   } else if (s.status === "approved") {
-    actions = `<button class="mini-btn mini-btn-primary" onclick="onStudentDetail('${s.student_id}')">Abrir</button>`;
+    actions = `<button class="mini-btn mini-btn-primary" onclick="onStudentDetail('${id}')">Abrir</button>`;
   } else {
-    actions = `<button class="mini-btn mini-btn-success" onclick="onApprove('${s.student_id}')">Reativar</button>`;
+    actions = `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Reativar</button>`;
   }
-  return `<div class="list-row" onclick="onStudentDetail('${s.student_id}')" style="cursor:pointer">
+  return `<div class="list-row" onclick="onStudentDetail('${id}')" style="cursor:pointer">
     <div class="lr-avatar">💪</div>
     <div class="lr-info">
       <div class="lr-name">${escape(s.full_name || s.email || "Aluno")}</div>
@@ -3380,6 +3797,38 @@ function studentRow(s) {
     <div class="lr-actions" onclick="event.stopPropagation()">${actions}</div>
   </div>`;
 }
+
+window.toggleStudentSelect = function(id) {
+  if (_studentSelected.has(id)) _studentSelected.delete(id); else _studentSelected.add(id);
+  renderStudents();
+};
+window.toggleStudentSelectAll = function() {
+  if (_studentSelected.size > 0) { _studentSelected.clear(); }
+  else { STATE.students.forEach(s => _studentSelected.add(s.student_id)); }
+  renderStudents();
+};
+window.clearStudentSelection = function() { _studentSelected.clear(); renderStudents(); };
+
+window.bulkBlockStudents = async function() {
+  if (!_studentSelected.size) return;
+  if (!confirm(`Bloquear ${_studentSelected.size} aluno(s)?`)) return;
+  const ids = [..._studentSelected];
+  const { error } = await sb.from("profiles").update({ status: "blocked" }).in("id", ids);
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast(`${ids.length} aluno(s) bloqueado(s)`, "success");
+  _studentSelected.clear();
+  await loadStudents(); renderStudents();
+};
+window.bulkDeleteStudents = async function() {
+  if (!_studentSelected.size) return;
+  if (!confirm(`Excluir permanentemente ${_studentSelected.size} aluno(s)?\n\nIsso remove o perfil e todos os dados (treinos, logs). A conta de autenticação permanece no Supabase (exclua manualmente se necessário).`)) return;
+  const ids = [..._studentSelected];
+  const { error } = await sb.from("profiles").delete().in("id", ids);
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast(`${ids.length} aluno(s) excluído(s)`, "success");
+  _studentSelected.clear();
+  await loadStudents(); renderStudents();
+};
 
 window.openNewStudentSheet = function() {
   openSheet(`
@@ -3497,31 +3946,80 @@ window.deleteStudent = async function(id, email) {
 };
 
 /* ============ Editor de periodização individual do aluno ============ */
+/* ============================================================================
+   PERIODIZAÇÃO V2 — presets editáveis + múltiplos blocos por dia
+   ============================================================================ */
+
+// Cache de presets em memória (carrega ao logar; recarrega via reloadPresets)
+let _PRESETS = [];
+async function loadPresets() {
+  // pega presets do coach atual (se for staff) e fallback nos globais
+  const coachId = STATE.profile && (STATE.profile.role === "coach" ? STATE.profile.id : null);
+  const filters = coachId ? `coach_id.eq.${coachId},coach_id.is.null` : `coach_id.is.null`;
+  const { data, error } = await sb.from("intensity_presets")
+    .select("*").or(filters).order("position");
+  if (error) { console.warn("loadPresets:", error); _PRESETS = []; return; }
+  // mescla: se coach tem preset com mesmo code, usa o dele
+  const map = {};
+  (data || []).forEach(p => {
+    const cur = map[p.code];
+    if (!cur || (p.coach_id && !cur.coach_id)) map[p.code] = p;
+  });
+  _PRESETS = Object.values(map).sort((a,b)=>(a.position||0)-(b.position||0));
+}
+async function reloadPresets() { await loadPresets(); }
+window.reloadPresets = reloadPresets;
+function getPreset(code) { return _PRESETS.find(p => p.code === code) || null; }
+window.getPreset = getPreset;
+
+// Carrega blocos de um conjunto de dias
+async function loadBlocksForDays(dayIds) {
+  if (!dayIds || !dayIds.length) return {};
+  const { data } = await sb.from("periodization_blocks")
+    .select("*").in("day_id", dayIds).order("position");
+  const map = {};
+  (data || []).forEach(b => { (map[b.day_id] = map[b.day_id] || []).push(b); });
+  return map;
+}
+
 window.openStudentPeriodSheet = async function(id) {
-  openSheet(`<h3>Periodização do aluno</h3><div class="loading"><div class="spinner"></div></div>`);
+  openSheet(`<h3>Periodização</h3><div class="loading"><div class="spinner"></div></div>`);
+  if (!_PRESETS.length) await loadPresets();
   const { data: days } = await sb.from("periodization_days")
     .select("*").eq("student_id", id).order("date");
+  const dayIds = (days||[]).map(d => d.id);
+  const blocksByDay = await loadBlocksForDays(dayIds);
   const grouped = [];
   for (let i = 0; i < (days||[]).length; i += 7) grouped.push((days||[]).slice(i, i+7));
-  const codeOpts = ['OFF','A','B','C','D','FLEX'];
-  const intOpts = ['off','yellow','red','flex'];
+
   const html = `
     <h3>Periodização do aluno</h3>
-    <p>Toque em um dia para alterar treino e intensidade. As mudanças são salvas automaticamente.</p>
-    <div style="display:flex; gap:6px; margin-bottom:10px;">
-      <button class="mini-btn mini-btn-primary" onclick="reseedPeriod('${id}')">Recriar padrão (12 semanas)</button>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 10px">Toque em um dia para editar os blocos. Você pode ter <b>vários blocos por dia</b> (ex: aeróbio + hipertrofia).</p>
+    <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap">
+      <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ Semana</button>
+      <button class="mini-btn" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line)" onclick="removePeriodWeek('${id}')">− Semana</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openPeriodConfig('${id}')">📅 Configurar período</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openPresetEditor()">⚙ Tipos</button>
     </div>
-    ${grouped.map((week, wi) => `
+    ${grouped.length === 0 ? `<div class="empty"><p>Nenhuma semana ainda. Clique em "+ 1 Semana".</p></div>` : grouped.map((week, wi) => `
       <div class="card mb-8">
         <div class="text-xs muted" style="margin-bottom:6px">Semana ${wi+1}</div>
         <div class="week-grid">
           ${week.map(d => {
             const dt = new Date(d.date+"T00:00:00");
-            const wp = workoutPretty(d.workout_code);
-            return `<div class="day-pill ${intensityClass(d.intensity)}" onclick="editPeriodDay('${d.id}','${id}')">
+            const blocks = blocksByDay[d.id] || [];
+            const labels = blocks.map(b => {
+              const p = getPreset(b.preset_code);
+              const lab = (p && p.label) || b.preset_code;
+              return b.workout_code ? `${b.workout_code} · ${lab.slice(0,5)}` : lab.slice(0,5);
+            });
+            const colors = blocks.map(b => (getPreset(b.preset_code)||{}).color || '#9aa6c0');
+            const stripe = colors.slice(0,3).map(c => `<span style="background:${c};width:6px;border-radius:2px"></span>`).join('');
+            return `<div class="day-pill" style="position:relative;cursor:pointer" onclick="editPeriodDay('${d.id}','${id}')">
+              <div style="position:absolute;top:4px;left:4px;right:4px;display:flex;gap:2px;height:4px">${stripe}</div>
               <span class="dp-day">${WEEKDAY_LABELS[dt.getDay()]}</span>
               <span class="dp-num">${dt.getDate()}</span>
-              <span class="dp-w">${wp === 'OFF'?'—':wp === 'FLEX'?'Flex':wp}</span>
+              <span class="dp-w" style="font-size:9px;line-height:1.2">${labels.length === 0 ? '—' : labels.slice(0,2).join('·')}</span>
             </div>`;
           }).join("")}
         </div>
@@ -3531,43 +4029,334 @@ window.openStudentPeriodSheet = async function(id) {
   `;
   openSheet(html);
 };
+
+window.addPeriodWeek = async function(studentId) {
+  const { error } = await sb.rpc("add_periodization_week", { p_student_id: studentId });
+  if (error) { showToast("Erro: "+error.message, "error"); return; }
+  showToast("Semana adicionada", "success");
+  openStudentPeriodSheet(studentId);
+};
+window.removePeriodWeek = async function(studentId) {
+  if (!confirm("Remover a última semana?")) return;
+  const { error } = await sb.rpc("remove_periodization_week", { p_student_id: studentId });
+  if (error) { showToast("Erro: "+error.message, "error"); return; }
+  showToast("Semana removida", "success");
+  openStudentPeriodSheet(studentId);
+};
+
 window.reseedPeriod = async function(id) {
-  if (!confirm("Recriar a periodização padrão de 12 semanas? (Histórico de treinos é preservado)")) return;
+  if (!confirm("Recriar a periodização padrão? Os blocos atuais serão substituídos. (Histórico de treinos é preservado)")) return;
   const { error } = await sb.rpc("seed_periodization_for_student", { p_student: id });
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Periodização recriada", "success");
   openStudentPeriodSheet(id);
 };
+
+window.openPeriodConfig = function(studentId) {
+  const today = todayISO();
+  // Pega data de início e número de semanas atuais
+  const days = STATE.periodization && STATE.periodization.length > 0 ? STATE.periodization : [];
+  const currentStart = days.length > 0 ? days[0].date : today;
+  const currentWeeks = Math.ceil(days.length / 7) || 12;
+  const sheetContent = document.getElementById("sheet-content");
+  sheetContent.innerHTML = `<div class="sheet-handle"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button class="mini-btn" onclick="openStudentPeriodSheet('${studentId}')" style="padding:6px 12px">← Voltar</button>
+      <div style="font-weight:700;font-size:15px">Configurar período</div>
+    </div>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Define o início e a duração do ciclo. Os dias existentes serão recriados a partir da nova data.</p>
+    <div class="form-group">
+      <label class="form-label">Data de início</label>
+      <input class="input" type="date" id="pc-start" value="${currentStart}" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Número de semanas</label>
+      <select class="input" id="pc-weeks">
+        ${[4,8,12,16,20,24].map(n => `<option value="${n}" ${n === currentWeeks ? 'selected' : ''}>${n} semanas</option>`).join('')}
+      </select>
+    </div>
+    <div style="padding:10px;border-radius:8px;background:rgba(255,200,0,0.08);border:1px solid rgba(255,200,0,0.2);color:var(--text-2);font-size:12px;margin-bottom:14px">
+      ⚠ Isso recria todos os dias do ciclo. Os blocos de cada dia e o histórico de treinos não são afetados.
+    </div>
+    <button class="btn-primary" onclick="applyPeriodConfig('${studentId}')">Aplicar configuração</button>
+  `;
+};
+
+window.applyPeriodConfig = async function(studentId) {
+  const startDate = document.getElementById("pc-start").value;
+  const numWeeks = parseInt(document.getElementById("pc-weeks").value);
+  if (!startDate || !numWeeks) { showToast("Preencha os campos", "error"); return; }
+  const btn = document.querySelector('#sheet-content .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = "Aplicando…"; }
+  try {
+    // Deleta dias existentes (mantém blocks e set_logs via FK com ON DELETE CASCADE)
+    const { error: delErr } = await sb.from("periodization_days").delete().eq("student_id", studentId);
+    if (delErr) throw delErr;
+    // Cria novos dias (sem blocos — coach edita depois)
+    const rows = [];
+    const start = new Date(startDate + "T00:00:00");
+    for (let i = 0; i < numWeeks * 7; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      rows.push({ student_id: studentId, date: d.toISOString().slice(0, 10), workout_code: 'OFF', intensity: 'off', aero: false });
+    }
+    // Insere em batches de 200 para evitar limite de payload
+    for (let i = 0; i < rows.length; i += 200) {
+      const { error } = await sb.from("periodization_days").insert(rows.slice(i, i + 200));
+      if (error) throw error;
+    }
+    showToast(`Período de ${numWeeks} semanas criado a partir de ${fmtDateBR(startDate)}`, "success");
+    await openStudentPeriodSheet(studentId);
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = "Aplicar configuração"; }
+    showToast("Erro: " + e.message, "error");
+  }
+};
+
 window.editPeriodDay = async function(dayId, studentId) {
+  // BUG-009: coach só edita periodização de alunos que são seus
+  if (STATE.profile.role === "coach") {
+    const owned = STATE.students.find(s => s.student_id === studentId);
+    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
+  }
+  if (!_PRESETS.length) await loadPresets();
+  // Salva scroll da sheet antes de entrar no editor de dia
+  const sheetEl = document.getElementById("sheet");
+  if (sheetEl) _periodScrollTop = sheetEl.scrollTop;
+  _editingStudentId = studentId;
+
   const { data: d } = await sb.from("periodization_days").select("*").eq("id", dayId).single();
   if (!d) return;
+  const { data: blocks } = await sb.from("periodization_blocks")
+    .select("*").eq("day_id", dayId).order("position");
   const dt = new Date(d.date+"T00:00:00");
-  const sheetEl = document.getElementById("sheet-content");
-  // overlay menor sobre a sheet atual
-  const codes = ['OFF','A','B','C','D','FLEX'];
-  const ints = ['off','yellow','red','flex'];
+  const sheetContent = document.getElementById("sheet-content");
+
   const html = `
-    <h3>${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}/${MONTH_SHORT[dt.getMonth()]}</h3>
-    <div class="form-group"><label class="form-label">Treino</label>
-      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px;">
-        ${codes.map(c => `<button class="mini-btn ${d.workout_code === c ? 'mini-btn-primary' : 'mini-btn-ghost'}" onclick="setPeriodField('${dayId}','workout_code','${c}','${studentId}')">${c}</button>`).join("")}
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <button class="mini-btn" onclick="backToPeriodSheet('${studentId}')" style="padding:6px 12px">← Voltar</button>
+      <div>
+        <div style="font-weight:700;font-size:15px">${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}/${MONTH_SHORT[dt.getMonth()]}</div>
+        <div style="font-size:11px;color:var(--text-3)">Alterações salvas automaticamente</div>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Intensidade</label>
-      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px;">
-        ${ints.map(c => `<button class="mini-btn ${d.intensity === c ? 'mini-btn-primary' : 'mini-btn-ghost'}" onclick="setPeriodField('${dayId}','intensity','${c}','${studentId}')">${c === 'off' ? 'OFF' : c === 'yellow' ? 'Hipert.' : c === 'red' ? 'Força' : 'Flex'}</button>`).join("")}
-      </div>
+    <div id="blocks-list">
+      ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId)).join("") || '<div style="padding:14px;text-align:center;color:var(--text-3);font-size:13px">Nenhum bloco. Adicione abaixo.</div>'}
     </div>
-    <button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')">Voltar</button>
+    <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">+ Adicionar bloco</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">
+      ${_PRESETS.map(p => `
+        <button class="mini-btn" style="background:${p.color}22;color:${p.color};border:1px solid ${p.color}55;font-size:11px" onclick="addBlockToDay('${dayId}','${studentId}','${p.code}',${p.is_workout})">${p.label}</button>
+      `).join("")}
+    </div>
   `;
-  sheetEl.innerHTML = '<div class="sheet-handle"></div>' + html;
+  sheetContent.innerHTML = '<div class="sheet-handle"></div>' + html;
 };
-window.setPeriodField = async function(dayId, field, value, studentId) {
-  const patch = {}; patch[field] = value;
-  const { error } = await sb.from("periodization_days").update(patch).eq("id", dayId);
-  if (error) { showToast("Erro: "+error.message, "error"); return; }
-  // re-renderiza com novo valor
+
+const AERO_MODALITIES = ['Corrida','Caminhada','Bike','Elíptico','Natação','Remo','Pular corda','Outro'];
+
+window.renderBlockItem = function(b, idx, dayId, studentId) {
+  const preset = getPreset(b.preset_code) || { label: b.preset_code, color: '#9aa6c0', is_workout: !!b.workout_code };
+  const isWorkout = preset.is_workout || !!b.workout_code;
+  const isAero = b.preset_code === 'aero' || preset.label?.toLowerCase().includes('aero');
+  const codes = ['A','B','C','D'];
+  return `
+    <div style="background:var(--bg-card);border:1px solid var(--line);border-left:4px solid ${preset.color};border-radius:10px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:700;font-size:13px;color:${preset.color}">${preset.label}</div>
+        <div style="display:flex;gap:6px">
+          ${idx > 0 ? `<button class="mini-btn mini-btn-ghost" style="padding:2px 8px;font-size:11px" onclick="moveBlock('${b.id}','${dayId}','${studentId}',-1)">↑</button>` : ''}
+          <button class="mini-btn mini-btn-ghost" style="padding:2px 8px;font-size:11px;color:var(--red)" onclick="deleteBlock('${b.id}','${dayId}','${studentId}')">×</button>
+        </div>
+      </div>
+      ${isWorkout && !isAero ? `
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${codes.map(c => `
+            <button class="mini-btn ${b.workout_code===c?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${c}')">${c}</button>
+          `).join("")}
+          <button class="mini-btn ${!b.workout_code?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','')">—</button>
+        </div>
+        ${preset.rep_min || preset.pause_seconds ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${preset.rep_min}-${preset.rep_max} reps · pausa ${Math.floor((preset.pause_seconds||0)/60)}:${String((preset.pause_seconds||0)%60).padStart(2,'0')}</div>` : ''}
+      ` : isAero ? `
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Modalidade aeróbia</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${AERO_MODALITIES.map(m => `
+            <button class="mini-btn ${b.workout_code===m?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 10px;font-size:11px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${m}')">${m}</button>
+          `).join("")}
+        </div>
+        ${b.workout_code ? `<div style="font-size:11px;color:var(--brand);margin-top:6px">✓ ${b.workout_code}</div>` : `<div style="font-size:11px;color:var(--text-3);margin-top:6px">Selecione a modalidade acima</div>`}
+      ` : `<div style="font-size:11px;color:var(--text-3)">${preset.label}</div>`}
+    </div>`;
+};
+
+// Volta da edição de dia para a sheet de periodização, restaurando scroll
+window.backToPeriodSheet = async function(studentId) {
+  await openStudentPeriodSheet(studentId);
+  requestAnimationFrame(() => {
+    const sheet = document.getElementById("sheet");
+    if (sheet && _periodScrollTop > 0) sheet.scrollTop = _periodScrollTop;
+  });
+};
+
+window.addBlockToDay = async function(dayId, studentId, presetCode, isWorkout) {
+  const { data: existing } = await sb.from("periodization_blocks").select("position").eq("day_id", dayId).order("position", { ascending: false }).limit(1);
+  const pos = existing && existing.length ? (existing[0].position + 1) : 0;
+  const insert = { day_id: dayId, position: pos, preset_code: presetCode };
+  if (isWorkout) insert.workout_code = "A";
+  const { error } = await sb.from("periodization_blocks").insert(insert);
+  if (error) { showToast(error.message, "error"); return; }
+  await syncDayLegacy(dayId);
+  showToast("Bloco adicionado ✓", "success");
   editPeriodDay(dayId, studentId);
+};
+
+window.deleteBlock = async function(blockId, dayId, studentId) {
+  await sb.from("periodization_blocks").delete().eq("id", blockId);
+  await syncDayLegacy(dayId);
+  editPeriodDay(dayId, studentId);
+};
+
+window.moveBlock = async function(blockId, dayId, studentId, dir) {
+  const { data: blocks } = await sb.from("periodization_blocks").select("id, position").eq("day_id", dayId).order("position");
+  if (!blocks) return;
+  const idx = blocks.findIndex(b => b.id === blockId);
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= blocks.length) return;
+  const a = blocks[idx], b = blocks[newIdx];
+  await sb.from("periodization_blocks").update({ position: b.position }).eq("id", a.id);
+  await sb.from("periodization_blocks").update({ position: a.position }).eq("id", b.id);
+  await syncDayLegacy(dayId);
+  editPeriodDay(dayId, studentId);
+};
+
+window.setBlockWorkout = async function(blockId, dayId, studentId, workout) {
+  await sb.from("periodization_blocks").update({ workout_code: workout || null }).eq("id", blockId);
+  await syncDayLegacy(dayId);
+  editPeriodDay(dayId, studentId);
+};
+
+// Mantém periodization_days.workout_code/intensity em sync com o primeiro bloco (compat com app legado)
+async function syncDayLegacy(dayId) {
+  const { data: blocks } = await sb.from("periodization_blocks").select("*").eq("day_id", dayId).order("position");
+  if (!blocks || !blocks.length) {
+    await sb.from("periodization_days").update({ workout_code: 'OFF', intensity: 'off', aero: false }).eq("id", dayId);
+    return;
+  }
+  const first = blocks[0];
+  const aero = blocks.some(b => b.preset_code === 'aero');
+  // legacy intensity: hipertrofia→yellow, forca→red, deload→white, flex→flex, off→off
+  const intMap = { hipertrofia: 'yellow', forca: 'red', deload: 'white', flex: 'flex', off: 'off', aero: 'flex' };
+  const intensity = intMap[first.preset_code] || 'yellow';
+  const workout_code = first.workout_code || (first.preset_code === 'off' ? 'OFF' : (first.preset_code === 'flex' ? 'FLEX' : null));
+  await sb.from("periodization_days").update({
+    workout_code: workout_code,
+    intensity: intensity,
+    aero: aero
+  }).eq("id", dayId);
+}
+window.syncDayLegacy = syncDayLegacy;
+
+window.setPeriodField = async function(dayId, field, value, studentId) {
+  // legacy support — não usar mais, mas mantido pra não quebrar caso algum código antigo chame
+  const patch = {}; patch[field] = value;
+  await sb.from("periodization_days").update(patch).eq("id", dayId);
+  editPeriodDay(dayId, studentId);
+};
+
+/* ---------- EDITOR DE PRESETS (coach) ---------- */
+window.openPresetEditor = async function() {
+  if (!_PRESETS.length) await loadPresets();
+  const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
+  const html = `
+    <h3>⚙ Tipos de treino</h3>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 14px">Personalize repetições e tempo de pausa de cada tipo. ${myCoachId ? 'Suas alterações afetam apenas seus alunos.' : 'Você está editando os defaults globais (admin).'}</p>
+    ${_PRESETS.map(p => renderPresetItem(p)).join("")}
+    <button class="btn-ghost" style="margin-top:14px" onclick="closeSheet()">Fechar</button>
+  `;
+  openSheet(html);
+};
+
+window.renderPresetItem = function(p) {
+  const isWorkout = p.is_workout;
+  return `
+    <div data-code="${p.code}" style="background:var(--bg-card);border:1px solid var(--line);border-left:4px solid ${p.color};border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-weight:700;color:${p.color}">${p.label}</div>
+        <div style="font-size:11px;color:var(--text-3)">${isWorkout ? 'com treino' : 'standalone'}</div>
+      </div>
+      ${isWorkout ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div>
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Reps min</div>
+            <input type="number" id="pr-min-${p.code}" value="${p.rep_min||''}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Reps max</div>
+            <input type="number" id="pr-max-${p.code}" value="${p.rep_max||''}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Pausa (s)</div>
+            <input type="number" id="pr-pause-${p.code}" value="${p.pause_seconds||''}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
+        </div>
+        <button class="mini-btn mini-btn-primary" style="margin-top:8px;width:100%" onclick="savePreset('${p.code}')">Salvar</button>
+      ` : `<div style="font-size:11px;color:var(--text-3)">Não usa repetições/pausa.</div>`}
+    </div>`;
+};
+
+/* Carrega blocos da periodização (próximos 30 dias) — usado pelo card "Hoje" */
+async function loadTodayBlocks() {
+  if (!STATE.profile) return;
+  const sid = STATE.profile.id;
+  const today = todayISO();
+  const future = new Date(); future.setDate(future.getDate()+30);
+  const futureISO = future.toISOString().slice(0,10);
+  const { data: days } = await sb.from("periodization_days")
+    .select("id, date").eq("student_id", sid).gte("date", today).lte("date", futureISO);
+  if (!days || !days.length) { STATE.dayBlocks = {}; return; }
+  const ids = days.map(d => d.id);
+  const { data: blocks } = await sb.from("periodization_blocks")
+    .select("*").in("day_id", ids).order("position");
+  const byDate = {};
+  const idToDate = {};
+  days.forEach(d => idToDate[d.id] = d.date);
+  (blocks || []).forEach(b => {
+    const date = idToDate[b.day_id];
+    if (!date) return;
+    (byDate[date] = byDate[date] || []).push(b);
+  });
+  STATE.dayBlocks = byDate;
+}
+window.loadTodayBlocks = loadTodayBlocks;
+
+window.savePreset = async function(code) {
+  const min = document.getElementById(`pr-min-${code}`).value;
+  const max = document.getElementById(`pr-max-${code}`).value;
+  const pause = document.getElementById(`pr-pause-${code}`).value;
+  const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
+  const existing = _PRESETS.find(p => p.code === code);
+  const patch = {
+    rep_min: min ? Number(min) : null,
+    rep_max: max ? Number(max) : null,
+    pause_seconds: pause ? Number(pause) : null
+  };
+  // Se for coach editando preset global, cria override
+  if (myCoachId && (!existing.coach_id)) {
+    const { error } = await sb.from("intensity_presets").insert({
+      coach_id: myCoachId,
+      code: existing.code,
+      label: existing.label,
+      color: existing.color,
+      is_workout: existing.is_workout,
+      position: existing.position,
+      ...patch
+    });
+    if (error) { showToast(error.message, "error"); return; }
+  } else {
+    const { error } = await sb.from("intensity_presets").update(patch).eq("id", existing.id);
+    if (error) { showToast(error.message, "error"); return; }
+  }
+  showToast("Salvo ✓", "success");
+  await reloadPresets();
 };
 window.onApprove = async (id) => {
   await approveStudent(id, "approved");
@@ -3619,6 +4408,11 @@ window.onPickCoach = async function(studentId, coachId, studentName) {
 window.onBlock = (id) => approveStudent(id, "blocked");
 
 window.onStudentDetail = async function(id) {
+  // BUG-002: coach só pode ver detalhes de alunos que estão em STATE.students (seus alunos)
+  if (STATE.profile.role === "coach") {
+    const owned = STATE.students.find(s => s.student_id === id);
+    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
+  }
   openSheet(`<h3>Carregando aluno...</h3><div class="loading"><div class="spinner"></div></div>`);
   const { data: prof } = await sb.from("profiles").select("*").eq("id", id).single();
   // Pega nome do coach atual
@@ -3681,6 +4475,11 @@ window.seedPerForStudent = async (id) => {
 };
 
 window.openStudentWorkoutsSheet = async function(studentId) {
+  // BUG-009: coach só edita treinos de alunos que são seus
+  if (STATE.profile.role === "coach") {
+    const owned = STATE.students.find(s => s.student_id === studentId);
+    if (!owned) { showToast("Sem permissão para este aluno", "error"); return; }
+  }
   openSheet(`<h3>Treinos personalizados</h3><div class="loading"><div class="spinner"></div></div>`);
   // Carrega workouts globais e personalizados deste aluno
   const { data: globals } = await sb.from("workouts").select("*").is("student_id", null).order("code");
@@ -3777,7 +4576,7 @@ window.openWorkoutEditor = function(code) {
     ${w.exercises.map((ex, i) => `
       <div class="card mb-8">
         <div class="row-flex" style="margin-bottom:8px;">
-          <div class="ex-thumb" style="width:36px; height:36px; flex:0 0 36px; overflow:hidden;">${ex.image_url ? `<img src="${escape(ex.image_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"/>` : iconFor(ex.cat)}</div>
+          <div class="ex-thumb" style="width:36px; height:36px; flex:0 0 36px; overflow:hidden;">${getExThumb(ex)}</div>
           <div style="flex:1; min-width:0;">
             <div class="fw-700 text-sm">${i+1}. ${escape(ex.name)}</div>
             <div class="text-xs muted">${ex.sets_count}× ${escape(ex.reps || "")}</div>
@@ -3836,7 +4635,7 @@ function renderExercisePicker() {
       ${filter.length === 0 ? `<div class="empty"><p>Nenhum exercício encontrado.</p></div>` : ""}
       ${filter.map(e => `
         <div class="list-row" onclick="onPickerPick('${e.id}')" style="cursor:pointer;">
-          <div class="lr-avatar" style="overflow:hidden;">${e.image_url ? `<img src="${escape(e.image_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"/>` : iconFor(e.cat)}</div>
+          <div class="lr-avatar" style="overflow:hidden;">${getExThumb(e)}</div>
           <div class="lr-info">
             <div class="lr-name">${escape(e.name)}</div>
             <div class="lr-sub">${escape(e.muscle_group || "")} · ${e.sets_count}× ${escape(e.reps || "")}</div>
@@ -4092,65 +4891,180 @@ function bindTimerHandlers() {
 /* =============================================================================
    BOOT
    ============================================================================= */
+/* ---------- BOOT TIMEOUT SAFETY ---------- */
+let _BOOT_DONE = false;
+let _POST_SIGN_IN_RUNNING = false;
+let _SW_RELOADING = false;
+
+function showStuckEscape(reason) {
+  if (document.getElementById("stuck-overlay")) return;
+  const div = document.createElement("div");
+  div.id = "stuck-overlay";
+  div.innerHTML = `
+    <div style="position:fixed;inset:0;background:#0a0e1a;color:#e7ecf5;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:-apple-system,system-ui,sans-serif">
+      <div style="font-size:42px;margin-bottom:12px">⚠️</div>
+      <h2 style="margin:0 0 6px;font-size:20px">App travou no carregamento</h2>
+      <p style="color:#9aa6c0;margin:0 0 18px;max-width:340px;font-size:13px;line-height:1.45">${reason || 'Algo deu errado. Vamos tentar limpar o cache e recarregar.'}</p>
+      <button id="stuck-clear" style="background:#00b4ff;color:#001a2a;border:0;border-radius:10px;padding:13px 22px;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:8px">🗑️ Limpar cache e recarregar</button>
+      <button id="stuck-logout" style="background:transparent;color:#9aa6c0;border:1px solid #2a3654;border-radius:10px;padding:11px 20px;font-weight:600;font-size:13px;cursor:pointer">Sair da conta</button>
+      <div style="margin-top:18px;font-size:11px;color:#6b7892">Se persistir, abra em uma aba anônima ou desinstale o app da tela inicial.</div>
+    </div>`;
+  document.body.appendChild(div);
+  document.getElementById("stuck-clear").onclick = async () => {
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      const theme = localStorage.getItem('theme-pref');
+      try { localStorage.clear(); } catch(e){}
+      if (theme) try { localStorage.setItem('theme-pref', theme); } catch(e){}
+      location.reload();
+    } catch(e) { location.reload(); }
+  };
+  document.getElementById("stuck-logout").onclick = async () => {
+    try {
+      if (window.sb && sb.auth) await sb.auth.signOut();
+    } catch(e){}
+    document.getElementById("stuck-clear").click();
+  };
+}
+
 async function boot() {
-  // tema salvo (preferência local)
-  let pref = null;
-  try { pref = localStorage.getItem('theme-pref'); } catch(e){}
-  applyTheme(pref || 'dark');
-  document.getElementById('btn-theme').addEventListener('click', toggleTheme);
+  // Helper: marca boot como concluído e limpa o timer de segurança
+  const safetyTimer = setTimeout(() => {
+    if (!_BOOT_DONE) showStuckEscape("Carregamento demorou demais.");
+  }, 12000);
+  const doneBoot = () => { _BOOT_DONE = true; clearTimeout(safetyTimer); };
 
-  bindAuthHandlers();
-  bindTimerHandlers();
+  try {
+    let pref = null;
+    try { pref = localStorage.getItem('theme-pref'); } catch(e){}
+    applyTheme(pref || 'dark');
+    document.getElementById('btn-theme').addEventListener('click', toggleTheme);
 
-  if (!SUPABASE_URL || !SUPABASE_ANON) { showCfg(); return; }
-  if (!window.supabase) { showToast("Falha ao carregar SDK", "error"); showCfg(); return; }
+    // Trava orientação portrait (funciona em PWA instalado)
+    try {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('portrait-primary').catch(() => {});
+      }
+    } catch(e) {}
 
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    bindAuthHandlers();
+    bindTimerHandlers();
 
-  // Aplica branding do sistema (definido pelo admin) na tela de login
-  applyAuthBranding();
+    if (!SUPABASE_URL || !SUPABASE_ANON) { doneBoot(); showCfg(); return; }
+    if (!window.supabase) { doneBoot(); showToast("Falha ao carregar SDK", "error"); showCfg(); return; }
 
-  sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-      if (session) await postSignIn();
-    } else if (event === "SIGNED_OUT") {
-      cleanupRealtime();
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+    // Aplica branding do sistema (definido pelo admin) na tela de login
+    applyAuthBranding();
+
+    // Registra SW cedo — independente do login, para que atualizações sejam captadas
+    registerServiceWorker().catch(e => console.warn("SW:", e));
+
+    // onAuthStateChange: só chama postSignIn para logins manuais pós-boot.
+    // TOKEN_REFRESHED é silencioso — não recarrega o app.
+    // Durante o boot, getSession() abaixo cuida do postSignIn inicial.
+    sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN") {
+        if (_BOOT_DONE && !_POST_SIGN_IN_RUNNING) {
+          await postSignIn().catch(e => {
+            console.error("postSignIn (auth event):", e);
+            showStuckEscape("Erro ao carregar perfil.");
+          });
+        }
+      } else if (event === "SIGNED_OUT") {
+        _POST_SIGN_IN_RUNNING = false;
+        cleanupRealtime();
+        showAuth(); setAuthMode("signin");
+      }
+      // TOKEN_REFRESHED: atualiza token silenciosamente, sem recarregar nada
+    });
+
+    // getSession com timeout próprio (evita travar em conexão ruim)
+    const sessionPromise = sb.auth.getSession();
+    const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("getSession timeout")), 8000));
+    let session = null;
+    try {
+      const r = await Promise.race([sessionPromise, timeoutPromise]);
+      session = r?.data?.session || null;
+    } catch(e) {
+      console.warn("getSession falhou:", e);
+      session = null;
+    }
+
+    if (session) {
+      try { await postSignIn(); }
+      catch(e) {
+        console.error("postSignIn falhou:", e);
+        doneBoot();
+        showStuckEscape("Não foi possível carregar seu perfil. Talvez sua sessão expirou.");
+        return;
+      }
+    } else {
       showAuth(); setAuthMode("signin");
     }
-  });
-
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) await postSignIn();
-  else { showAuth(); setAuthMode("signin"); }
+    doneBoot();
+  } catch(e) {
+    _BOOT_DONE = true;
+    clearTimeout(safetyTimer);
+    console.error("boot crashou:", e);
+    showStuckEscape("Erro ao iniciar o app. " + (e.message || ""));
+  }
 }
 
 async function postSignIn() {
+  // Proteção contra chamadas duplas (TOKEN_REFRESHED + getSession race)
+  if (_POST_SIGN_IN_RUNNING) return;
+  _POST_SIGN_IN_RUNNING = true;
+
+  const headerSub = document.getElementById("header-sub");
   showApp();
-  document.getElementById("header-sub").textContent = "Carregando...";
-  const profile = await loadProfile();
-  if (!profile) { showToast("Perfil não encontrado", "error"); await sb.auth.signOut(); return; }
-  const roleLabel = profile.role === "admin" ? "Admin · " : profile.role === "coach" ? "Professor · " : "Aluno · ";
-  document.getElementById("header-sub").textContent = roleLabel + (profile.full_name || profile.email);
+  headerSub.textContent = "";  // limpo — skeleton cuida do loading visual
 
-  // Carrega branding personalizado AGORA (depois de sabermos o role)
-  await loadBranding();
+  try {
+    const profile = await loadProfile();
+    if (!profile) {
+      showToast("Perfil não encontrado", "error");
+      await sb.auth.signOut();
+      return;
+    }
+    const roleLabel = profile.role === "admin" ? "Admin · " : profile.role === "coach" ? "Professor · " : "Aluno · ";
+    headerSub.textContent = roleLabel + (profile.full_name || profile.email);
 
-  await loadWorkouts();
-  await loadExerciseLibrary();
-  await loadFollows();
-  // Todos os roles podem ter periodização própria e treinar
-  await loadPeriodization();
-  await loadLastLoads();
+  // === GRUPO 1: loaders independentes — executam em paralelo ===
+  // (branding, workouts, library, follows, presets, blocks, periodização, cargas)
+  await Promise.all([
+    loadBranding(),
+    loadWorkouts(),
+    loadExerciseLibrary(),
+    loadFollows(),
+    loadPresets().catch(e => console.warn("presets:", e)),
+    loadTodayBlocks().catch(e => console.warn("blocks:", e)),
+    loadPeriodization(),
+    loadLastLoads(),
+  ]);
+
+  // === GRUPO 2: precisa de follows (feed) + role definido — paralelo ===
+  const _roleLoads = [];
   if (profile.role === "coach") {
-    await loadStudents();
-    await loadCoachPayments();
+    _roleLoads.push(loadStudents(), loadCoachPayments());
   } else if (profile.role === "admin") {
-    await loadTrainers();
-    await loadStudents();
-    await loadAdminPayments();
+    _roleLoads.push(loadTrainers(), loadStudents(), loadAdminPayments());
   }
-  await loadFeed();
-  await checkMyPaymentStatus();
+  await Promise.all([
+    loadFeed(),            // usa STATE.follows (pronto do grupo 1)
+    checkMyPaymentStatus(),
+    ..._roleLoads,
+  ]);
+
+  // === GRUPO 3: notificações (rápidas, sem dependências críticas) ===
   await loadNotifications();
   // Auto-gera lembretes (não bloqueia)
   setTimeout(() => {
@@ -4160,11 +5074,9 @@ async function postSignIn() {
   }, 1000);
   setupRealtime();
 
-  // Default view
-  const initialView = "home";
-  STATE.view = initialView;
+  // Default view — navTo() adiciona .active na view e chama renderCurrentView()
   renderBottomNav();
-  renderCurrentView();
+  navTo("home");
   renderHeaderBell();
 
   // Pré-seleciona treino do dia se for aluno
@@ -4180,6 +5092,27 @@ async function postSignIn() {
 
   // Onboarding + push + chat unread + load history/ranking
   try { await postLoginInit(); } catch(e) { console.error("postLoginInit", e); }
+
+  // Deep-link via query string (?chat=USER_ID, ?view=feed, etc)
+  try {
+    const qs = new URLSearchParams(location.search);
+    const chatId = qs.get("chat");
+    const view = qs.get("view");
+    if (chatId && typeof openChatThread === "function") {
+      setTimeout(() => openChatThread(chatId), 250);
+      try { history.replaceState({}, "", location.pathname); } catch(e){}
+    } else if (view) {
+      navTo(view);
+      try { history.replaceState({}, "", location.pathname); } catch(e){}
+    }
+  } catch(e){ console.warn("deep-link", e); }
+
+  } catch(e) {
+    if (headerSub) headerSub.textContent = "";
+    throw e;
+  } finally {
+    _POST_SIGN_IN_RUNNING = false;
+  }
 }
 
 /* =============================================================================
@@ -4195,7 +5128,7 @@ const VAPID_PUBLIC_KEY = window.VAPID_PUBLIC_KEY || ""; // se vazio, push desabi
 
 /* ---------- postLoginInit: chamado depois do postSignIn ---------- */
 async function postLoginInit() {
-  await registerServiceWorker();
+  // SW já registrado no boot() — não duplicar aqui
   await loadCommentsCounts();
   await loadChatThreads();
   await loadWeeklyRanking();
@@ -4220,17 +5153,28 @@ window.addEventListener("beforeinstallprompt", (e) => {
 async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   try {
-    const reg = await navigator.serviceWorker.register("sw.js", { scope: "/" });
-    // Detecta nova versão e força ativação
-    if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+    // Sem scope explícito: defaults para o diretório de sw.js, compatível com qualquer hosting
+    const reg = await navigator.serviceWorker.register("sw.js");
+
+    // Se há SW esperando para ativar (nova versão já baixada), ativa imediatamente
+    if (reg.waiting) {
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!_SW_RELOADING) { _SW_RELOADING = true; location.reload(); }
+      }, { once: true });
+      reg.waiting.postMessage("SKIP_WAITING");
+    }
+
+    // Detecta nova versão sendo instalada durante a sessão
     reg.addEventListener("updatefound", () => {
       const sw = reg.installing;
       if (!sw) return;
       sw.addEventListener("statechange", () => {
         if (sw.state === "installed" && navigator.serviceWorker.controller) {
           showToast("Nova versão disponível, recarregando…", "info");
+          navigator.serviceWorker.addEventListener("controllerchange", () => {
+            if (!_SW_RELOADING) { _SW_RELOADING = true; location.reload(); }
+          }, { once: true });
           sw.postMessage("SKIP_WAITING");
-          setTimeout(()=>location.reload(), 600);
         }
       });
     });
@@ -4559,7 +5503,23 @@ async function loadCommentsCounts() {
   STATE.commentsCount = STATE.commentsCount || {};
 }
 
+let _cmInHistory = false;
+
+function closeComments() {
+  const el = document.getElementById("cm-overlay");
+  if (el) el.remove();
+  if (_cmInHistory) {
+    _cmInHistory = false;
+    try { history.back(); } catch(e){}
+  }
+}
+window.closeComments = closeComments;
+
 async function openComments(postId) {
+  // Remove overlay anterior se existir (ex: chamado via deleteComment)
+  const existing = document.getElementById("cm-overlay");
+  if (existing) { existing.remove(); }
+
   const sheet = document.createElement("div");
   sheet.id = "cm-overlay";
   sheet.innerHTML = `
@@ -4584,27 +5544,42 @@ async function openComments(postId) {
     <div class="cm-card">
       <div class="cm-head">
         <div style="font-size:16px;font-weight:700;flex:1">Comentários</div>
-        <button onclick="this.closest('#cm-overlay').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
+        <button onclick="closeComments()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
       </div>
-      <div class="cm-list" id="cm-list">Carregando…</div>
+      <div class="cm-list" id="cm-list"><div style="padding:20px;text-align:center;color:var(--text-3)">Carregando…</div></div>
       <div class="cm-form">
         <input class="cm-input" id="cm-input" placeholder="Adicione um comentário…" maxlength="500" />
         <button class="cm-send" id="cm-send">Enviar</button>
       </div>
     </div>`;
   document.body.appendChild(sheet);
-  sheet.addEventListener("click", (e)=>{ if (e.target===sheet) sheet.remove(); });
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) closeComments(); });
+
+  // History API — botão voltar fecha o overlay
+  if (!_cmInHistory) {
+    _cmInHistory = true;
+    try { history.pushState({ treinova: 'comments' }, ''); } catch(e){}
+  }
 
   async function load() {
+    // Sem hint FK — PostgREST infere automaticamente quando há só uma FK entre as tabelas
     const { data, error } = await sb.from("feed_comments")
-      .select("*, author:profiles!feed_comments_user_id_fkey(id, full_name, avatar_emoji, avatar_url)")
+      .select("*, author:profiles(id, full_name, avatar_emoji, avatar_url)")
       .eq("post_id", postId).order("created_at", { ascending: true });
     const list = document.getElementById("cm-list");
-    if (error) { list.innerHTML = `<div style="padding:20px;color:var(--red)">${error.message}</div>`; return; }
-    if (!data.length) { list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-3)">Seja o primeiro a comentar 🎉</div>`; return; }
+    if (!list) return; // overlay pode ter sido fechado
+    if (error) {
+      console.warn("feed_comments error:", error);
+      list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3)">Erro ao carregar comentários. Tente novamente.</div>`;
+      return;
+    }
+    if (!data || !data.length) {
+      list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-3)">Seja o primeiro a comentar 🎉</div>`;
+      return;
+    }
     list.innerHTML = data.map(c => {
       const a = c.author || {};
-      const me = STATE.profile.id === c.user_id || STATE.profile.role === "admin" || STATE.profile.role === "coach";
+      const canDel = STATE.profile.id === c.user_id || STATE.profile.role === "admin" || STATE.profile.role === "coach";
       return `<div class="cm-item">
         <div class="cm-av">${a.avatar_url ? `<img src="${a.avatar_url}">` : (a.avatar_emoji || '👤')}</div>
         <div class="cm-content">
@@ -4612,7 +5587,7 @@ async function openComments(postId) {
             <div class="cm-name">${escapeHtml(a.full_name || 'Usuário')}</div>
             <div style="display:flex;gap:6px;align-items:center">
               <div class="cm-time">${timeAgo(c.created_at)}</div>
-              ${me ? `<button class="cm-del" onclick="deleteComment('${c.id}', '${postId}')">apagar</button>` : ''}
+              ${canDel ? `<button class="cm-del" onclick="deleteComment('${c.id}', '${postId}')">apagar</button>` : ''}
             </div>
           </div>
           <div class="cm-text">${escapeHtml(c.content)}</div>
@@ -4626,7 +5601,7 @@ async function openComments(postId) {
   const input = document.getElementById("cm-input");
   const btn = document.getElementById("cm-send");
   const submit = async () => {
-    const content = (input.value||'').trim();
+    const content = (input.value || '').trim();
     if (!content) return;
     btn.disabled = true;
     const { error } = await sb.from("feed_comments").insert({
@@ -4636,12 +5611,11 @@ async function openComments(postId) {
     if (error) { showToast(error.message, "error"); return; }
     input.value = '';
     await load();
-    // refresh counter no feed
-    if (typeof loadFeed === "function") loadFeed().then(()=>{ if (STATE.view==='feed') renderFeed(); });
+    loadFeed && loadFeed().then(() => { if (STATE.view === 'feed') renderFeed(); });
   };
   btn.onclick = submit;
-  input.addEventListener("keydown", (e)=>{ if (e.key==="Enter") submit(); });
-  setTimeout(()=>input.focus(), 200);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  setTimeout(() => input && input.focus(), 200);
 }
 window.openComments = openComments;
 
@@ -4649,8 +5623,34 @@ async function deleteComment(id, postId) {
   if (!confirm("Apagar comentário?")) return;
   const { error } = await sb.from("feed_comments").delete().eq("id", id);
   if (error) { showToast(error.message, "error"); return; }
-  await openComments(postId); // reabre limpo
-  document.querySelectorAll("#cm-overlay").forEach((el,i,arr)=>{ if (i<arr.length-1) el.remove(); });
+  // Recarrega a lista sem fechar/reabrir o overlay
+  const { data } = await sb.from("feed_comments")
+    .select("*, author:profiles(id, full_name, avatar_emoji, avatar_url)")
+    .eq("post_id", postId).order("created_at", { ascending: true });
+  const list = document.getElementById("cm-list");
+  if (!list) return;
+  if (!data || !data.length) {
+    list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-3)">Seja o primeiro a comentar 🎉</div>`;
+  } else {
+    list.innerHTML = data.map(c => {
+      const a = c.author || {};
+      const canDel = STATE.profile.id === c.user_id || STATE.profile.role === "admin" || STATE.profile.role === "coach";
+      return `<div class="cm-item">
+        <div class="cm-av">${a.avatar_url ? `<img src="${a.avatar_url}">` : (a.avatar_emoji || '👤')}</div>
+        <div class="cm-content">
+          <div class="cm-meta">
+            <div class="cm-name">${escapeHtml(a.full_name || 'Usuário')}</div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <div class="cm-time">${timeAgo(c.created_at)}</div>
+              ${canDel ? `<button class="cm-del" onclick="deleteComment('${c.id}', '${postId}')">apagar</button>` : ''}
+            </div>
+          </div>
+          <div class="cm-text">${escapeHtml(c.content)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  loadFeed && loadFeed().then(() => { if (STATE.view === 'feed') renderFeed(); });
 }
 window.deleteComment = deleteComment;
 
@@ -4919,34 +5919,43 @@ async function loadChatThreads() {
 }
 
 async function renderChat() {
-  const el = document.getElementById("view-home");
+  const el = document.getElementById("view-chat");
   if (!el) return;
   await loadChatThreads();
   const ths = STATE.chatThreads || [];
   el.innerHTML = `
     <div style="padding:16px 16px 100px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
-        <div style="flex:1">
-          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Mensagens</div>
-          <div style="font-size:20px;font-weight:800">💬 Chat</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <h1 class="view-title" style="margin:0">Mensagens</h1>
+          <p class="view-subtitle" style="margin:2px 0 0">${ths.length} conversa${ths.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onclick="openChatNewSheet()" style="background:var(--brand);color:var(--brand-on);border:0;border-radius:10px;padding:10px 12px;font-weight:700">+ Novo</button>
+        <button onclick="openChatNewSheet()" style="background:var(--brand);color:var(--brand-on);border:0;border-radius:12px;padding:10px 16px;font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova
+        </button>
       </div>
-      ${ths.length === 0 ? `<div style="padding:40px;text-align:center;color:var(--text-3)">Nenhuma conversa ainda. Toque em "+ Novo" pra começar.</div>` : `
-        <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;overflow:hidden">
+      ${ths.length === 0
+        ? `<div class="empty"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12h24a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H36l-8 8v-8h-8a4 4 0 0 1-4-4V16a4 4 0 0 1 4-4z"/></svg><h3>Nenhuma conversa</h3><p>Toque em "Nova" para iniciar um chat.</p></div>`
+        : `<div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;overflow:hidden">
           ${ths.map(t => {
             const me = STATE.profile.id;
             const isMine = t.last_from === me;
             const unread = !t.last_read_at && t.last_to === me;
             const o = t.other || {};
-            return `<div onclick="openChatThread('${o.id}')" style="display:flex;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;${unread?'background:var(--brand-soft)':''}">
-              <div style="width:44px;height:44px;border-radius:50%;background:var(--bg-2);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:20px">${o.avatar_url?`<img src="${o.avatar_url}" style="width:100%;height:100%;object-fit:cover">`:(o.avatar_emoji||'👤')}</div>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:14px;font-weight:700;color:var(--text)">${escapeHtml(o.full_name||'')}</div>
-                <div style="font-size:12px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isMine?'Você: ':''}${escapeHtml((t.last_content||'').slice(0,80))}</div>
+            return `<div onclick="openChatThread('${o.id}')" style="display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;${unread ? 'background:rgba(var(--brand-rgb,99,102,241),0.08);' : ''}align-items:center">
+              <div style="position:relative;flex:0 0 auto">
+                <div style="width:46px;height:46px;border-radius:50%;background:var(--bg-2);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:20px">${o.avatar_url ? `<img src="${o.avatar_url}" style="width:100%;height:100%;object-fit:cover">` : (o.avatar_emoji || '👤')}</div>
+                ${unread ? `<span style="position:absolute;top:0;right:0;width:10px;height:10px;background:var(--brand);border-radius:50%;border:2px solid var(--bg-card)"></span>` : ''}
               </div>
-              <div style="font-size:11px;color:var(--text-3);align-self:flex-start;margin-top:4px">${timeAgo(t.last_at)}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14px;font-weight:${unread ? '800' : '600'};color:var(--text)">${escapeHtml(o.full_name || '')}</div>
+                <div style="font-size:12px;color:${unread ? 'var(--text)' : 'var(--text-3)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${isMine ? 'Você: ' : ''}${escapeHtml((t.last_content || '').slice(0, 60))}</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-3);flex:0 0 auto;text-align:right">
+                <div>${timeAgo(t.last_at)}</div>
+                ${unread ? `<div style="font-weight:700;color:var(--brand);margin-top:2px">Novo</div>` : ''}
+              </div>
             </div>`;
           }).join('')}
         </div>`}
@@ -4997,11 +6006,27 @@ window.openChatNewSheet = openChatNewSheet;
 
 let CHAT_ACTIVE_OTHER = null;
 let CHAT_RT_CHANNEL = null;
+let _chatThreadInHistory = false;
+
 async function openChatThread(otherUserId) {
+  if (!otherUserId) { showToast("Usuário não encontrado", "error"); return; }
   CHAT_ACTIVE_OTHER = otherUserId;
-  const { data: other } = await sb.from("profiles").select("*").eq("id", otherUserId).single();
+
+  const { data: other, error: profileErr } = await sb.from("profiles").select("*").eq("id", otherUserId).single();
+  if (profileErr || !other) { showToast("Usuário não encontrado", "error"); return; }
+
+  // Fecha overlay anterior se aberto
+  const existing = document.getElementById("chat-thread-overlay");
+  if (existing) existing.remove();
+
   const sheet = document.createElement("div");
   sheet.id = "chat-thread-overlay";
+
+  // Empurra estado para que o botão voltar feche o overlay
+  if (!_chatThreadInHistory) {
+    _chatThreadInHistory = true;
+    try { history.pushState({ treinova: 'chat-thread' }, ''); } catch(e){}
+  }
   sheet.innerHTML = `
     <style>
       #chat-thread-overlay{position:fixed;inset:0;background:var(--bg);z-index:9600;display:flex;flex-direction:column}
@@ -5051,10 +6076,12 @@ async function openChatThread(otherUserId) {
       </div>`;
     }).join('');
     list.scrollTop = list.scrollHeight;
-    // Marca todas as recebidas como lidas
+    // Marca todas as recebidas como lidas e atualiza contador
     const unreadIds = (data||[]).filter(m => m.to_user === me && !m.read_at).map(m => m.id);
     if (unreadIds.length) {
       await sb.from("messages").update({ read_at: new Date().toISOString() }).in("id", unreadIds);
+      STATE.chatUnread = Math.max(0, (STATE.chatUnread || 0) - unreadIds.length);
+      renderHeaderBell();
     }
   }
   await load();
@@ -5103,15 +6130,975 @@ async function sendChatMessage(otherUserId, reload) {
     from_user: STATE.profile.id, to_user: otherUserId, content
   });
   if (error) { showToast(error.message, "error"); return; }
+  // dispara push pro destinatário (silencioso — não bloqueia UI)
+  try {
+    sb.functions.invoke("send-push", {
+      body: {
+        user_ids: [otherUserId],
+        title: STATE.profile.full_name || "Nova mensagem",
+        body: content.slice(0, 120),
+        url: "/app/?chat=" + STATE.profile.id,
+        tag: "chat-" + STATE.profile.id
+      }
+    }).catch(()=>{});
+  } catch(e) {}
   if (reload) await reload();
 }
 
 function closeChatThread() {
   if (CHAT_RT_CHANNEL) { sb.removeChannel(CHAT_RT_CHANNEL); CHAT_RT_CHANNEL = null; }
+  CHAT_ACTIVE_OTHER = null;
   const el = document.getElementById("chat-thread-overlay");
   if (el) el.remove();
+  // Limpa o history state sem navegar — evita sair do app
+  if (_chatThreadInHistory) {
+    _chatThreadInHistory = false;
+    try { history.replaceState(null, ''); } catch(e){}
+  }
+  // Atualiza a lista de chats (marca como lido visualmente)
+  if (STATE.view === "chat") renderChat().catch(() => {});
 }
 window.closeChatThread = closeChatThread;
+
+/* =============================================================================
+   POLIMENTO UX — Foto de progresso, Aeróbio, 1RM, Volume semanal, Confete, etc.
+   ============================================================================= */
+
+/* ---------- HOME: cards extras (volume semanal + lembrete avaliação) ---------- */
+async function renderHomeExtras() {
+  if (!STATE.profile) return;
+  const sid = STATE.profile.id;
+  const role = STATE.profile.role;
+
+  // Verificar se treino de hoje já foi concluído (aluno + admin com periodização)
+  const todayDate = todayISO();
+  const todayInfo = findDayInfo(todayDate);
+  if (todayInfo && todayInfo.workout_code && todayInfo.workout_code !== "OFF") {
+    const { data: doneSess } = await sb.from("sessions")
+      .select("id").eq("student_id", sid)
+      .eq("date", todayDate).eq("workout_code", todayInfo.workout_code)
+      .eq("status", "completed").maybeSingle();
+    if (doneSess) {
+      // Substituir o botão "Iniciar treino" por "Concluído" + "Ver detalhes"
+      const startBtn = document.querySelector('.today-card .btn-primary[onclick*="openWorkout"]');
+      if (startBtn) {
+        const wrapper = startBtn.parentElement;
+        wrapper.innerHTML = `
+          <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
+            <span class="today-pill pill-approved" style="font-size:13px;padding:7px 14px">✓ Treino concluído!</span>
+            <button class="btn-ghost" style="font-size:12px;padding:6px 12px"
+              onclick="openWorkout('${todayDate}','${todayInfo.workout_code}','${todayInfo.intensity}')">Ver detalhes</button>
+          </div>`;
+      }
+      // Para admin com grid de 2 colunas (btn-primary + btn-ghost)
+      const adminGrid = document.querySelector('.today-card div[style*="grid-template-columns"]');
+      if (adminGrid) {
+        adminGrid.innerHTML = `
+          <span class="today-pill pill-approved" style="font-size:13px;padding:7px 14px;grid-column:1/-1">✓ Treino concluído!</span>
+          <button class="btn-ghost" style="font-size:12px"
+            onclick="openWorkout('${todayDate}','${todayInfo.workout_code}','${todayInfo.intensity}')">Ver detalhes</button>
+          <button class="btn-ghost" onclick="navTo('calendar')">Periodização</button>`;
+      }
+    }
+  }
+
+  if (role !== "student") return;
+  // Volume semanal (últimas 8 semanas)
+  const { data: vols } = await sb.from("v_weekly_volume")
+    .select("*").eq("user_id", sid).order("week_start", { ascending: false }).limit(8);
+  const card = document.getElementById("weekly-volume-card");
+  if (card) {
+    const rows = (vols || []).reverse();
+    const total = rows.reduce((s,r)=>s + Number(r.total_volume_kg||0), 0);
+    const sessions = rows.reduce((s,r)=>s + Number(r.sessions||0), 0);
+    if (rows.length === 0) {
+      card.innerHTML = "";
+    } else {
+      const max = Math.max(...rows.map(r=>Number(r.total_volume_kg||0)), 1);
+      card.innerHTML = `
+        <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px">
+            <div>
+              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Volume nas últimas semanas</div>
+              <div style="font-size:18px;font-weight:800;margin-top:2px">${Math.round(total/1000)}t · ${sessions} sessões</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:6px;height:60px">
+            ${rows.map(r => {
+              const h = Math.max(4, Math.round((Number(r.total_volume_kg||0)/max)*60));
+              const isThisWeek = (new Date(r.week_start)).getTime() >= (new Date()).setDate(new Date().getDate()-7);
+              return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div style="width:100%;height:${h}px;background:${isThisWeek?'var(--brand)':'var(--brand-soft)'};border-radius:4px;transition:height .3s"></div>
+                <div style="font-size:9px;color:var(--text-3)">${formatBR(r.week_start).slice(0,5)}</div>
+              </div>`;
+            }).join("")}
+          </div>
+        </div>`;
+    }
+  }
+  // Lembrete avaliação (a cada 8 semanas)
+  const card2 = document.getElementById("assessment-reminder-card");
+  if (card2) {
+    const { data: lastPhoto } = await sb.from("progress_photos")
+      .select("date").eq("student_id", sid).order("date", { ascending: false }).limit(1).maybeSingle();
+    const last = lastPhoto ? new Date(lastPhoto.date) : null;
+    const days = last ? Math.floor((Date.now()-last.getTime())/86400000) : 999;
+    if (!last || days >= 56) {
+      card2.innerHTML = `
+        <div style="background:linear-gradient(135deg, rgba(0,180,255,0.15), transparent 60%), var(--bg-card);border:1px solid var(--brand);border-radius:14px;padding:14px;margin-bottom:14px;display:flex;gap:12px;align-items:center">
+          <div style="font-size:28px">📸</div>
+          <div style="flex:1">
+            <div style="font-weight:700">Hora de uma nova avaliação</div>
+            <div style="font-size:12px;color:var(--text-2)">${last ? `Última foto há ${days} dias` : 'Você ainda não tirou nenhuma foto de progresso'} — registre sua evolução.</div>
+          </div>
+          <button onclick="navTo('progress')" style="background:var(--brand);color:var(--brand-on);border:0;border-radius:10px;padding:10px 14px;font-weight:700;font-size:12px">Tirar foto</button>
+        </div>`;
+    } else {
+      card2.innerHTML = "";
+    }
+  }
+}
+// Plugar no renderHome existente (chamada após render):
+const _origRenderHome = window.renderHome || (typeof renderHome === "function" ? renderHome : null);
+if (_origRenderHome) {
+  window.renderHome = function(...args) {
+    const r = _origRenderHome.apply(this, args);
+    setTimeout(()=>renderHomeExtras().catch(()=>{}), 50);
+    return r;
+  };
+  // garantir referência local também
+  try { renderHome = window.renderHome; } catch(e){}
+}
+
+/* ---------- FOTO DE PROGRESSO ---------- */
+async function renderProgress() {
+  const el = document.getElementById("view-home");
+  if (!el) return;
+  const sid = STATE.profile.id;
+  const { data: photos } = await sb.from("progress_photos")
+    .select("*").eq("student_id", sid).order("date", { ascending: false }).limit(60);
+  el.innerHTML = `
+    <div style="padding:16px 16px 100px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Linha do tempo</div>
+          <div style="font-size:20px;font-weight:800">📸 Foto de progresso</div>
+        </div>
+        <button onclick="openProgressUpload()" style="background:var(--brand);color:var(--brand-on);border:0;border-radius:10px;padding:10px 14px;font-weight:700">+ Nova</button>
+      </div>
+      ${(!photos || photos.length === 0) ? `
+        <div style="text-align:center;padding:40px 20px;color:var(--text-2)">
+          <div style="font-size:48px;margin-bottom:12px">📷</div>
+          <div style="font-weight:700;color:var(--text);margin-bottom:6px">Sem fotos ainda</div>
+          <div style="font-size:13px">Tire a primeira pra acompanhar sua evolução</div>
+        </div>
+      ` : `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${photos.map(p => `
+            <div style="position:relative;border-radius:12px;overflow:hidden;background:var(--bg-card);border:1px solid var(--line);aspect-ratio:3/4">
+              <img src="${p.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onclick="openPhotoFull('${p.url}')">
+              <div style="position:absolute;left:0;right:0;bottom:0;padding:8px;background:linear-gradient(0deg,rgba(0,0,0,.85),transparent);color:#fff">
+                <div style="font-size:11px;font-weight:700">${formatBR(p.date)}</div>
+                ${p.weight ? `<div style="font-size:10px;opacity:.8">${p.weight}kg${p.body_fat ? ` · ${p.body_fat}%` : ''}</div>` : ''}
+              </div>
+              <button onclick="event.stopPropagation();deleteProgressPhoto('${p.id}','${p.url.split('/').slice(-2).join('/')}')" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:50%;width:26px;height:26px;font-size:14px">×</button>
+            </div>
+          `).join("")}
+        </div>
+      `}
+    </div>`;
+}
+
+window.openPhotoFull = (url) => {
+  const div = document.createElement("div");
+  div.id = "photo-full";
+  div.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9700;display:flex;align-items:center;justify-content:center;padding:20px;cursor:pointer";
+  div.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;border-radius:12px">`;
+  div.onclick = () => div.remove();
+  document.body.appendChild(div);
+};
+
+async function openProgressUpload() {
+  const sheet = document.createElement("div");
+  sheet.id = "pp-overlay";
+  sheet.innerHTML = `
+    <style>
+      #pp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9500;display:flex;align-items:flex-end}
+      #pp-overlay .pc{background:var(--bg);border-top-left-radius:18px;border-top-right-radius:18px;width:100%;max-height:85vh;overflow:auto;padding:16px}
+      #pp-overlay .row{display:flex;gap:8px;margin:10px 0}
+      #pp-overlay input{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg-card);color:var(--text)}
+      #pp-overlay textarea{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font:inherit;min-height:60px;margin:10px 0}
+      #pp-overlay .pp-up{background:var(--brand);color:var(--brand-on);padding:12px;border-radius:10px;border:0;font-weight:700;width:100%;margin-top:12px}
+      #pp-overlay label{font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-top:6px}
+    </style>
+    <div class="pc">
+      <div style="display:flex;align-items:center;margin-bottom:8px">
+        <div style="flex:1;font-weight:700;font-size:18px">Nova foto</div>
+        <button onclick="document.getElementById('pp-overlay').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
+      </div>
+      <input type="file" id="pp-file" accept="image/*" capture="user" style="margin-top:8px;width:100%;padding:11px;border-radius:10px;border:1px dashed var(--line);background:var(--bg-card);color:var(--text)">
+      <label>Peso (kg)</label>
+      <div class="row">
+        <input type="number" id="pp-weight" step="0.1" placeholder="Ex: 78.5">
+        <input type="number" id="pp-fat" step="0.1" placeholder="% gordura (opcional)">
+      </div>
+      <textarea id="pp-notes" placeholder="Notas (como está se sentindo, mudanças notadas…)" maxlength="500"></textarea>
+      <button class="pp-up" id="pp-submit">Enviar foto</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.remove(); });
+
+  document.getElementById("pp-submit").onclick = async () => {
+    const file = document.getElementById("pp-file").files[0];
+    if (!file) { showToast("Selecione uma foto", "error"); return; }
+    const btn = document.getElementById("pp-submit");
+    btn.disabled = true; btn.textContent = "Enviando…";
+    try {
+      const compressed = await compressImage(file, 1200, 0.85);
+      const path = `${STATE.profile.id}/${Date.now()}.jpg`;
+      const { error: upErr } = await sb.storage.from("progress").upload(path, compressed);
+      if (upErr) throw upErr;
+      const { data: pub } = sb.storage.from("progress").getPublicUrl(path);
+      const weight = document.getElementById("pp-weight").value;
+      const fat = document.getElementById("pp-fat").value;
+      const notes = document.getElementById("pp-notes").value || null;
+      const { error: insErr } = await sb.from("progress_photos").insert({
+        student_id: STATE.profile.id,
+        url: pub.publicUrl,
+        weight: weight ? Number(weight) : null,
+        body_fat: fat ? Number(fat) : null,
+        notes
+      });
+      if (insErr) throw insErr;
+      showToast("Foto registrada ✓", "success");
+      sheet.remove();
+      await renderProgress();
+    } catch (e) {
+      showToast(e.message || "Erro ao enviar", "error");
+      btn.disabled = false; btn.textContent = "Enviar foto";
+    }
+  };
+}
+window.openProgressUpload = openProgressUpload;
+
+async function deleteProgressPhoto(id, storagePath) {
+  if (!confirm("Apagar esta foto?")) return;
+  await sb.from("progress_photos").delete().eq("id", id);
+  if (storagePath) await sb.storage.from("progress").remove([storagePath]).catch(()=>null);
+  await renderProgress();
+}
+window.deleteProgressPhoto = deleteProgressPhoto;
+
+/* ---------- AERÓBIO ---------- */
+let AERO_TIMER = null;
+async function renderAero() {
+  const el = document.getElementById("view-home");
+  if (!el) return;
+  const sid = STATE.profile.id;
+  const { data: logs } = await sb.from("aero_logs")
+    .select("*").eq("student_id", sid).order("date", { ascending: false }).limit(20);
+  el.innerHTML = `
+    <div style="padding:16px 16px 100px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Cardio</div>
+          <div style="font-size:20px;font-weight:800">🏃 Aeróbio</div>
+        </div>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px">
+        <div id="aero-display" style="font-size:48px;font-weight:900;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:1px;color:var(--brand)">00:00</div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button id="aero-start" onclick="aeroStart()" style="flex:1;background:var(--brand);color:var(--brand-on);border:0;padding:12px;border-radius:10px;font-weight:700">Iniciar</button>
+          <button id="aero-pause" onclick="aeroPause()" style="flex:1;background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:12px;border-radius:10px;font-weight:700;display:none">Pausar</button>
+          <button id="aero-reset" onclick="aeroReset()" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line);padding:12px 16px;border-radius:10px">↺</button>
+        </div>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">Modalidade</div>
+            <select id="aero-modality" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+              <option value="corrida">Corrida</option>
+              <option value="bike">Bike</option>
+              <option value="esteira">Esteira</option>
+              <option value="escada">Escada</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">Intensidade</div>
+            <select id="aero-int" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+              <option value="leve">Leve</option>
+              <option value="moderado" selected>Moderado</option>
+              <option value="forte">Forte</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">Distância (km)</div>
+            <input id="aero-dist" type="number" step="0.1" placeholder="0" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">FC média</div>
+            <input id="aero-hr" type="number" placeholder="bpm" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
+        </div>
+        <button onclick="saveAeroLog()" style="width:100%;background:var(--brand);color:var(--brand-on);border:0;padding:12px;border-radius:10px;font-weight:700;margin-top:12px">Salvar treino</button>
+      </div>
+      <div class="section-title" style="margin:18px 0 8px">Histórico</div>
+      ${(!logs || logs.length === 0) ? `
+        <div style="text-align:center;padding:30px;color:var(--text-3);font-size:13px">Sem registros ainda</div>
+      ` : `
+        <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;overflow:hidden">
+          ${logs.map(l => `
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)">
+              <div style="font-size:24px">${l.modality === 'bike' ? '🚴' : l.modality === 'esteira' ? '🏃' : l.modality === 'escada' ? '🪜' : '🏃'}</div>
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:13px;text-transform:capitalize">${l.modality||'—'} · ${l.intensity||'—'}</div>
+                <div style="font-size:11px;color:var(--text-3)">${formatBR(l.date)} · ${fmtSec(l.duration_seconds||0)}${l.distance_km ? ` · ${l.distance_km}km` : ''}${l.hr_avg ? ` · ${l.hr_avg}bpm` : ''}</div>
+              </div>
+              <button onclick="deleteAeroLog('${l.id}')" style="background:transparent;border:0;color:var(--red);font-size:16px;padding:6px">×</button>
+            </div>
+          `).join("")}
+        </div>
+      `}
+    </div>`;
+}
+
+let AERO_SECS = 0;
+function aeroDisplay() {
+  const m = Math.floor(AERO_SECS/60), s = AERO_SECS%60;
+  const el = document.getElementById("aero-display");
+  if (el) el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function aeroStart() {
+  if (AERO_TIMER) return;
+  AERO_TIMER = setInterval(()=>{ AERO_SECS++; aeroDisplay(); }, 1000);
+  document.getElementById("aero-start").style.display = "none";
+  document.getElementById("aero-pause").style.display = "block";
+}
+function aeroPause() {
+  if (AERO_TIMER) { clearInterval(AERO_TIMER); AERO_TIMER = null; }
+  document.getElementById("aero-start").style.display = "block";
+  document.getElementById("aero-pause").style.display = "none";
+}
+function aeroReset() {
+  aeroPause();
+  AERO_SECS = 0;
+  aeroDisplay();
+}
+function fmtSec(s){ const m=Math.floor(s/60), ss=s%60; const h=Math.floor(m/60), mm=m%60; return h?`${h}h${String(mm).padStart(2,'0')}`:`${mm}min ${String(ss).padStart(2,'0')}s`; }
+window.aeroStart = aeroStart; window.aeroPause = aeroPause; window.aeroReset = aeroReset;
+
+async function saveAeroLog() {
+  const modality = document.getElementById("aero-modality").value;
+  const intensity = document.getElementById("aero-int").value;
+  const dist = document.getElementById("aero-dist").value;
+  const hr = document.getElementById("aero-hr").value;
+  if (AERO_SECS === 0 && !dist) { showToast("Inicie o cronômetro ou informe distância", "error"); return; }
+  const { error } = await sb.from("aero_logs").insert({
+    student_id: STATE.profile.id,
+    modality, intensity,
+    duration_seconds: AERO_SECS,
+    distance_km: dist ? Number(dist) : null,
+    hr_avg: hr ? Number(hr) : null
+  });
+  if (error) { showToast(error.message, "error"); return; }
+  showToast("Aeróbio registrado ✓", "success");
+  aeroReset();
+  await renderAero();
+}
+window.saveAeroLog = saveAeroLog;
+
+async function deleteAeroLog(id) {
+  if (!confirm("Apagar?")) return;
+  await sb.from("aero_logs").delete().eq("id", id);
+  await renderAero();
+}
+window.deleteAeroLog = deleteAeroLog;
+
+/* ---------- 1RM (calibração) ---------- */
+async function renderOneRM() {
+  const el = document.getElementById("view-home");
+  if (!el) return;
+  const sid = STATE.profile.id;
+  const { data: rms } = await sb.from("one_rep_max")
+    .select("*").eq("student_id", sid).order("date", { ascending: false }).limit(60);
+  // agrupa por exercício, pega o mais recente
+  const byEx = {};
+  (rms || []).forEach(r => {
+    if (!byEx[r.exercise_name]) byEx[r.exercise_name] = [];
+    byEx[r.exercise_name].push(r);
+  });
+  el.innerHTML = `
+    <div style="padding:16px 16px 100px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Calibração</div>
+          <div style="font-size:20px;font-weight:800">💪 Testes de força (1RM)</div>
+        </div>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px">
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:6px">Novo teste</div>
+        <input id="rm-ex" placeholder="Exercício (ex: Supino reto)" style="width:100%;padding:11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);margin-bottom:8px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <input id="rm-load" type="number" step="0.5" placeholder="Carga (kg)" style="padding:11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          <input id="rm-reps" type="number" placeholder="Reps (1 = 1RM)" value="1" style="padding:11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+        </div>
+        <button onclick="save1RM()" style="width:100%;background:var(--brand);color:var(--brand-on);border:0;padding:12px;border-radius:10px;font-weight:700;margin-top:10px">Registrar</button>
+        <div style="font-size:11px;color:var(--text-3);margin-top:8px">Para mais de 1 rep, calculamos automaticamente o 1RM estimado (Epley).</div>
+      </div>
+      ${Object.keys(byEx).length === 0 ? `
+        <div style="text-align:center;padding:30px;color:var(--text-3);font-size:13px">Nenhum teste ainda — registre seu primeiro acima</div>
+      ` : Object.entries(byEx).map(([name, arr]) => {
+        const latest = arr[0];
+        const max = arr.reduce((m,r)=> Math.max(m, Number(r.estimated_1rm||r.load_kg||0)), 0);
+        return `
+          <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <div>
+                <div style="font-weight:700">${escapeHtml(name)}</div>
+                <div style="font-size:11px;color:var(--text-3)">${arr.length} teste(s)</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:22px;font-weight:900;color:var(--brand)">${max}kg</div>
+                <div style="font-size:10px;color:var(--text-3)">1RM máx</div>
+              </div>
+            </div>
+            ${arr.slice(0,3).map(r => `
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:12px">
+                <div style="color:var(--text-2)">${formatBR(r.date)}</div>
+                <div>${r.load_kg}kg × ${r.reps} → <b>${r.estimated_1rm||r.load_kg}kg</b></div>
+                <button onclick="delete1RM('${r.id}')" style="background:transparent;border:0;color:var(--red);font-size:13px;padding:0 6px">×</button>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }).join("")}
+    </div>`;
+}
+
+async function save1RM() {
+  const exercise = document.getElementById("rm-ex").value.trim();
+  const load = document.getElementById("rm-load").value;
+  const reps = document.getElementById("rm-reps").value || 1;
+  if (!exercise || !load) { showToast("Preencha exercício e carga", "error"); return; }
+  const { error } = await sb.from("one_rep_max").insert({
+    student_id: STATE.profile.id,
+    exercise_name: exercise,
+    load_kg: Number(load),
+    reps: Number(reps)
+  });
+  if (error) { showToast(error.message, "error"); return; }
+  showToast("Teste registrado ✓", "success");
+  await renderOneRM();
+}
+window.save1RM = save1RM;
+
+async function delete1RM(id) {
+  if (!confirm("Apagar este teste?")) return;
+  await sb.from("one_rep_max").delete().eq("id", id);
+  await renderOneRM();
+}
+window.delete1RM = delete1RM;
+
+/* ---------- CONFETE (animação fim de treino) ---------- */
+function fireConfetti(durationMs = 2500) {
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:10000";
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  const colors = ["#00b4ff","#ffd60a","#2ecc71","#ff3b3b","#ff9500","#f4f7ff"];
+  const particles = Array.from({length: 140}, () => ({
+    x: Math.random()*canvas.width,
+    y: -20 - Math.random()*200,
+    vx: (Math.random()-0.5) * 6,
+    vy: 3 + Math.random()*5,
+    size: 6 + Math.random()*6,
+    rot: Math.random()*Math.PI*2,
+    vr: (Math.random()-0.5)*0.3,
+    color: colors[Math.floor(Math.random()*colors.length)]
+  }));
+  const start = performance.now();
+  function tick(t) {
+    const elapsed = t - start;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+      ctx.restore();
+    });
+    if (elapsed < durationMs) requestAnimationFrame(tick);
+    else canvas.remove();
+  }
+  requestAnimationFrame(tick);
+}
+window.fireConfetti = fireConfetti;
+
+/* ---------- WORKOUT COMPLETE MODAL ---------- */
+function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
+  const wname = STATE.selectedWorkout && STATE.workouts[STATE.selectedWorkout]?.name || "Treino";
+  const setsDone = (STATE.setLogs || []).filter(s => s.done).length;
+  const overlay = document.createElement("div");
+  overlay.id = "wc-overlay";
+  overlay.innerHTML = `
+    <style>
+      #wc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9800;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .3s}
+      #wc-overlay .wc-card{background:var(--bg);border:1px solid var(--brand);border-radius:18px;max-width:380px;width:100%;padding:28px 22px;text-align:center;animation:popIn .4s cubic-bezier(.2,.8,.4,1.2)}
+      @keyframes popIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+      #wc-overlay .wc-emoji{font-size:60px;margin-bottom:8px}
+      #wc-overlay h2{margin:0 0 6px;font-size:24px}
+      #wc-overlay .wc-sub{color:var(--text-2);margin:0 0 18px;font-size:14px}
+      #wc-overlay .wc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}
+      #wc-overlay .wc-stat{background:var(--bg-card);border:1px solid var(--line);border-radius:10px;padding:10px}
+      #wc-overlay .wc-val{font-size:20px;font-weight:900;color:var(--brand)}
+      #wc-overlay .wc-lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+      #wc-overlay .wc-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      #wc-overlay .wc-btn{padding:13px;border-radius:10px;font-weight:700;border:0;cursor:pointer;font-size:13px}
+      #wc-overlay .wc-share{background:var(--brand);color:var(--brand-on)}
+      #wc-overlay .wc-cont{background:var(--bg-card);color:var(--text);border:1px solid var(--line)}
+    </style>
+    <div class="wc-card">
+      <div class="wc-emoji">🎯</div>
+      <h2>Treino concluído!</h2>
+      <p class="wc-sub">${escapeHtml(wname)}</p>
+      <div class="wc-stats">
+        <div class="wc-stat">
+          <div class="wc-val">${setsDone}</div>
+          <div class="wc-lbl">Séries</div>
+        </div>
+        <div class="wc-stat">
+          <div class="wc-val">${Math.round(totalVolume)}</div>
+          <div class="wc-lbl">kg total</div>
+        </div>
+        <div class="wc-stat">
+          <div class="wc-val">${Math.floor(duration/60)}<span style="font-size:11px">min</span></div>
+          <div class="wc-lbl">Duração</div>
+        </div>
+      </div>
+      <div class="wc-buttons">
+        <button class="wc-btn wc-share" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone})">📤 Compartilhar</button>
+        <button class="wc-btn wc-cont" onclick="document.getElementById('wc-overlay').remove();navTo('feed')">Ver feed</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+window.showWorkoutCompleteModal = showWorkoutCompleteModal;
+
+async function shareWorkout(totalVolume, duration, name, setsDone) {
+  try {
+    const blob = await generateWorkoutCard(name, totalVolume, duration, setsDone);
+    if (blob && navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'treino.png', { type: 'image/png' })] })) {
+      const file = new File([blob], 'treino.png', { type: 'image/png' });
+      await navigator.share({ files: [file], title: "Treino concluído 💪" });
+      return;
+    }
+    if (blob) {
+      // Fallback: abre a imagem em nova aba para o usuário salvar
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "treino.png"; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      showToast("Imagem salva — compartilhe onde quiser 📤", "success");
+      return;
+    }
+  } catch(e) { console.warn("shareWorkout:", e); }
+  // Último fallback: texto
+  const text = `Acabei o treino de hoje 💪\n${name}\n${setsDone} séries · ${Math.round(totalVolume)}kg · ${Math.floor(duration/60)}min\n#Treinova`;
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("Texto copiado — cola onde quiser 📋", "success");
+  } catch(e) { showToast("Compartilhamento não suportado", "error"); }
+}
+
+async function generateWorkoutCard(wname, totalVolume, duration, setsDone) {
+  try {
+    const W = 1080, H = 1080;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    // Fundo gradiente escuro
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, "#0a0e1a");
+    bg.addColorStop(1, "#141928");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Glow de fundo
+    const brand = STATE.branding && STATE.branding.brand_color || "#6366f1";
+    const glow = ctx.createRadialGradient(W * 0.15, H * 0.15, 0, W * 0.15, H * 0.15, W * 0.55);
+    glow.addColorStop(0, brand + "33");
+    glow.addColorStop(1, "transparent");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Borda colorida no topo
+    ctx.fillStyle = brand;
+    ctx.fillRect(0, 0, W, 8);
+
+    // Logo/nome do app
+    const appName = (STATE.branding && STATE.branding.app_name) || "TREINOVA";
+    ctx.fillStyle = "#ffffff99";
+    ctx.font = "bold 36px -apple-system, system-ui, sans-serif";
+    ctx.letterSpacing = "4px";
+    ctx.fillText(appName.toUpperCase(), 72, 108);
+
+    // Ícone de check grande
+    ctx.fillStyle = brand;
+    ctx.font = "bold 120px sans-serif";
+    ctx.fillText("✓", W/2 - 60, 340);
+
+    // Nome do treino
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 72px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    // Quebra de linha se necessário
+    const words = wname.split(" ");
+    let line = ""; const lines = [];
+    for (const w of words) {
+      const test = line + (line ? " " : "") + w;
+      if (ctx.measureText(test).width > W - 140) { lines.push(line); line = w; }
+      else line = test;
+    }
+    lines.push(line);
+    const lineH = 84;
+    const startY = 450 - ((lines.length - 1) * lineH) / 2;
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, startY + i * lineH));
+
+    // Linha separadora
+    ctx.strokeStyle = brand + "55";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(72, 560); ctx.lineTo(W - 72, 560); ctx.stroke();
+
+    // Stats
+    const stats = [
+      { icon: "🔥", label: "Séries", value: String(setsDone) },
+      { icon: "⚡", label: "Volume", value: `${Math.round(totalVolume)}kg` },
+      { icon: "⏱", label: "Tempo", value: `${Math.floor(duration/60)}min` },
+    ];
+    const colW = (W - 144) / 3;
+    ctx.textAlign = "center";
+    stats.forEach((s, i) => {
+      const cx = 72 + colW * i + colW / 2;
+      ctx.font = "48px sans-serif";
+      ctx.fillText(s.icon, cx, 660);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 60px -apple-system, system-ui, sans-serif";
+      ctx.fillText(s.value, cx, 760);
+      ctx.fillStyle = "#ffffff66";
+      ctx.font = "32px -apple-system, system-ui, sans-serif";
+      ctx.fillText(s.label, cx, 810);
+      ctx.fillStyle = "#ffffff";
+    });
+
+    // Mensagem motivacional
+    ctx.fillStyle = "#ffffff55";
+    ctx.font = "italic 34px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Missão cumprida 💪", W / 2, 930);
+
+    // Data
+    const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+    ctx.fillStyle = "#ffffff33";
+    ctx.font = "28px -apple-system, system-ui, sans-serif";
+    ctx.fillText(today, W / 2, 990);
+
+    return await new Promise(res => canvas.toBlob(res, "image/png"));
+  } catch(e) {
+    console.warn("generateWorkoutCard:", e);
+    return null;
+  }
+}
+window.shareWorkout = shareWorkout;
+
+/* ---------- TERMOS / PRIVACIDADE MODAIS ---------- */
+const TERMS_TXT = `<h2>Termos de Uso — Treinova</h2>
+<p><b>Última atualização:</b> ${new Date().toLocaleDateString('pt-BR')}</p>
+
+<h3>1. Sobre o Treinova</h3>
+<p>O Treinova é uma plataforma white-label que conecta treinadores e alunos para gestão de treinos, periodização, evolução de carga, comunicação e pagamentos.</p>
+
+<h3>2. Cadastro e acesso</h3>
+<p>O acesso é feito por convite do treinador ou administrador. Cada usuário é responsável pelas credenciais e pelas ações realizadas em sua conta.</p>
+
+<h3>3. Conteúdo enviado</h3>
+<p>Você é responsável pelo conteúdo que envia (fotos, vídeos, mensagens). Não é permitido conteúdo ilegal, ofensivo ou que viole direitos de terceiros.</p>
+
+<h3>4. Pagamentos</h3>
+<p>As mensalidades são processadas via Asaas. Em caso de inadimplência, o acesso pode ser bloqueado. O reembolso segue a política definida pelo seu treinador.</p>
+
+<h3>5. Limitação de responsabilidade</h3>
+<p>O Treinova é uma ferramenta de apoio. Não substitui orientação médica/profissional. Antes de iniciar qualquer atividade física, consulte um profissional de saúde.</p>
+
+<h3>6. Encerramento</h3>
+<p>O usuário pode solicitar o encerramento da conta a qualquer momento por suporte@treinovaapp.com.</p>
+
+<h3>7. Contato</h3>
+<p>Suporte: suporte@treinovaapp.com · WhatsApp: +55 35 98847-7254</p>`;
+
+const PRIVACY_TXT = `<h2>Política de Privacidade — Treinova</h2>
+<p><b>Última atualização:</b> ${new Date().toLocaleDateString('pt-BR')}</p>
+
+<h3>1. Dados que coletamos</h3>
+<ul>
+  <li>Identificação: nome, e-mail, telefone, foto</li>
+  <li>Treino: pesos, repetições, duração, frequência</li>
+  <li>Saúde (opcional): peso corporal, % gordura, fotos de progresso</li>
+  <li>Pagamento: status (não armazenamos dados de cartão — fica no Asaas)</li>
+  <li>Técnicos: IP, user-agent, push subscription</li>
+</ul>
+
+<h3>2. Como usamos</h3>
+<p>Para operar o app: mostrar treinos, gerar gráficos de evolução, enviar notificações, gerar cobranças, comunicação com seu treinador.</p>
+
+<h3>3. Compartilhamento</h3>
+<p>Não vendemos seus dados. Compartilhamos apenas com:</p>
+<ul>
+  <li>Seu treinador / administrador (visibilidade definida pelo papel)</li>
+  <li>Asaas (pagamentos)</li>
+  <li>Supabase (infraestrutura — banco e armazenamento)</li>
+</ul>
+
+<h3>4. Seus direitos (LGPD)</h3>
+<p>Você pode pedir acesso, correção ou exclusão dos seus dados a qualquer momento via suporte@treinovaapp.com. Também pode exportar seus dados pelo botão "Exportar meus dados" no perfil.</p>
+
+<h3>5. Segurança</h3>
+<p>Conexões em HTTPS. Senhas armazenadas com hash. Acesso ao banco controlado por Row Level Security (RLS) do Supabase.</p>
+
+<h3>6. Cookies</h3>
+<p>Usamos somente cookies/storage técnicos (sessão e preferências). Não fazemos rastreamento de terceiros.</p>
+
+<h3>7. Contato do encarregado</h3>
+<p>suporte@treinovaapp.com</p>`;
+
+function openLegalModal(kind) {
+  const html = kind === "terms" ? TERMS_TXT : PRIVACY_TXT;
+  const overlay = document.createElement("div");
+  overlay.id = "legal-overlay";
+  overlay.innerHTML = `
+    <style>
+      #legal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9700;display:flex;align-items:center;justify-content:center;padding:16px}
+      #legal-overlay .lg{background:var(--bg);border:1px solid var(--line);border-radius:14px;max-width:600px;width:100%;max-height:85vh;display:flex;flex-direction:column}
+      #legal-overlay .lg-h{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+      #legal-overlay .lg-b{flex:1;overflow:auto;padding:16px 20px;color:var(--text-2);line-height:1.55;font-size:13px}
+      #legal-overlay .lg-b h2{color:var(--text);margin-top:0}
+      #legal-overlay .lg-b h3{color:var(--text);font-size:14px;margin:18px 0 6px}
+      #legal-overlay .lg-b p, #legal-overlay .lg-b ul{margin:0 0 8px}
+    </style>
+    <div class="lg">
+      <div class="lg-h">
+        <div style="flex:1;font-weight:700">Documento legal</div>
+        <button onclick="this.closest('#legal-overlay').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
+      </div>
+      <div class="lg-b">${html}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+}
+window.openLegalModal = openLegalModal;
+
+/* ---------- EXPORT CSV (perfil aluno) ---------- */
+async function exportMyDataCSV() {
+  showToast("Preparando exportação…", "info");
+  const sid = STATE.profile.id;
+  // Sessions + set logs + aero + 1RM + progress photos
+  const [sess, sets, aero, rms, photos, payments] = await Promise.all([
+    sb.from("sessions").select("date, workout_code, intensity, status, completed_at, duration_seconds, total_volume_kg").eq("student_id", sid).order("date", { ascending: false }),
+    sb.from("set_logs").select("created_at, exercise_name, set_number, target_reps, load_kg, reps_done, done").eq("student_id", sid).order("created_at", { ascending: false }).limit(2000),
+    sb.from("aero_logs").select("date, modality, duration_seconds, distance_km, intensity, hr_avg").eq("student_id", sid).order("date", { ascending: false }),
+    sb.from("one_rep_max").select("date, exercise_name, load_kg, reps, estimated_1rm").eq("student_id", sid).order("date", { ascending: false }),
+    sb.from("progress_photos").select("date, weight, body_fat, notes, url").eq("student_id", sid).order("date", { ascending: false }),
+    sb.from("payments").select("due_date, amount, status, paid_at, method").eq("user_id", sid).order("due_date", { ascending: false })
+  ]);
+
+  function toCSV(rows) {
+    if (!rows || !rows.length) return "(vazio)\n";
+    const keys = Object.keys(rows[0]);
+    const esc = v => v == null ? "" : `"${String(v).replace(/"/g,'""')}"`;
+    return keys.join(",") + "\n" + rows.map(r => keys.map(k => esc(r[k])).join(",")).join("\n") + "\n";
+  }
+
+  const sections = [
+    "==== SESSÕES ====\n" + toCSV(sess.data),
+    "==== SÉRIES ====\n" + toCSV(sets.data),
+    "==== AERÓBIO ====\n" + toCSV(aero.data),
+    "==== 1RM ====\n" + toCSV(rms.data),
+    "==== FOTOS DE PROGRESSO ====\n" + toCSV(photos.data),
+    "==== PAGAMENTOS ====\n" + toCSV(payments.data),
+  ];
+  const blob = new Blob([sections.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `treinova-meusdados-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  showToast("CSV baixado ✓", "success");
+}
+window.exportMyDataCSV = exportMyDataCSV;
+
+/* ---------- INJETA BOTÃO "EXPORTAR DADOS" NO PROFILE ---------- */
+const _origRenderProfile = window.renderProfile || (typeof renderProfile === "function" ? renderProfile : null);
+if (_origRenderProfile) {
+  window.renderProfile = async function(...args) {
+    const r = await _origRenderProfile.apply(this, args);
+    setTimeout(() => {
+      const el = document.getElementById("view-profile");
+      if (!el || el.querySelector("#export-csv-btn")) return;
+      const role = STATE.profile && STATE.profile.role;
+      if (role !== "student") return;
+      const div = document.createElement("div");
+      div.style.cssText = "padding:14px 0";
+      div.innerHTML = `
+        <button id="export-csv-btn" onclick="exportMyDataCSV()" class="btn-ghost" style="width:100%">📥 Exportar meus dados (CSV — LGPD)</button>
+        <div style="text-align:center;font-size:11px;color:var(--text-3);margin-top:14px">
+          <a href="#" onclick="event.preventDefault();openLegalModal('terms')" style="color:var(--text-3);margin:0 6px">Termos de Uso</a>·
+          <a href="#" onclick="event.preventDefault();openLegalModal('privacy')" style="color:var(--text-3);margin:0 6px">Privacidade</a>
+        </div>`;
+      el.appendChild(div);
+    }, 100);
+    return r;
+  };
+  try { renderProfile = window.renderProfile; } catch(e){}
+}
+
+/* ---------- HOME: múltiplos blocos do dia + botão compartilhar ---------- */
+const _origRenderHome2 = window.renderHome;
+window.renderHome = function(...args) {
+  const r = _origRenderHome2.apply(this, args);
+  setTimeout(() => {
+    if (STATE.profile && STATE.profile.role === "student") {
+      renderTodayBlocksCard();
+    }
+  }, 50);
+  return r;
+};
+try { renderHome = window.renderHome; } catch(e){}
+
+function renderTodayBlocksCard() {
+  const today = todayISO();
+  const blocks = (STATE.dayBlocks || {})[today];
+  const card = document.querySelector("#view-home .today-card");
+  if (!card) return;
+  if (!blocks || !blocks.length) return; // mantém o card legado se sem blocos
+
+  const eyebrow = card.querySelector(".today-eyebrow");
+  const eyebrowText = eyebrow ? eyebrow.textContent : `Hoje · ${fmtFullDateBR ? fmtFullDateBR(today) : today}`;
+
+  const blocksHTML = blocks.map(b => {
+    const p = (typeof getPreset === "function" && getPreset(b.preset_code)) || { label: b.preset_code, color: '#9aa6c0', is_workout: !!b.workout_code };
+    const W = b.workout_code ? STATE.workouts[b.workout_code] : null;
+    const hasRepRange = p.rep_min && p.rep_max;
+    return `
+      <div style="background:var(--bg-2);border:1px solid var(--line);border-left:4px solid ${p.color};border-radius:12px;padding:14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:800;color:${p.color};font-size:11px;text-transform:uppercase;letter-spacing:.6px">${escape(p.label)}</div>
+            <div style="font-size:16px;color:var(--text);font-weight:700;margin-top:3px">${W ? escape(W.name) : (p.is_workout ? '— sem treino atribuído —' : escape(p.label))}</div>
+            ${hasRepRange ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px">${p.rep_min}-${p.rep_max} reps · pausa ${Math.floor((p.pause_seconds||0)/60)}:${String((p.pause_seconds||0)%60).padStart(2,'0')}</div>` : ''}
+            ${W && W.focus ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px">${escape(W.focus)}</div>` : ''}
+          </div>
+          ${b.workout_code && p.is_workout && W ? `
+            <button class="btn-primary" style="padding:9px 14px;font-size:12px;width:auto;flex-shrink:0" onclick="openWorkoutWithPreset('${today}','${b.workout_code}','${b.preset_code}')">
+              Iniciar
+            </button>
+          ` : (b.preset_code === 'aero' ? `
+            <button class="btn-ghost" style="padding:9px 14px;font-size:12px;width:auto;flex-shrink:0" onclick="navTo('aero')">
+              Cardio →
+            </button>
+          ` : '')}
+        </div>
+      </div>`;
+  }).join("");
+
+  card.classList.remove("intensity-yellow","intensity-red","intensity-white","intensity-flex","intensity-off");
+  card.innerHTML = `
+    <div class="today-eyebrow">${escape(eyebrowText)}</div>
+    <div style="font-weight:900;font-size:24px;margin:4px 0 14px">Hoje · ${blocks.length} ${blocks.length > 1 ? 'blocos' : 'bloco'}</div>
+    ${blocksHTML}`;
+}
+window.renderTodayBlocksCard = renderTodayBlocksCard;
+
+/* Abre treino com o preset selecionado (rep range + pause vêm do preset) */
+window.openWorkoutWithPreset = function(date, code, presetCode) {
+  STATE.selectedPresetCode = presetCode;
+  // mapeia preset → intensity legacy pra UI atual
+  const intMap = { hipertrofia: 'yellow', forca: 'red', deload: 'white', flex: 'flex', off: 'off', aero: 'flex' };
+  STATE.selectedDate = date;
+  STATE.selectedWorkout = code;
+  STATE.selectedIntensity = intMap[presetCode] || 'yellow';
+  STATE.expandedEx = null;
+  navTo("workout");
+};
+
+/* Banner com preset info no topo do treino */
+const _origRenderWorkout = window.renderWorkout;
+if (_origRenderWorkout) {
+  window.renderWorkout = async function(...args) {
+    const r = await _origRenderWorkout.apply(this, args);
+    setTimeout(() => {
+      if (!STATE.selectedPresetCode) return;
+      const p = (typeof getPreset === "function") ? getPreset(STATE.selectedPresetCode) : null;
+      if (!p || !(p.rep_min || p.pause_seconds)) return;
+      const banner = document.querySelector("#view-workout .intensity-banner");
+      if (banner && !banner.dataset.presetEnhanced) {
+        banner.dataset.presetEnhanced = "1";
+        const extra = document.createElement("div");
+        extra.style.cssText = "margin-top:6px;font-size:11px;color:var(--text-2)";
+        extra.textContent = `${p.rep_min}-${p.rep_max} reps · pausa ${Math.floor((p.pause_seconds||0)/60)}:${String((p.pause_seconds||0)%60).padStart(2,'0')}`;
+        banner.appendChild(extra);
+      }
+    }, 50);
+    return r;
+  };
+  try { renderWorkout = window.renderWorkout; } catch(e){}
+}
+
+/* ---------- MARCA D'ÁGUA NOS VÍDEOS DE EXERCÍCIO ---------- */
+async function watermarkVideo(file, brandName) {
+  // Se for vídeo, retorna o próprio arquivo (não dá pra remuxar no browser sem ffmpeg.wasm).
+  // Em vez disso, gera-se um THUMBNAIL com marca d'água que é salvo junto.
+  // Fica como TODO mais robusto. Por ora retorna o arquivo original.
+  return file;
+}
+async function generateVideoWatermarkPoster(videoFile, brandName = "Treinova") {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video");
+    v.preload = "metadata"; v.muted = true; v.playsInline = true;
+    v.src = URL.createObjectURL(videoFile);
+    v.onloadeddata = () => {
+      v.currentTime = Math.min(0.5, (v.duration || 1) / 2);
+    };
+    v.onseeked = () => {
+      const canvas = document.createElement("canvas");
+      const w = Math.min(720, v.videoWidth);
+      const h = Math.round(v.videoHeight * (w / v.videoWidth));
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(v, 0, 0, w, h);
+      // marca d'água
+      ctx.fillStyle = "rgba(0,0,0,.45)";
+      const txt = "▲ " + brandName;
+      ctx.font = "bold 16px -apple-system, sans-serif";
+      const tw = ctx.measureText(txt).width + 16;
+      ctx.fillRect(w - tw - 10, h - 36, tw, 26);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(txt, w - tw, h - 18);
+      canvas.toBlob(b => { URL.revokeObjectURL(v.src); resolve(b); }, "image/jpeg", 0.85);
+    };
+    v.onerror = (e) => { URL.revokeObjectURL(v.src); reject(e); };
+  });
+}
+window.watermarkVideo = watermarkVideo;
+window.generateVideoWatermarkPoster = generateVideoWatermarkPoster;
 
 boot();
 </script>
