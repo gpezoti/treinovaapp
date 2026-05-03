@@ -503,6 +503,14 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   }
 }
 </style>
+
+<!-- [B-03] PostHog Analytics — substitua YOUR_POSTHOG_KEY pela chave real
+     Obtenha em: https://app.posthog.com → Project Settings → Project API Key
+     Free tier: até 1M eventos/mês. Remova este bloco se não quiser analytics. -->
+<script>
+  !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]);t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a=e,u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+" (stub)"},o="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys getNextSurveyStep onSessionId setPersonPropertiesForFlags".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+  posthog.init('YOUR_POSTHOG_KEY', { api_host: 'https://us.i.posthog.com', person_profiles: 'identified_only' });
+</script>
 </head>
 <body>
 
@@ -818,6 +826,39 @@ function showToast(msg, kind) {
   if (kind) t.classList.add(kind);
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2200);
 }
+
+// ============================================================
+// [M-01] showConfirm — substitui confirm() nativo em toda a app
+// Retorna Promise<boolean>. Uso: if (!await showConfirm({...})) return;
+// ============================================================
+function showConfirm({ title = "Confirmar", msg = "", confirm: confirmLabel = "Confirmar", cancel: cancelLabel = "Cancelar", danger = false } = {}) {
+  return new Promise(resolve => {
+    const old = document.getElementById("_confirm_overlay");
+    if (old) old.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "_confirm_overlay";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:flex-end;justify-content:center";
+
+    const card = document.createElement("div");
+    card.style.cssText = "background:var(--bg-card);border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px";
+    card.innerHTML = `
+      <div style="font-weight:700;font-size:17px;color:var(--text);margin-bottom:8px">${escapeHtml(title)}</div>
+      ${msg ? `<div style="font-size:14px;color:var(--text-2);line-height:1.5;margin-bottom:18px;white-space:pre-line">${escapeHtml(msg)}</div>` : `<div style="margin-bottom:16px"></div>`}
+      <div style="display:flex;gap:10px">
+        <button id="_confirm_cancel" style="flex:1;padding:13px;border-radius:12px;border:1px solid var(--line);background:var(--bg-2);color:var(--text);font-size:15px;font-weight:600;cursor:pointer">${escapeHtml(cancelLabel)}</button>
+        <button id="_confirm_ok" style="flex:1;padding:13px;border-radius:12px;border:0;background:${danger ? '#ef4444' : 'var(--brand)'};color:${danger ? '#fff' : 'var(--brand-on)'};font-size:15px;font-weight:700;cursor:pointer">${escapeHtml(confirmLabel)}</button>
+      </div>`;
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    function cleanup(result) { overlay.remove(); resolve(result); }
+    document.getElementById("_confirm_cancel").onclick = () => cleanup(false);
+    document.getElementById("_confirm_ok").onclick    = () => cleanup(true);
+    overlay.addEventListener("click", e => { if (e.target === overlay) cleanup(false); });
+  });
+}
+
 function parsePauseToSeconds(s) {
   if (!s) return null;
   const m = s.match(/(\d+)\s*'\s*(\d+)?/);
@@ -1173,8 +1214,33 @@ function showAuthError(msg) {
   e.textContent = msg; e.style.display = "block";
 }
 
+// [M-05] Login rate limiting — cooldown progressivo após 3 tentativas falhas
+let _loginAttempts = 0;
+let _loginCooldownUntil = 0;
+let _loginCooldownTimer = null;
+
+function _startLoginCooldown(seconds) {
+  _loginCooldownUntil = Date.now() + seconds * 1000;
+  const submitBtn = document.getElementById("auth-submit");
+  clearInterval(_loginCooldownTimer);
+  _loginCooldownTimer = setInterval(() => {
+    const remaining = Math.ceil((_loginCooldownUntil - Date.now()) / 1000);
+    if (remaining <= 0) {
+      clearInterval(_loginCooldownTimer);
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Entrar"; }
+      showAuthError("Tente novamente.");
+      return;
+    }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = `Aguarde ${remaining}s`; }
+  }, 500);
+}
+
 async function handleAuthSubmit(ev) {
   ev.preventDefault();
+
+  // [M-05] Checar cooldown ativo
+  if (Date.now() < _loginCooldownUntil) return;
+
   const email = document.getElementById("auth-email").value.trim();
   const password = document.getElementById("auth-password").value;
   const submitBtn = document.getElementById("auth-submit");
@@ -1182,11 +1248,23 @@ async function handleAuthSubmit(ev) {
   try {
     const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    // Sucesso — zera contador
+    _loginAttempts = 0;
   } catch (e) {
+    _loginAttempts++;
+    // Cooldown progressivo: 3 falhas=30s, 4=60s, 5+=120s
+    if (_loginAttempts >= 3) {
+      const secs = _loginAttempts === 3 ? 30 : _loginAttempts === 4 ? 60 : 120;
+      showAuthError(`Muitas tentativas. Aguarde ${secs} segundos.`);
+      _startLoginCooldown(secs);
+      return; // finally não precisa resetar botão — cooldown cuida disso
+    }
     showAuthError(e.message || "Email ou senha inválidos");
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Entrar";
+    if (Date.now() >= _loginCooldownUntil) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Entrar";
+    }
   }
 }
 
@@ -1208,13 +1286,58 @@ async function submitForgotPassword() {
   if (!email) { showToast("Digite seu email", "error"); return; }
   const btn = document.getElementById("forgot-submit");
   btn.disabled = true; btn.textContent = "Enviando...";
-  const redirectTo = window.location.origin + window.location.pathname;
+  // A-03 FIX: redirectTo aponta para a raiz do app (não pathname que pode ser /app/)
+  const redirectTo = window.location.origin + "/";
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
   btn.disabled = false; btn.textContent = "Enviar link";
   if (error) { showToast("Erro: " + error.message, "error"); return; }
   document.getElementById("forgot-success").style.display = "block";
   btn.style.display = "none";
 }
+
+// A-03 FIX: modal para nova senha — disparado pelo evento PASSWORD_RECOVERY
+function showPasswordRecoveryModal() {
+  // Remover modal anterior se existir
+  document.getElementById("pw-recovery-modal")?.remove();
+  const el = document.createElement("div");
+  el.id = "pw-recovery-modal";
+  el.innerHTML = `
+    <style>
+      #pw-recovery-modal{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99000;display:flex;align-items:center;justify-content:center;padding:20px}
+      #pw-recovery-modal .prm-card{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:24px;width:100%;max-width:360px}
+      #pw-recovery-modal h3{margin:0 0 6px;font-size:18px}
+      #pw-recovery-modal p{color:var(--text-2);font-size:13px;margin-bottom:16px}
+    </style>
+    <div class="prm-card">
+      <h3>Criar nova senha</h3>
+      <p>Escolha uma senha segura com pelo menos 6 caracteres.</p>
+      <div class="form-group">
+        <input class="input" type="password" id="prm-pw1" placeholder="Nova senha" autocomplete="new-password">
+      </div>
+      <div class="form-group" style="margin-top:8px">
+        <input class="input" type="password" id="prm-pw2" placeholder="Confirmar nova senha" autocomplete="new-password">
+      </div>
+      <button class="btn-primary" style="width:100%;margin-top:12px" id="prm-save" onclick="submitPasswordRecovery()">Salvar nova senha</button>
+    </div>`;
+  document.body.appendChild(el);
+}
+
+window.submitPasswordRecovery = async function() {
+  const pw1 = document.getElementById("prm-pw1")?.value || "";
+  const pw2 = document.getElementById("prm-pw2")?.value || "";
+  if (pw1.length < 6) { showToast("Senha deve ter ao menos 6 caracteres", "error"); return; }
+  if (pw1 !== pw2) { showToast("As senhas não conferem", "error"); return; }
+  const btn = document.getElementById("prm-save");
+  if (btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
+  const { error } = await sb.auth.updateUser({ password: pw1 });
+  if (error) {
+    showToast("Erro: " + error.message, "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Salvar nova senha"; }
+    return;
+  }
+  showToast("Senha atualizada com sucesso!", "success");
+  document.getElementById("pw-recovery-modal")?.remove();
+};
 
 async function loadProfile() {
   const { data: { user } } = await sb.auth.getUser();
@@ -1230,11 +1353,12 @@ async function loadProfile() {
 }
 
 async function signOut() {
-  if (confirm("Sair da conta?")) {
-    cleanupRealtime();
-    await sb.auth.signOut();
-    location.reload();
-  }
+  if (!await showConfirm({ title: "Sair da conta?", confirm: "Sair", cancel: "Cancelar" })) return;
+  cleanupRealtime();
+  // M-01 FIX: limpar dados do timer para não vazar entre usuários do mesmo dispositivo
+  try { localStorage.removeItem("timer_start"); localStorage.removeItem("timer_total"); localStorage.removeItem("timer_label"); } catch(e) {}
+  await sb.auth.signOut();
+  location.reload();
 }
 
 /* =============================================================================
@@ -1707,6 +1831,13 @@ async function updateLoad(exercise, position, setIdx, val) {
 
 async function completeSession() {
   if (!STATE.currentSession) return;
+  // A-04 FIX: prevenir double-click / dupla conclusão
+  if (STATE._completingSession) return;
+  STATE._completingSession = true;
+  // Desabilitar botão visualmente
+  const btn = document.getElementById("btn-complete-session");
+  if (btn) { btn.disabled = true; btn.textContent = "Concluindo..."; }
+  try {
   // calcula volume e duração
   const totalVolume = STATE.setLogs.filter(s => s.done && s.load_kg).reduce((acc, s) => acc + (s.load_kg || 0), 0);
   const startedAt = new Date(STATE.currentSession.started_at).getTime();
@@ -1721,6 +1852,15 @@ async function completeSession() {
   showToast("Treino concluído! 🎯", "success");
   STATE.currentSession.status = "completed";
   await loadLastLoads();
+  // [B-03] PostHog — evento mais importante: treino concluído
+  try {
+    if (window.posthog) posthog.capture("workout_completed", {
+      workout_code: STATE.selectedWorkout,
+      total_volume_kg: totalVolume,
+      duration_seconds: duration,
+      sets_done: STATE.setLogs.filter(s => s.done).length,
+    });
+  } catch(e) {}
   // Animação de conclusão
   if (typeof fireConfetti === "function") fireConfetti(2800);
   // Mostra modal de "treino concluído" com stats e botão de compartilhar
@@ -1728,6 +1868,12 @@ async function completeSession() {
     showWorkoutCompleteModal({ totalVolume, duration, sessionId: STATE.currentSession.id });
   } else {
     navTo("feed");
+  }
+  } catch(e) {
+    console.error("[completeSession]", e);
+    showToast("Erro ao concluir treino", "error");
+  } finally {
+    STATE._completingSession = false;
   }
 }
 
@@ -1765,6 +1911,54 @@ async function toggleLike(postId) {
   }
   renderFeed();
 }
+
+/* =============================================================================
+   [UX-01] VISUAL VIEWPORT — iOS keyboard push-up
+   Ajusta o bottom da sheet e do chat quando o teclado virtual aparece no iOS.
+   Sem isso, inputs no final de formulários ficam cobertos pelo teclado.
+   ============================================================================= */
+(function setupVisualViewport() {
+  if (!window.visualViewport) return;
+  let _rafId = null;
+
+  function onViewportChange() {
+    if (_rafId) cancelAnimationFrame(_rafId);
+    _rafId = requestAnimationFrame(() => {
+      const vv = window.visualViewport;
+      // offsetTop: espaço acima do viewport visível (notch + barra de navegação iOS)
+      // height: altura do viewport visível (exclui teclado)
+      const keyboardHeight = window.innerHeight - (vv.offsetTop + vv.height);
+      const offset = Math.max(0, keyboardHeight);
+
+      // Sheet bottom
+      const sheet = document.getElementById("sheet");
+      if (sheet) {
+        sheet.style.paddingBottom = offset > 0
+          ? `calc(${offset}px + env(safe-area-inset-bottom, 0px))`
+          : "";
+      }
+
+      // Chat thread input footer
+      const ctFooter = document.querySelector("#chat-thread-overlay .ct-f");
+      if (ctFooter) {
+        ctFooter.style.paddingBottom = offset > 0
+          ? `calc(${offset}px + env(safe-area-inset-bottom, 0px))`
+          : "";
+      }
+
+      // Rola o último input visível para cima
+      if (offset > 0) {
+        const focused = document.activeElement;
+        if (focused && (focused.tagName === "INPUT" || focused.tagName === "TEXTAREA")) {
+          focused.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+      }
+    });
+  }
+
+  window.visualViewport.addEventListener("resize", onViewportChange, { passive: true });
+  window.visualViewport.addEventListener("scroll", onViewportChange, { passive: true });
+})();
 
 /* =============================================================================
    PULL-TO-REFRESH
@@ -1894,7 +2088,15 @@ function setupRealtime() {
       // Se a lista de threads está visível, atualiza
       if (STATE.view === "chat") renderChat().catch(()=>{});
     })
-    .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, async () => {
+    // A-01 FIX: filtrar por user_id para não vazar dados de outros alunos via Realtime
+    .on("postgres_changes", {
+      event: "*", schema: "public", table: "payments",
+      filter: STATE.profile.role === "student"
+        ? `user_id=eq.${STATE.profile.id}`
+        : STATE.profile.role === "coach"
+          ? `receiver_id=eq.${STATE.profile.id}`
+          : undefined
+    }, async () => {
       await checkMyPaymentStatus();
       if (STATE.profile.role === 'admin') await loadAdminPayments();
       if (STATE.profile.role === 'coach') await loadCoachPayments();
@@ -2432,7 +2634,31 @@ function renderCurrentView() {
   else if (v === "onerm") renderOneRM && renderOneRM();
 }
 
+function renderBlockedScreen() {
+  // C-03: Tela centralizada de acesso bloqueado
+  let el = document.getElementById("view-home");
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  if (el) {
+    el.classList.add("active");
+    el.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:32px 20px">
+        <div style="font-size:56px;margin-bottom:16px">🔒</div>
+        <h2 style="font-size:20px;font-weight:800;margin-bottom:8px">Acesso suspenso</h2>
+        <p style="color:var(--text-2);max-width:280px;line-height:1.5">Sua conta foi temporariamente bloqueada pelo professor.<br>Entre em contato para regularizar seu acesso.</p>
+        <button class="btn-ghost" style="margin-top:24px" onclick="signOut()">Sair da conta</button>
+      </div>`;
+  }
+  // Esconder nav para não exibir opções inacessíveis
+  const bnBar = document.getElementById("bn-bar");
+  if (bnBar) bnBar.style.display = "none";
+}
+
 function navTo(view) {
+  // C-03: Aluno bloqueado — redirecionar para tela de bloqueio em qualquer navegação
+  if (STATE.profile?.role === "student" && STATE.profile?.status === "blocked") {
+    renderBlockedScreen();
+    return;
+  }
   // Bloquear saída do treino se sessão ativa e não concluída
   if (STATE.view === "workout" && view !== "workout") {
     const session = STATE.currentSession;
@@ -2440,7 +2666,9 @@ function navTo(view) {
     if (!completed && session) {
       const doneCount = (STATE.setLogs || []).filter(s => s.done).length;
       if (doneCount > 0) {
-        if (!confirm("Você tem séries em andamento. Sair agora? O progresso será salvo.")) return;
+        showConfirm({ title: "Sair do treino?", msg: "Você tem séries em andamento. O progresso será salvo.", confirm: "Sair", cancel: "Continuar" })
+          .then(ok => { if (ok) { STATE.view = null; navTo(view); } });
+        return;
       }
     }
   }
@@ -2919,7 +3147,7 @@ window.clearTrainerSelection = function() { _trainerSelected.clear(); renderTrai
 
 window.bulkBlockTrainers = async function() {
   if (!_trainerSelected.size) return;
-  if (!confirm(`Bloquear ${_trainerSelected.size} treinador(es)?`)) return;
+  if (!await showConfirm({ title: "Bloquear treinadores?", msg: `${_trainerSelected.size} treinador(es) serão bloqueados.`, confirm: "Bloquear", danger: true })) return;
   const ids = [..._trainerSelected];
   const { error } = await sb.from("profiles").update({ status: "blocked" }).in("id", ids);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
@@ -2929,7 +3157,7 @@ window.bulkBlockTrainers = async function() {
 };
 window.bulkDeleteTrainers = async function() {
   if (!_trainerSelected.size) return;
-  if (!confirm(`Excluir permanentemente ${_trainerSelected.size} treinador(es)?\n\nIsso remove o perfil e todos os dados. A conta de autenticação permanece no Supabase.`)) return;
+  if (!await showConfirm({ title: "Excluir treinadores?", msg: `Excluir permanentemente ${_trainerSelected.size} treinador(es)?\n\nIsso remove o perfil e todos os dados. A conta de autenticação permanece no Supabase.`, confirm: "Excluir", cancel: "Cancelar", danger: true })) return;
   const ids = [..._trainerSelected];
   const { error } = await sb.from("profiles").delete().in("id", ids);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
@@ -2945,7 +3173,7 @@ window.setTrainerStatus = async function(id, status) {
   await loadTrainers(); renderTrainers();
 };
 window.removeTrainer = async function(id, email) {
-  if (!confirm(`Remover o treinador ${email}?\nO usuário será despromovido para aluno e bloqueado. A conta de auth permanece (use o dashboard do Supabase para deletar permanentemente).`)) return;
+  if (!await showConfirm({ title: "Remover treinador?", msg: `O usuário ${email} será despromovido para aluno e bloqueado.`, confirm: "Remover", danger: true })) return;
   const { error } = await sb.from("profiles").update({ status: "blocked", role: "student" }).eq("id", id);
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Treinador removido", "success");
@@ -3324,7 +3552,7 @@ window.submitNewPayment = async function(userId, name) {
 };
 
 window.onMarkPaid = async function(paymentId, userId, name) {
-  if (!confirm("Marcar como pago hoje?")) return;
+  if (!await showConfirm({ title: "Marcar como pago?", msg: "Registrar pagamento com data de hoje.", confirm: "Confirmar" })) return;
   try { await markPaymentPaid(paymentId, 'pix'); }
   catch (e) { showToast("Erro: "+e.message, "error"); return; }
   showToast("Pago ✓", "success");
@@ -3334,7 +3562,7 @@ window.onMarkPaid = async function(paymentId, userId, name) {
 };
 
 window.onDeletePayment = async function(paymentId, userId, name) {
-  if (!confirm("Apagar este lançamento?")) return;
+  if (!await showConfirm({ title: "Apagar lançamento?", confirm: "Apagar", danger: true })) return;
   try { await deletePayment(paymentId); }
   catch (e) { showToast("Erro: "+e.message, "error"); return; }
   showToast("Apagado", "success");
@@ -3746,9 +3974,9 @@ async function renderWorkout() {
         </button>
       </div>`;
     document.body.appendChild(bar);
-    document.getElementById("btn-complete-session").addEventListener("click", () => {
+    document.getElementById("btn-complete-session").addEventListener("click", async () => {
       if (!allDone) {
-        if (!confirm(`Você marcou ${doneCount} de ${totalTarget} séries. Concluir mesmo assim?`)) return;
+        if (!await showConfirm({ title: "Concluir treino?", msg: `Você marcou ${doneCount} de ${totalTarget} séries.`, confirm: "Concluir mesmo assim", cancel: "Continuar" })) return;
       }
       completeSession();
     });
@@ -4042,7 +4270,7 @@ function feedPostHTML(p, compact) {
 }
 window.onLikeToggle = (id) => toggleLike(id);
 window.onDeletePost = async (id) => {
-  if (!confirm("Apagar este post?")) return;
+  if (!await showConfirm({ title: "Apagar post?", confirm: "Apagar", danger: true })) return;
   await sb.from("feed_posts").delete().eq("id", id);
   await loadFeed(); renderFeed();
 };
@@ -4182,6 +4410,14 @@ async function renderProfile() {
     </div>
 
     ${!isStaff ? `
+      <div class="section-title">Conta</div>
+      <div class="card" style="border:1px solid rgba(239,68,68,.25)">
+        <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.5">Solicitar exclusão apaga seu perfil, posts, fotos e dados pessoais. Seu histórico de treinos é mantido de forma anônima.</p>
+        <button class="btn-ghost" style="color:#ef4444;border-color:rgba(239,68,68,.4)" onclick="requestDeleteMyAccount()">🗑 Excluir minha conta</button>
+      </div>
+    ` : ""}
+
+    ${!isStaff ? `
       <div class="section-title">Pessoas</div>
       <div class="card">
         <span class="text-xs muted">${(STATE.follows.following || []).length} seguindo · ${(STATE.follows.followers || []).length} seguidores</span>
@@ -4249,6 +4485,26 @@ window.saveNewPassword = async function() {
   showToast("Senha alterada com sucesso!", "success");
   document.getElementById("prof-new-pass").value = "";
   document.getElementById("prof-conf-pass").value = "";
+};
+
+// [B-01] Exclusão de conta — LGPD art. 18
+window.requestDeleteMyAccount = async function() {
+  const ok = await showConfirm({
+    title: "Excluir sua conta?",
+    msg: "Seu perfil, posts e fotos serão removidos permanentemente. Esta ação não pode ser desfeita.",
+    confirm: "Excluir minha conta",
+    cancel: "Cancelar",
+    danger: true
+  });
+  if (!ok) return;
+  const { error } = await sb.rpc("delete_my_account");
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast("Conta excluída. Você será desconectado.", "success");
+  setTimeout(async () => {
+    cleanupRealtime();
+    await sb.auth.signOut();
+    location.reload();
+  }, 1800);
 };
 
 window.saveAdminCoachLink = async function() {
@@ -4654,7 +4910,7 @@ window.clearStudentSelection = function() { _studentSelected.clear(); renderStud
 
 window.bulkBlockStudents = async function() {
   if (!_studentSelected.size) return;
-  if (!confirm(`Bloquear ${_studentSelected.size} aluno(s)?`)) return;
+  if (!await showConfirm({ title: "Bloquear alunos?", msg: `${_studentSelected.size} aluno(s) serão bloqueados.`, confirm: "Bloquear", danger: true })) return;
   const ids = [..._studentSelected];
   const { error } = await sb.from("profiles").update({ status: "blocked" }).in("id", ids);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
@@ -4664,7 +4920,7 @@ window.bulkBlockStudents = async function() {
 };
 window.bulkDeleteStudents = async function() {
   if (!_studentSelected.size) return;
-  if (!confirm(`Excluir permanentemente ${_studentSelected.size} aluno(s)?\n\nIsso remove o perfil e todos os dados (treinos, logs). A conta de autenticação permanece no Supabase (exclua manualmente se necessário).`)) return;
+  if (!await showConfirm({ title: "Excluir alunos?", msg: `Excluir permanentemente ${_studentSelected.size} aluno(s)?\n\nIsso remove o perfil e todos os dados (treinos, logs).`, confirm: "Excluir tudo", danger: true })) return;
   const ids = [..._studentSelected];
   const { error } = await sb.from("profiles").delete().in("id", ids);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
@@ -4739,9 +4995,20 @@ window.openNewStudentSheet = function() {
 };
 // Cliente Supabase isolado, sem persistir sessão — usado para criar contas
 // sem afetar o login do staff atual.
+// A-06 FIX: storage completamente em memória para que signUp() de novo aluno
+// jamais sobreescreva o token do coach no localStorage.
 function createTempClient() {
+  const _mem = {};
   return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-    auth: { persistSession: false, autoRefreshToken: false, storageKey: "ja-temp-" + Date.now() }
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      storage: {
+        getItem:    (k) => _mem[k] ?? null,
+        setItem:    (k, v) => { _mem[k] = v; },
+        removeItem: (k) => { delete _mem[k]; }
+      }
+    }
   });
 }
 
@@ -4779,7 +5046,8 @@ window.submitNewStudent = async function() {
     const patch = {
       status: "approved",
       phone: phone || null,
-      full_name: name
+      full_name: name,
+      must_reset_password: true  // [A-02] Coach definiu a senha — aluno deve criar a sua
     };
     if (STATE.profile.role === "coach") patch.coach_id = STATE.profile.id;
     const { error: upErr } = await sb.from("profiles").update(patch).eq("id", studentId);
@@ -4816,19 +5084,32 @@ window.openEditStudentSheet = async function(id) {
   `);
 };
 window.submitEditStudent = async function(id) {
-  const name = document.getElementById("es-name").value.trim();
+  const name  = document.getElementById("es-name").value.trim();
   const email = document.getElementById("es-email").value.trim();
   const phone = document.getElementById("es-phone").value.trim();
   const patch = { full_name: name, phone: phone || null };
-  if (email) patch.email = email; // só atualiza profile.email — auth.email não muda aqui
+  if (email) patch.email = email;
+
   const { error } = await sb.from("profiles").update(patch).eq("id", id);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
+
+  // [A-04] Sincronizar email em auth.users via edge function admin-user
+  if (email) {
+    const { error: authErr } = await sb.functions.invoke("admin-user", {
+      body: { action: "update_email", user_id: id, email }
+    });
+    if (authErr) {
+      showToast("Perfil salvo, mas falha ao sincronizar email de login: " + authErr.message, "error");
+      return;
+    }
+  }
+
   showToast("Aluno salvo", "success");
   await loadStudents();
   onStudentDetail(id);
 };
 window.deleteStudent = async function(id, email) {
-  if (!confirm(`Excluir o aluno ${email}?\nTreinos, cargas e histórico do aluno serão removidos. (A conta de auth fica, mas sem perfil ativo.)`)) return;
+  if (!await showConfirm({ title: `Excluir aluno?`, msg: `Treinos, cargas e histórico de ${email} serão removidos permanentemente.`, confirm: "Excluir", danger: true })) return;
   // deleta profile (cascateia sessions, set_logs, periodization via FK)
   const { error } = await sb.from("profiles").delete().eq("id", id);
   if (error) { showToast("Erro: "+error.message, "error"); return; }
@@ -4929,7 +5210,7 @@ window.addPeriodWeek = async function(studentId) {
   openStudentPeriodSheet(studentId);
 };
 window.removePeriodWeek = async function(studentId) {
-  if (!confirm("Remover a última semana?")) return;
+  if (!await showConfirm({ title: "Remover última semana?", msg: "A última semana da periodização será apagada.", confirm: "Remover", danger: true })) return;
   const { error } = await sb.rpc("remove_periodization_week", { p_student_id: studentId });
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Semana removida", "success");
@@ -4937,7 +5218,7 @@ window.removePeriodWeek = async function(studentId) {
 };
 
 window.reseedPeriod = async function(id) {
-  if (!confirm("Recriar a periodização padrão? Os blocos atuais serão substituídos. (Histórico de treinos é preservado)")) return;
+  if (!await showConfirm({ title: "Recriar periodização?", msg: "Os blocos atuais serão substituídos. O histórico de treinos é preservado.", confirm: "Recriar", danger: true })) return;
   const { error } = await sb.rpc("seed_periodization_for_student", { p_student: id });
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Periodização recriada", "success");
@@ -5286,7 +5567,7 @@ window.savePresetDuration = async function(code) {
 window.onApprove = async (id) => {
   await approveStudent(id, "approved");
   // pergunta se quer criar a periodização padrão
-  if (confirm("Criar periodização padrão de 12 semanas (Ciclo 5) para este aluno?")) {
+  if (await showConfirm({ title: "Criar periodização?", msg: "Criar periodização padrão de 12 semanas (Ciclo 5) para este aluno?", confirm: "Criar", cancel: "Agora não" })) {
     await seedPeriodizationFor(id);
   }
 };
@@ -5389,7 +5670,7 @@ window.onStudentDetail = async function(id) {
   `);
 };
 window.seedPerForStudent = async (id) => {
-  if (!confirm("Substituir periodização atual deste aluno pelo padrão de 12 semanas?")) return;
+  if (!await showConfirm({ title: "Substituir periodização?", msg: "A periodização atual deste aluno será substituída pelo padrão de 12 semanas.", confirm: "Substituir", danger: true })) return;
   const ok = await seedPeriodizationFor(id);
   if (ok) closeSheet();
 };
@@ -5497,7 +5778,7 @@ window.cloneForStudent = async function(workoutId, studentId) {
 };
 
 window.deleteCustomWorkout = async function(workoutId, studentId) {
-  if (!confirm("Remover este treino personalizado? O aluno volta a usar o treino global.")) return;
+  if (!await showConfirm({ title: "Remover treino personalizado?", msg: "O aluno voltará a usar o treino global.", confirm: "Remover", danger: true })) return;
   const { error } = await sb.from("workouts").delete().eq("id", workoutId);
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Treino personalizado removido", "success");
@@ -5557,7 +5838,7 @@ window.openWorkoutEditor = function(code) {
 };
 
 window.removeExerciseFromWorkout = async function(exId, code) {
-  if (!confirm("Remover este exercício do treino?")) return;
+  if (!await showConfirm({ title: "Remover exercício?", msg: "Este exercício será removido do treino.", confirm: "Remover", danger: true })) return;
   const { error } = await sb.from("exercises").delete().eq("id", exId);
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Removido", "success");
@@ -5954,6 +6235,10 @@ async function boot() {
         _POST_SIGN_IN_RUNNING = false;
         cleanupRealtime();
         showAuth(); setAuthMode("signin");
+      } else if (event === "PASSWORD_RECOVERY") {
+        // A-03 FIX: processar token de reset de senha em PWA/deep-link
+        // Mostra modal para o usuário definir nova senha
+        showPasswordRecoveryModal();
       }
       // TOKEN_REFRESHED: atualiza token silenciosamente, sem recarregar nada
     });
@@ -6051,6 +6336,17 @@ async function postSignIn() {
   navTo("home");
   renderHeaderBell();
 
+  // [B-03] PostHog — identificar usuário após login
+  try {
+    if (window.posthog && profile) {
+      posthog.identify(profile.id, {
+        role: profile.role,
+        status: profile.status,
+        name: profile.full_name,
+      });
+    }
+  } catch(e) { /* analytics nunca deve quebrar o app */ }
+
   // Pré-seleciona treino do dia se for aluno
   if (profile.role === "student") {
     const today = todayISO();
@@ -6071,8 +6367,30 @@ async function postSignIn() {
     const chatId = qs.get("chat");
     const view = qs.get("view");
     if (chatId && typeof openChatThread === "function") {
-      setTimeout(() => openChatThread(chatId), 250);
       try { history.replaceState({}, "", location.pathname); } catch(e){}
+      // [M-06] Validar relação antes de abrir o chat (previne enumeração de perfis)
+      setTimeout(async () => {
+        const me = STATE.profile;
+        if (!me) return;
+        // Admin conversa com qualquer um; coach conversa com seus alunos ou o admin
+        // Aluno conversa apenas com seu coach ou o admin
+        let allowed = false;
+        if (me.role === "admin") {
+          allowed = true;
+        } else if (me.role === "coach") {
+          const { data: target } = await sb.from("profiles").select("id, coach_id, role").eq("id", chatId).single();
+          allowed = !!target && (target.role === "admin" || target.coach_id === me.id);
+        } else {
+          // student
+          const { data: target } = await sb.from("profiles").select("id, role").eq("id", chatId).single();
+          allowed = !!target && (target.role === "admin" || target.id === me.coach_id);
+        }
+        if (allowed) {
+          openChatThread(chatId);
+        } else {
+          console.warn("[deep-link] chat rejeitado: sem relação com", chatId);
+        }
+      }, 250);
     } else if (view) {
       navTo(view);
       try { history.replaceState({}, "", location.pathname); } catch(e){}
@@ -6150,6 +6468,12 @@ async function postLoginInit() {
     }
   });
 
+  // [A-02] Troca obrigatória de senha no primeiro login
+  if (STATE.profile.must_reset_password) {
+    showForcePasswordReset();
+    return;
+  }
+
   if (STATE.profile.role === "student" && STATE.profile.onboarded === false) {
     showOnboarding();
   } else if (STATE.profile.role === "coach" && STATE.profile.onboarded === false) {
@@ -6164,6 +6488,68 @@ async function postLoginInit() {
     showIOSInstallHintIfNeeded();
   }
 }
+
+// [A-02] Tela fullscreen de troca obrigatória de senha
+function showForcePasswordReset() {
+  const overlay = document.createElement("div");
+  overlay.id = "force-pwd-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;background:var(--bg);z-index:99998;display:flex;align-items:center;justify-content:center;padding:24px";
+  overlay.innerHTML = `
+    <div style="width:100%;max-width:380px">
+      <div style="text-align:center;margin-bottom:28px">
+        <div style="font-size:40px;margin-bottom:12px">🔒</div>
+        <div style="font-weight:700;font-size:20px;color:var(--text)">Crie sua senha</div>
+        <div style="font-size:14px;color:var(--text-2);margin-top:8px;line-height:1.5">Por segurança, você precisa criar uma senha pessoal antes de continuar.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <input id="fpwd-new" type="password" placeholder="Nova senha (mínimo 8 caracteres)"
+          style="padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font-size:15px;width:100%;box-sizing:border-box">
+        <input id="fpwd-confirm" type="password" placeholder="Confirmar nova senha"
+          style="padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font-size:15px;width:100%;box-sizing:border-box">
+        <div id="fpwd-error" style="color:#ef4444;font-size:13px;display:none"></div>
+        <button id="fpwd-submit" onclick="submitForcePasswordReset()"
+          style="padding:14px;border-radius:12px;border:0;background:var(--brand);color:var(--brand-on);font-size:16px;font-weight:700;cursor:pointer;margin-top:4px">
+          Salvar senha e continuar
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById("fpwd-new")?.focus(), 100);
+}
+
+window.submitForcePasswordReset = async function() {
+  const np  = document.getElementById("fpwd-new").value;
+  const np2 = document.getElementById("fpwd-confirm").value;
+  const errEl = document.getElementById("fpwd-error");
+  const btn   = document.getElementById("fpwd-submit");
+
+  const showErr = (msg) => { errEl.textContent = msg; errEl.style.display = "block"; };
+  errEl.style.display = "none";
+
+  if (np.length < 8) return showErr("A senha deve ter pelo menos 8 caracteres.");
+  if (np !== np2) return showErr("As senhas não coincidem.");
+
+  btn.disabled = true; btn.textContent = "Salvando...";
+  const { error } = await sb.auth.updateUser({ password: np });
+  if (error) {
+    btn.disabled = false; btn.textContent = "Salvar senha e continuar";
+    return showErr("Erro: " + error.message);
+  }
+
+  // Limpa a flag no profile
+  await sb.from("profiles").update({ must_reset_password: false }).eq("id", STATE.profile.id);
+  STATE.profile.must_reset_password = false;
+
+  document.getElementById("force-pwd-overlay")?.remove();
+  showToast("Senha criada com sucesso!", "success");
+
+  // Continua o fluxo de onboarding normal
+  if (STATE.profile.role === "student" && STATE.profile.onboarded === false) {
+    showOnboarding();
+  } else if (STATE.profile.role === "coach" && STATE.profile.onboarded === false) {
+    showCoachOnboarding();
+  }
+};
 
 /* ---------- PWA: register SW + install prompt ---------- */
 let DEFERRED_INSTALL_PROMPT = null;
@@ -6788,7 +7174,7 @@ async function openComments(postId) {
 window.openComments = openComments;
 
 async function deleteComment(id, postId) {
-  if (!confirm("Apagar comentário?")) return;
+  if (!await showConfirm({ title: "Apagar comentário?", confirm: "Apagar", danger: true })) return;
   const { error } = await sb.from("feed_comments").delete().eq("id", id);
   if (error) { showToast(error.message, "error"); return; }
   // Recarrega a lista sem fechar/reabrir o overlay
@@ -6992,6 +7378,9 @@ window.exportStudentPDF = exportStudentPDF;
 
 /* ---------- ASAAS (criar cobrança via Edge Function) ---------- */
 async function createAsaasCharge({ paymentId, billingType="PIX" }) {
+  // A-04 FIX: prevenir double-call
+  if (STATE._creatingCharge) return null;
+  STATE._creatingCharge = true;
   try {
     const { data, error } = await sb.functions.invoke("asaas-create-charge", {
       body: { payment_id: paymentId, billing_type: billingType }
@@ -7013,11 +7402,14 @@ async function createAsaasCharge({ paymentId, billingType="PIX" }) {
   } catch(e) {
     showToast("Erro de conexão com Asaas: " + (e.message||e), "error");
     return null;
+  } finally {
+    STATE._creatingCharge = false;
   }
 }
 
 async function openAsaasSheet(paymentId) {
-  const { data: p } = await sb.from("payments").select("*, user:profiles!payments_user_id_fkey(full_name,email,phone)").eq("id", paymentId).single();
+  // C-02 FIX: FK constraint correta é payments_payer_id_fkey
+  const { data: p } = await sb.from("payments").select("*, user:profiles!payments_payer_id_fkey(full_name,email,phone)").eq("id", paymentId).single();
   if (!p) { showToast("Pagamento não encontrado", "error"); return; }
   const sheet = document.createElement("div");
   sheet.id = "asaas-overlay";
@@ -7360,7 +7752,7 @@ function closeChatThread() {
 window.closeChatThread = closeChatThread;
 
 window.deleteConversation = async function(otherUserId) {
-  if (!confirm("Excluir toda a conversa? Esta ação não pode ser desfeita.")) return;
+  if (!await showConfirm({ title: "Excluir conversa?", msg: "Toda a conversa será apagada. Esta ação não pode ser desfeita.", confirm: "Excluir", danger: true })) return;
   const me = STATE.profile.id;
   // Deleta as mensagens onde o usuário é o remetente OU destinatário desta conversa
   const { error } = await sb.from("messages")
@@ -7594,7 +7986,7 @@ async function openProgressUpload() {
 window.openProgressUpload = openProgressUpload;
 
 async function deleteProgressPhoto(id, storagePath) {
-  if (!confirm("Apagar esta foto?")) return;
+  if (!await showConfirm({ title: "Apagar foto?", msg: "Esta foto de progresso será removida permanentemente.", confirm: "Apagar", danger: true })) return;
   await sb.from("progress_photos").delete().eq("id", id);
   if (storagePath) await sb.storage.from("progress").remove([storagePath]).catch(()=>null);
   await renderProgress();
@@ -7725,7 +8117,7 @@ async function saveAeroLog() {
 window.saveAeroLog = saveAeroLog;
 
 async function deleteAeroLog(id) {
-  if (!confirm("Apagar?")) return;
+  if (!await showConfirm({ title: "Apagar registro?", confirm: "Apagar", danger: true })) return;
   await sb.from("aero_logs").delete().eq("id", id);
   await renderAero();
 }
@@ -7811,7 +8203,7 @@ async function save1RM() {
 window.save1RM = save1RM;
 
 async function delete1RM(id) {
-  if (!confirm("Apagar este teste?")) return;
+  if (!await showConfirm({ title: "Apagar teste 1RM?", confirm: "Apagar", danger: true })) return;
   await sb.from("one_rep_max").delete().eq("id", id);
   await renderOneRM();
 }
