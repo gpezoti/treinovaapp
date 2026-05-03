@@ -1596,6 +1596,7 @@ function onSerieCompleted(exercise, log, setIdx, totalSets, pauseSec, nextLabel,
 
   // Salvar referência para uso em confirmSerieDone
   modal._exerciseName = exercise.name;
+  modal._exercisePos = exercise.position;
   modal._logId = log.id;
   modal._pauseSec = pauseSec;
   modal._nextLabel = nextLabel;
@@ -1630,14 +1631,40 @@ window.confirmSerieDone = async function(skipTimer) {
     } catch(e) { console.warn("load save err:", e); }
   }
 
+  const isLastEx = modal._isLast;
+  const exPos    = modal._exercisePos;
+
   modal.style.opacity = "0";
   setTimeout(() => modal.remove(), 200);
   window._sdmModal = null;
 
+  function autoAdvanceExercise() {
+    const W = STATE.workouts[STATE.selectedWorkout];
+    if (!W) return;
+    const exercises = W.exercises || [];
+    const curIdx = exercises.findIndex(e => e.position === exPos);
+    const nextEx = exercises[curIdx + 1];
+    if (nextEx) {
+      STATE.expandedEx = nextEx.position;
+      renderWorkout();
+      setTimeout(() => {
+        const card = document.querySelector(`.exercise-card[data-pos="${nextEx.position}"]`);
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    } else {
+      // Último exercício — apenas re-renderiza
+      renderWorkout();
+    }
+  }
+
   if (!skipTimer) {
-    startTimer(pauseSec, nextLabel, () => { if (navigator.vibrate) navigator.vibrate([200,100,200]); });
+    startTimer(pauseSec, nextLabel, () => {
+      if (navigator.vibrate) navigator.vibrate([200,100,200]);
+      if (isLastEx) setTimeout(autoAdvanceExercise, 600);
+    });
   } else {
     showToast("Timer pulado", null);
+    if (isLastEx) setTimeout(autoAdvanceExercise, 200);
   }
   renderWorkout();
 };
@@ -1727,6 +1754,82 @@ async function toggleLike(postId) {
 }
 
 /* =============================================================================
+   PULL-TO-REFRESH
+   ============================================================================= */
+function setupPullToRefresh() {
+  const THRESHOLD = 72;
+  let startY = 0, pulling = false, indicator = null;
+
+  function getIndicator() {
+    if (!indicator) {
+      indicator = document.createElement("div");
+      indicator.id = "ptr-indicator";
+      indicator.innerHTML = `<svg id="ptr-spinner" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6-8.5"/></svg>`;
+      Object.assign(indicator.style, {
+        position: "fixed", top: "0", left: "50%", transform: "translateX(-50%) translateY(-60px)",
+        zIndex: "9999", background: "var(--bg-card)", border: "1px solid var(--line)",
+        borderRadius: "50%", width: "40px", height: "40px",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: "0 2px 12px rgba(0,0,0,.25)", transition: "transform .15s ease",
+        color: "var(--brand)"
+      });
+      document.body.appendChild(indicator);
+    }
+    return indicator;
+  }
+
+  async function doRefresh() {
+    const sp = document.getElementById("ptr-spinner");
+    if (sp) sp.style.animation = "spin 0.7s linear infinite";
+    try {
+      if (STATE.view === "home")      await (STATE.profile?.role === "coach" ? loadStudents() : Promise.resolve()), renderHome?.();
+      else if (STATE.view === "feed") { await loadFeed(); renderFeed(); }
+      else if (STATE.view === "calendar") { await loadPeriodization?.(); renderCalendar(); }
+      else if (STATE.view === "students") { await loadStudents(); renderStudents(); }
+      else if (STATE.view === "payments") { await loadCoachPayments?.(); renderPayments?.(); }
+      else if (STATE.view === "chat")     { renderChat?.(); }
+      else renderCurrentView();
+    } finally {
+      if (sp) sp.style.animation = "";
+      const ind = getIndicator();
+      ind.style.transform = "translateX(-50%) translateY(-60px)";
+      pulling = false;
+    }
+  }
+
+  document.addEventListener("touchstart", e => {
+    const main = document.querySelector(".view.active") || document.getElementById("app");
+    const scrollEl = (main && main.scrollTop !== undefined) ? main : window;
+    const scrollY  = (scrollEl === window) ? window.scrollY : scrollEl.scrollTop;
+    if (scrollY <= 0 && e.touches.length === 1) {
+      startY  = e.touches[0].clientY;
+      pulling = true;
+    }
+  }, { passive: true });
+
+  document.addEventListener("touchmove", e => {
+    if (!pulling) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) { pulling = false; return; }
+    const progress = Math.min(dy / THRESHOLD, 1);
+    const translateY = -60 + progress * 80;
+    getIndicator().style.transform = `translateX(-50%) translateY(${translateY}px)`;
+  }, { passive: true });
+
+  document.addEventListener("touchend", e => {
+    if (!pulling) return;
+    const dy = (e.changedTouches[0]?.clientY || 0) - startY;
+    if (dy >= THRESHOLD) {
+      getIndicator().style.transform = "translateX(-50%) translateY(20px)";
+      doRefresh();
+    } else {
+      getIndicator().style.transform = "translateX(-50%) translateY(-60px)";
+      pulling = false;
+    }
+  }, { passive: true });
+}
+
+/* =============================================================================
    REALTIME
    ============================================================================= */
 function setupRealtime() {
@@ -1804,8 +1907,28 @@ function cleanupRealtime() {
    TIMER
    ============================================================================= */
 const RING_CIRC = 2 * Math.PI * 45;
+let _wakeLock = null;
+async function _acquireWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      _wakeLock = await navigator.wakeLock.request('screen');
+      _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+    }
+  } catch(e) {}
+}
+function _releaseWakeLock() {
+  try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
+}
+// Re-adquire wake lock ao voltar de background
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && STATE.timer && STATE.timer.running) {
+    _acquireWakeLock();
+  }
+});
+
 function startTimer(sec, label, onDone) {
   cancelTimer();
+  _acquireWakeLock();
   STATE.timer.secondsTotal = sec;
   STATE.timer.secondsLeft = sec;
   STATE.timer.startedAt = Date.now();
@@ -1893,6 +2016,14 @@ function finishTimer() {
   document.getElementById("timer-fs-time").textContent = "00:00";
   document.getElementById("timer-fs-label").textContent = "Vamos lá!";
   if (STATE.timer.onDone) STATE.timer.onDone();
+  // Auto-fechar fullscreen e barra após 2.5s
+  setTimeout(() => {
+    closeFsTimer();
+    setTimeout(() => {
+      document.getElementById("timer-bar")?.classList.remove("active","warning","done");
+      document.getElementById("timer-ring")?.classList.remove("warning","done");
+    }, 800);
+  }, 2500);
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     [880, 1320].forEach((freq, i) => {
@@ -1911,6 +2042,7 @@ function finishTimer() {
 function cancelTimer() {
   if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
   STATE.timer.running = false; STATE.timer.paused = false;
+  _releaseWakeLock();
   // [M-04] Limpar persistência ao cancelar
   try {
     localStorage.removeItem("timer_start");
@@ -2286,11 +2418,27 @@ function renderCurrentView() {
 }
 
 function navTo(view) {
+  // Bloquear saída do treino se sessão ativa e não concluída
+  if (STATE.view === "workout" && view !== "workout") {
+    const session = STATE.currentSession;
+    const completed = session && session.status === "completed";
+    if (!completed && session) {
+      const doneCount = (STATE.setLogs || []).filter(s => s.done).length;
+      if (doneCount > 0) {
+        if (!confirm("Você tem séries em andamento. Sair agora? O progresso será salvo.")) return;
+      }
+    }
+  }
   STATE.view = view;
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   const target = document.getElementById("view-" + view);
   if (target) target.classList.add("active");
   document.querySelectorAll(".bn-item").forEach(b => b.classList.toggle("active", b.dataset.nav === view));
+  // Ocultar nav durante treino ativo; restaurar em outras views
+  const bnBar = document.getElementById("bn-bar");
+  if (bnBar) bnBar.style.display = view === "workout" ? "none" : "";
+  // Remover barra fixa de treino ao sair do workout
+  if (view !== "workout") document.getElementById("workout-fixed-bar")?.remove();
   // Limpar badge do feed ao abrir o feed
   if (view === "feed") {
     STATE.feedUnread = 0;
@@ -2676,10 +2824,10 @@ function renderAdminHome(el) {
     </div>
     <div class="section-title">Acesso rápido</div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-      <button class="btn-ghost" onclick="navTo('trainers')">👨‍🏫 Treinadores</button>
-      <button class="btn-ghost" onclick="navTo('students')">💪 Alunos</button>
-      <button class="btn-ghost" onclick="navTo('calendar')">📅 Minha periodização</button>
-      <button class="btn-ghost" onclick="navTo('feed')">📰 Feed</button>
+      <button class="btn-ghost" onclick="navTo('trainers')">Treinadores</button>
+      <button class="btn-ghost" onclick="navTo('students')">Alunos</button>
+      <button class="btn-ghost" onclick="navTo('calendar')">Periodização</button>
+      <button class="btn-ghost" onclick="navTo('feed')">Feed</button>
     </div>
     <div class="section-title">Atividade recente</div>
     ${STATE.feed.slice(0,5).map(p => feedPostHTML(p, true)).join("") || `<div class="empty"><p>Sem atividade ainda</p></div>`}
@@ -3202,7 +3350,7 @@ window.openEditTrainerSheet = async function(id) {
             <div class="ro-desc">Pode usar o app</div>
           </div>
           <div class="role-option ${prof.status === 'blocked' ? 'active' : ''}" onclick="selectTrainerStatus('blocked')">
-            <div class="ro-title">⛔ Bloqueado</div>
+            <div class="ro-title">Bloqueado</div>
             <div class="ro-desc">Acesso suspenso</div>
           </div>
         </div>
@@ -3211,11 +3359,11 @@ window.openEditTrainerSheet = async function(id) {
         <label class="form-label">Papel</label>
         <div class="role-select">
           <div class="role-option ${prof.role === 'coach' ? 'active' : ''}" onclick="selectTrainerRole('coach')">
-            <div class="ro-title">🎯 Treinador</div>
+            <div class="ro-title">Treinador</div>
             <div class="ro-desc">Gerencia alunos</div>
           </div>
           <div class="role-option ${prof.role === 'student' ? 'active' : ''}" onclick="selectTrainerRole('student')">
-            <div class="ro-title">💪 Aluno</div>
+            <div class="ro-title">Aluno</div>
             <div class="ro-desc">Despromover</div>
           </div>
         </div>
@@ -3493,6 +3641,12 @@ async function renderWorkout() {
   const allDone = totalTarget > 0 && doneCount >= totalTarget;
 
   el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <button onclick="navTo('home')" style="background:transparent;border:0;color:var(--text-2);font-size:13px;padding:6px 0;display:flex;align-items:center;gap:4px">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Voltar
+      </button>
+    </div>
     <div class="workout-hero">
       <div class="wh-eyebrow">${fmtFullDateBR(date)} · Semana ${(findDayInfo(date)||{}).week || "—"}</div>
       <div class="wh-title">${escape(W.name)}</div>
@@ -3514,31 +3668,51 @@ async function renderWorkout() {
 
     <div id="exercise-list"></div>
 
-    ${!completed ? `
-      <div style="margin-top: 16px;">
-        <button class="btn-primary ${allDone ? 'btn-success' : ''}" id="btn-complete-session" ${doneCount === 0 ? 'disabled' : ''}>
-          ${allDone ? "✓ Concluir treino" : doneCount === 0 ? "Marque pelo menos 1 série" : `Concluir treino (${doneCount}/${totalTarget})`}
-        </button>
-        <p class="text-xs muted" style="text-align:center; margin-top:8px;">
-          Cargas e séries são salvas automaticamente.
-        </p>
-      </div>
-    ` : `
-      <div style="margin-top: 16px;">
-        <button class="btn-ghost" onclick="navTo('feed')">Ver no feed</button>
+    ${!completed ? `<div style="height:96px"></div>` : `
+      <div style="margin-top:16px;padding-bottom:24px">
+        <button class="btn-ghost" onclick="navTo('home')">← Voltar ao início</button>
       </div>
     `}
   `;
 
   renderExerciseList(W, intensity, completed);
 
-  const btn = document.getElementById("btn-complete-session");
-  if (btn) btn.addEventListener("click", () => {
-    if (!allDone) {
-      if (!confirm(`Você marcou ${doneCount} de ${totalTarget} séries. Concluir mesmo assim?`)) return;
-    }
-    completeSession();
-  });
+  // Barra fixa inferior de treino (substitui o botão inline + bottom nav)
+  document.getElementById("workout-fixed-bar")?.remove();
+  if (!completed) {
+    const bar = document.createElement("div");
+    bar.id = "workout-fixed-bar";
+    bar.innerHTML = `
+      <style>
+        #workout-fixed-bar{position:fixed;bottom:0;left:0;right:0;z-index:900;
+          background:var(--bg-2);border-top:1px solid var(--line);
+          padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));
+          display:flex;gap:10px;align-items:center}
+        #workout-fixed-bar .wfb-left{flex:0 0 auto}
+        #workout-fixed-bar .wfb-right{flex:1}
+        #workout-fixed-bar .wfb-progress{font-size:11px;color:var(--text-3);margin-bottom:4px}
+        #workout-fixed-bar .wfb-track{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+        #workout-fixed-bar .wfb-fill{height:100%;background:var(--brand);border-radius:2px;transition:width .3s}
+      </style>
+      <div class="wfb-right">
+        <div class="wfb-progress">${doneCount} de ${totalTarget} séries</div>
+        <div class="wfb-track"><div class="wfb-fill" style="width:${totalTarget>0?Math.round(doneCount/totalTarget*100):0}%"></div></div>
+      </div>
+      <button id="btn-complete-session" class="btn-primary ${allDone ? 'btn-success' : ''}"
+        style="flex:0 0 auto;padding:12px 20px;font-size:15px;white-space:nowrap"
+        ${doneCount === 0 ? 'disabled' : ''}>
+        ${allDone ? "Concluir treino ✓" : `Concluir (${doneCount}/${totalTarget})`}
+      </button>`;
+    document.body.appendChild(bar);
+    document.getElementById("btn-complete-session").addEventListener("click", () => {
+      if (!allDone) {
+        if (!confirm(`Você marcou ${doneCount} de ${totalTarget} séries. Concluir mesmo assim?`)) return;
+      }
+      completeSession();
+    });
+  } else {
+    document.getElementById("workout-fixed-bar")?.remove();
+  }
 }
 
 function renderExerciseList(W, intensity, completed) {
@@ -3727,7 +3901,13 @@ function renderFeed() {
 
   const codes = ["ALL","A","B","C","D","FLEX"];
   el.innerHTML = `
-    <h1 class="view-title">Feed</h1>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+      <h1 class="view-title" style="margin:0">Feed</h1>
+      <button onclick="openPeopleSearch()" style="background:var(--bg-card);border:1px solid var(--line);color:var(--text-2);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Descobrir
+      </button>
+    </div>
     <p class="view-subtitle">Treinos da turma · ${feed.length} post${feed.length!==1?'s':''}</p>
     <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:14px;-webkit-overflow-scrolling:touch">
       ${codes.map(c => `
@@ -3916,9 +4096,9 @@ async function renderProfile() {
           <div class="greeting-title" style="font-size:18px;">${escape(p.full_name || "—")}</div>
           <div class="greeting-sub">${escape(p.email)}</div>
           <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
-            <span class="today-pill ${isAdmin ? 'pill-red' : isCoach ? 'pill-flex' : 'pill-yellow'}">${isAdmin ? "Admin Master 👑" : isCoach ? "Professor 🎯" : "Aluno 💪"}</span>
+            <span class="today-pill ${isAdmin ? 'pill-red' : isCoach ? 'pill-flex' : 'pill-yellow'}">${isAdmin ? "Admin Master" : isCoach ? "Professor" : "Aluno"}</span>
             <span class="today-pill pill-${p.status === 'approved' ? 'approved' : p.status === 'pending' ? 'pending' : 'blocked'}">
-              ${p.status === 'approved' ? '✓ Ativo' : p.status === 'pending' ? '⏳ Pendente' : '⛔ Bloqueado'}
+              ${p.status === 'approved' ? 'Ativo' : p.status === 'pending' ? 'Pendente' : 'Bloqueado'}
             </span>
           </div>
         </div>
@@ -3962,10 +4142,7 @@ async function renderProfile() {
     ${!isStaff ? `
       <div class="section-title">Pessoas</div>
       <div class="card">
-        <div class="row-flex" style="gap:8px;">
-          <button class="btn-ghost" onclick="openPeopleSearch()">🔎 Buscar e seguir</button>
-          <span class="text-xs muted">${(STATE.follows.following || []).length} seguindo · ${(STATE.follows.followers || []).length} seguidores</span>
-        </div>
+        <span class="text-xs muted">${(STATE.follows.following || []).length} seguindo · ${(STATE.follows.followers || []).length} seguidores</span>
       </div>
 
       <div class="section-title">Histórico (últimos 20)</div>
@@ -4073,7 +4250,7 @@ window.onPeopleSearch = function(q) {
 
 function peopleRow(p) {
   const following = isFollowing(p.id);
-  const roleLabel = p.role === "coach" ? "🎯 Professor" : p.role === "admin" ? "👑 Admin" : "💪 Aluno";
+  const roleLabel = p.role === "coach" ? "Professor" : p.role === "admin" ? "Admin" : "Aluno";
   return `<div class="list-row">
     <div class="lr-avatar" style="overflow:hidden;">${p.avatar_url ? `<img src="${escape(p.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"/>` : escape(p.avatar_emoji || '💪')}</div>
     <div class="lr-info">
@@ -4413,7 +4590,7 @@ function studentRow(s, selMode) {
     actions = `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Reativar</button>`;
   }
   return `<div class="list-row" onclick="onStudentDetail('${id}')" style="cursor:pointer">
-    <div class="lr-avatar">💪</div>
+    <div class="lr-avatar" style="font-size:14px;font-weight:700;background:var(--brand-soft);color:var(--brand);overflow:hidden">${s.avatar_url ? `<img src="${escape(s.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">` : (s.avatar_emoji || (s.full_name||'A').slice(0,1).toUpperCase())}</div>
     <div class="lr-info">
       <div class="lr-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${escape(s.full_name || s.email || "Aluno")} ${badges}</div>
       <div class="lr-sub">${escape(s.email || "")} · ${lastTxt} · ${s.sessions_done || 0} treinos</div>
@@ -5606,11 +5783,18 @@ async function boot() {
     document.getElementById('btn-theme').addEventListener('click', toggleTheme);
 
     // Trava orientação portrait (funciona em PWA instalado)
-    try {
-      if (screen.orientation && screen.orientation.lock) {
-        screen.orientation.lock('portrait-primary').catch(() => {});
-      }
-    } catch(e) {}
+    const _lockPortrait = () => {
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('portrait-primary').catch(() => {});
+        }
+      } catch(e) {}
+    };
+    _lockPortrait();
+    // Re-trava ao voltar de background (iOS libera o lock ao minimizar)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') _lockPortrait();
+    });
 
     bindAuthHandlers();
     bindTimerHandlers();
@@ -5731,6 +5915,7 @@ async function postSignIn() {
     loadNotifications().then(() => { if (STATE.view) renderHeaderBell(); });
   }, 1000);
   setupRealtime();
+  setupPullToRefresh();
 
   // Default view — navTo() adiciona .active na view e chama renderCurrentView()
   renderBottomNav();
@@ -5794,7 +5979,18 @@ async function postLoginInit() {
   // [M-04] Restaurar timer se o aluno voltou ao app após ligação/troca de app
   restoreTimerIfActive();
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") restoreTimerIfActive();
+    if (document.visibilityState === "visible") {
+      restoreTimerIfActive();
+      // Re-bind modal de série se ainda estiver aberto (iOS pode perder listeners)
+      const sdm = document.getElementById("serie-done-modal");
+      if (sdm && window._sdmModal) {
+        const confirmBtn = document.getElementById("sdm-confirm-btn");
+        if (confirmBtn && !confirmBtn._bound) {
+          confirmBtn._bound = true;
+          confirmBtn.onclick = () => confirmSerieDone(false);
+        }
+      }
+    }
   });
 
   if (STATE.profile.role === "student" && STATE.profile.onboarded === false) {
@@ -6845,13 +7041,13 @@ async function openChatThread(otherUserId) {
   sheet.innerHTML = `
     <style>
       #chat-thread-overlay{position:fixed;inset:0;background:var(--bg);z-index:9600;display:flex;flex-direction:column}
-      #chat-thread-overlay .ct-h{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+      #chat-thread-overlay .ct-h{padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top, 0px));border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
       #chat-thread-overlay .ct-l{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:6px}
       #chat-thread-overlay .ct-msg{max-width:78%;padding:10px 13px;border-radius:14px;font-size:14px;line-height:1.35;word-break:break-word}
       #chat-thread-overlay .ct-mine{background:var(--brand);color:var(--brand-on);align-self:flex-end;border-bottom-right-radius:4px}
       #chat-thread-overlay .ct-them{background:var(--bg-card);color:var(--text);align-self:flex-start;border-bottom-left-radius:4px;border:1px solid var(--line)}
       #chat-thread-overlay .ct-time{font-size:10px;color:var(--text-3);margin:2px 6px}
-      #chat-thread-overlay .ct-f{padding:10px;border-top:1px solid var(--line);display:flex;gap:8px;background:var(--bg-2)}
+      #chat-thread-overlay .ct-f{padding:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));border-top:1px solid var(--line);display:flex;gap:8px;background:var(--bg-2)}
       #chat-thread-overlay .ct-i{flex:1;padding:11px 14px;border-radius:20px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font:inherit}
       #chat-thread-overlay .ct-s{background:var(--brand);color:var(--brand-on);border:0;border-radius:50%;width:42px;height:42px;font-size:18px}
       #chat-thread-overlay .ct-img-btn{background:var(--bg-card);border:1px solid var(--line);color:var(--text);border-radius:50%;width:42px;height:42px}
@@ -6863,6 +7059,9 @@ async function openChatThread(otherUserId) {
         <div style="font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(other.full_name||'')}</div>
         <div style="font-size:11px;color:var(--text-3)">${other.role==='admin'?'Admin':other.role==='coach'?'Treinador':'Aluno'}</div>
       </div>
+      <button onclick="deleteConversation('${otherUserId}')" style="background:transparent;border:0;color:var(--text-3);padding:6px;border-radius:8px" title="Excluir conversa">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      </button>
     </div>
     <div class="ct-l" id="ct-list">Carregando…</div>
     <div class="ct-f">
@@ -6875,11 +7074,20 @@ async function openChatThread(otherUserId) {
 
   async function load() {
     const me = STATE.profile.id;
-    const { data, error } = await sb.from("messages")
-      .select("*").or(`and(from_user.eq.${me},to_user.eq.${otherUserId}),and(from_user.eq.${otherUserId},to_user.eq.${me})`)
-      .order("created_at", { ascending: true }).limit(500);
-    if (error) { console.warn(error); return; }
+    // Busca mensagens enviadas + recebidas em paralelo e une
+    const [sent, recv] = await Promise.all([
+      sb.from("messages").select("*").eq("from_user", me).eq("to_user", otherUserId).order("created_at", { ascending: true }).limit(500),
+      sb.from("messages").select("*").eq("from_user", otherUserId).eq("to_user", me).order("created_at", { ascending: true }).limit(500)
+    ]);
+    const error = sent.error || recv.error;
     const list = document.getElementById("ct-list");
+    if (error) {
+      console.warn("chat load error:", error);
+      if (list) list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3)">Não foi possível carregar as mensagens.<br><small>${escapeHtml(error.message||'')}</small></div>`;
+      return;
+    }
+    const data = [...(sent.data||[]), ...(recv.data||[])].sort((a,b) => a.created_at.localeCompare(b.created_at));
+    if (!list) return;
     list.innerHTML = (data||[]).map(m => {
       const mine = m.from_user === me;
       return `<div style="display:flex;flex-direction:column;align-items:${mine?'flex-end':'flex-start'}">
@@ -6974,6 +7182,18 @@ function closeChatThread() {
   if (STATE.view === "chat") renderChat().catch(() => {});
 }
 window.closeChatThread = closeChatThread;
+
+window.deleteConversation = async function(otherUserId) {
+  if (!confirm("Excluir toda a conversa? Esta ação não pode ser desfeita.")) return;
+  const me = STATE.profile.id;
+  // Deleta as mensagens onde o usuário é o remetente OU destinatário desta conversa
+  const { error } = await sb.from("messages")
+    .delete()
+    .or(`and(from_user.eq.${me},to_user.eq.${otherUserId}),and(from_user.eq.${otherUserId},to_user.eq.${me})`);
+  if (error) { showToast("Erro ao excluir conversa", "error"); return; }
+  showToast("Conversa excluída", "success");
+  closeChatThread();
+};
 
 /* =============================================================================
    POLIMENTO UX — Foto de progresso, Aeróbio, 1RM, Volume semanal, Confete, etc.
@@ -7354,7 +7574,7 @@ async function renderOneRM() {
         <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
         <div style="flex:1">
           <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Calibração</div>
-          <div style="font-size:20px;font-weight:800">💪 Testes de força (1RM)</div>
+          <div style="font-size:20px;font-weight:800">Testes de força (1RM)</div>
         </div>
       </div>
       <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px">
