@@ -199,8 +199,9 @@ a { color: var(--brand); text-decoration: none; }
 .week-card-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .week-name { font-weight: 800; font-size: 14px; }
 .week-range { font-size: 11px; color: var(--text-3); }
-.week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 10px; }
-.week-grid .day-pill { padding: 8px 2px; }
+.week-grid { display: flex; flex-wrap: nowrap; gap: 4px; padding: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.week-grid::-webkit-scrollbar { display: none; }
+.week-grid .day-pill { flex: 0 0 calc((100% - 6*4px) / 7); min-width: 42px; padding: 8px 2px; }
 .week-grid .day-pill .dp-num { font-size: 14px; }
 .week-grid .day-pill .dp-w { font-size: 9px; padding: 1px 5px; }
 
@@ -578,7 +579,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       </div>
     </div>
     <div class="header-spacer"></div>
-    <button class="icon-btn" id="btn-bell" title="Notificações" aria-label="Notificações" onclick="openNotificationsSheet()" style="position:relative">
+    <button type="button" class="icon-btn" id="btn-bell" title="Notificações" aria-label="Notificações" onclick="openNotificationsSheet()" style="position:relative">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span id="bell-badge" style="display:none; position:absolute; top:-3px; right:-3px; background:var(--red); color:#fff; font-size:9px; font-weight:800; padding:2px 5px; border-radius:999px; min-width:14px; text-align:center;"></span>
     </button>
@@ -1146,6 +1147,18 @@ function showApp() {
   document.getElementById("app").style.display = "block";
   document.getElementById("auth-page").style.display = "none";
   document.getElementById("cfg-page").style.display = "none";
+  // Limpa campos de senha para iOS não oferecer salvar senha ao clicar em outros botões
+  try {
+    const pw = document.getElementById("auth-password");
+    if (pw) { pw.value = ""; pw.autocomplete = "off"; }
+    const em = document.getElementById("auth-email");
+    if (em) { em.autocomplete = "off"; }
+    // Adiciona um campo de senha falso fora de tela para enganar o autocomplete do iOS
+    const fake = document.createElement("input");
+    fake.type = "password"; fake.style.cssText = "position:absolute;opacity:0;height:0;width:0;pointer-events:none";
+    fake.autocomplete = "new-password";
+    document.getElementById("auth-page").appendChild(fake);
+  } catch(e) {}
   try { _BOOT_DONE = true; } catch(e){}
 }
 
@@ -1782,12 +1795,14 @@ function setupPullToRefresh() {
     const sp = document.getElementById("ptr-spinner");
     if (sp) sp.style.animation = "spin 0.7s linear infinite";
     try {
-      if (STATE.view === "home")      await (STATE.profile?.role === "coach" ? loadStudents() : Promise.resolve()), renderHome?.();
-      else if (STATE.view === "feed") { await loadFeed(); renderFeed(); }
-      else if (STATE.view === "calendar") { await loadPeriodization?.(); renderCalendar(); }
+      if (STATE.view === "home") {
+        if (STATE.profile?.role === "coach") await loadStudents();
+        renderHome();
+      } else if (STATE.view === "feed") { await loadFeed(); renderFeed(); }
+      else if (STATE.view === "calendar") { await loadPeriodization(); renderCalendar(); }
       else if (STATE.view === "students") { await loadStudents(); renderStudents(); }
-      else if (STATE.view === "payments") { await loadCoachPayments?.(); renderPayments?.(); }
-      else if (STATE.view === "chat")     { renderChat?.(); }
+      else if (STATE.view === "payments") { await loadCoachPayments(); renderPayments?.(); }
+      else if (STATE.view === "chat")     { await renderChat(); }
       else renderCurrentView();
     } finally {
       if (sp) sp.style.animation = "";
@@ -2951,6 +2966,10 @@ window.openNewTrainerSheet = function() {
   `);
 };
 window.submitNewTrainer = async function() {
+  // [C-NEW-03 FIX] Guard: apenas admin pode criar treinadores
+  if (!STATE.profile || STATE.profile.role !== "admin") {
+    showToast("Apenas o admin pode criar treinadores.", "error"); return;
+  }
   const btn = document.querySelector('#sheet-content .btn-primary');
   const setBusy = (b) => { if (btn) { btn.disabled = b; btn.textContent = b ? 'Criando...' : 'Criar treinador'; } };
   const name = document.getElementById("nt-name").value.trim();
@@ -2966,24 +2985,35 @@ window.submitNewTrainer = async function() {
     });
     if (signErr) throw signErr;
     const trainerId = signRes.user && signRes.user.id;
-    // Trigger criou profile com role=coach, status=approved (pelo handle_new_user)
-    // Garante que está consistente
-    if (trainerId) {
-      for (let i = 0; i < 8; i++) {
-        await new Promise(r => setTimeout(r, 400));
-        const { data } = await sb.from("profiles").select("id").eq("id", trainerId).maybeSingle();
-        if (data) break;
-      }
-      const { error: upErr } = await sb.from("profiles").update({
-        full_name: name, role: "coach", status: "approved"
-      }).eq("id", trainerId);
-      if (upErr) console.warn("update trainer:", upErr);
+    if (!trainerId) throw new Error("Falha ao obter ID do novo treinador.");
+
+    // [C-NEW-03 FIX] Trigger C-04 agora cria SEMPRE student/pending.
+    // Aguardamos o profile existir, depois o admin o promove explicitamente.
+    let profileFound = false;
+    for (let i = 0; i < 12; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      const { data } = await sb.from("profiles").select("id").eq("id", trainerId).maybeSingle();
+      if (data) { profileFound = true; break; }
     }
-    showToast("Treinador criado", "success");
+    if (!profileFound) throw new Error("Perfil não foi criado a tempo. Tente novamente.");
+
+    const { error: upErr } = await sb.from("profiles").update({
+      full_name: name, role: "coach", status: "approved"
+    }).eq("id", trainerId);
+
+    // [C-NEW-03 FIX] NUNCA ignorar o erro silenciosamente.
+    if (upErr) {
+      console.error("[submitNewTrainer] Falha ao promover perfil para coach:", upErr);
+      showToast("Conta criada mas falha ao definir permissões. Ajuste manualmente no Supabase ou contate o suporte. Erro: " + upErr.message, "error");
+      setBusy(false);
+      return;
+    }
+
+    showToast("Treinador criado com sucesso!", "success");
     closeSheet();
     await loadTrainers(); renderTrainers();
   } catch (e) {
-    console.error("Falha criar treinador:", e);
+    console.error("[submitNewTrainer] Falha:", e);
     showToast("Erro: " + (e.message || "tente novamente"), "error");
   } finally {
     setBusy(false);
@@ -3682,27 +3712,39 @@ async function renderWorkout() {
   if (!completed) {
     const bar = document.createElement("div");
     bar.id = "workout-fixed-bar";
+    const pct = totalTarget > 0 ? Math.round(doneCount / totalTarget * 100) : 0;
     bar.innerHTML = `
       <style>
-        #workout-fixed-bar{position:fixed;bottom:0;left:0;right:0;z-index:900;
-          background:var(--bg-2);border-top:1px solid var(--line);
-          padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));
-          display:flex;gap:10px;align-items:center}
-        #workout-fixed-bar .wfb-left{flex:0 0 auto}
-        #workout-fixed-bar .wfb-right{flex:1}
-        #workout-fixed-bar .wfb-progress{font-size:11px;color:var(--text-3);margin-bottom:4px}
-        #workout-fixed-bar .wfb-track{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
-        #workout-fixed-bar .wfb-fill{height:100%;background:var(--brand);border-radius:2px;transition:width .3s}
+        #workout-fixed-bar{
+          position:fixed;bottom:0;left:0;right:0;z-index:900;
+          background:var(--bg);border-top:1px solid var(--line);
+          padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));
+          box-shadow:0 -4px 20px rgba(0,0,0,.18)}
+        #workout-fixed-bar .wfb-inner{display:flex;gap:12px;align-items:center;max-width:600px;margin:0 auto}
+        #workout-fixed-bar .wfb-stats{flex:1;min-width:0}
+        #workout-fixed-bar .wfb-label{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+        #workout-fixed-bar .wfb-track{height:6px;background:var(--bg-card);border-radius:3px;overflow:hidden;border:1px solid var(--line)}
+        #workout-fixed-bar .wfb-fill{height:100%;border-radius:3px;transition:width .4s ease;
+          background:${allDone ? 'var(--green)' : 'linear-gradient(90deg,var(--brand),var(--brand-2,#818cf8))'}}
+        #workout-fixed-bar .wfb-pct{font-size:10px;color:${allDone ? 'var(--green)' : 'var(--brand)'};font-weight:800;margin-top:3px}
+        #workout-fixed-bar #btn-complete-session{
+          flex:0 0 auto;padding:13px 18px;border-radius:14px;font-size:14px;font-weight:800;
+          border:0;cursor:pointer;white-space:nowrap;transition:all .2s;
+          background:${allDone ? 'var(--green)' : doneCount===0 ? 'var(--bg-card)' : 'var(--brand)'};
+          color:${allDone ? '#002' : doneCount===0 ? 'var(--text-3)' : 'var(--brand-on)'};
+          opacity:${doneCount===0 ? '.5' : '1'}}
+        #workout-fixed-bar #btn-complete-session:active{transform:scale(.96)}
       </style>
-      <div class="wfb-right">
-        <div class="wfb-progress">${doneCount} de ${totalTarget} séries</div>
-        <div class="wfb-track"><div class="wfb-fill" style="width:${totalTarget>0?Math.round(doneCount/totalTarget*100):0}%"></div></div>
-      </div>
-      <button id="btn-complete-session" class="btn-primary ${allDone ? 'btn-success' : ''}"
-        style="flex:0 0 auto;padding:12px 20px;font-size:15px;white-space:nowrap"
-        ${doneCount === 0 ? 'disabled' : ''}>
-        ${allDone ? "Concluir treino ✓" : `Concluir (${doneCount}/${totalTarget})`}
-      </button>`;
+      <div class="wfb-inner">
+        <div class="wfb-stats">
+          <div class="wfb-label">${doneCount} de ${totalTarget} séries</div>
+          <div class="wfb-track"><div class="wfb-fill" style="width:${pct}%"></div></div>
+          <div class="wfb-pct">${pct}% concluído</div>
+        </div>
+        <button id="btn-complete-session" ${doneCount === 0 ? 'disabled' : ''}>
+          ${allDone ? 'Concluir ✓' : 'Concluir'}
+        </button>
+      </div>`;
     document.body.appendChild(bar);
     document.getElementById("btn-complete-session").addEventListener("click", () => {
       if (!allDone) {
@@ -3796,7 +3838,7 @@ function renderSetsTable(ex, logs, scheme, completed) {
                onchange="onLoadChange(${ex.position}, ${i}, this.value)" />
         <span class="unit">kg</span>
       </div>
-      <button class="set-check" ${completed ? "disabled" : ""} onclick="onToggleSet(${ex.position}, ${i})">
+      <button class="set-check" data-idx="${i}" ${completed ? "disabled" : ""} onclick="onToggleSet(${ex.position}, ${i})">
         ${isDone
           ? `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
           : `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>`
@@ -5144,7 +5186,16 @@ window.renderPresetItem = function(p) {
           </div>
         </div>
         <button class="mini-btn mini-btn-primary" style="margin-top:8px;width:100%" onclick="savePreset('${p.code}')">Salvar</button>
-      ` : `<div style="font-size:11px;color:var(--text-3)">Não usa repetições/pausa.</div>`}
+      ` : `
+        <div style="margin-top:4px">
+          <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:4px">Duração padrão (min)</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" id="pr-dur-${p.code}" value="${p.duration_minutes||30}" min="1" max="180"
+              style="width:100px;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+            <span style="font-size:12px;color:var(--text-3)">min · ex: 30 min de esteira</span>
+          </div>
+          <button class="mini-btn mini-btn-primary" style="margin-top:8px;width:100%" onclick="savePresetDuration('${p.code}')">Salvar</button>
+        </div>`}
     </div>`;
 };
 
@@ -5203,6 +5254,35 @@ window.savePreset = async function(code) {
   showToast("Salvo ✓", "success");
   await reloadPresets();
 };
+
+window.savePresetDuration = async function(code) {
+  const durEl = document.getElementById(`pr-dur-${code}`);
+  if (!durEl) return;
+  const dur = Number(durEl.value);
+  if (!dur || dur < 1) { showToast("Informe uma duração válida", "error"); return; }
+  const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
+  const existing = _PRESETS.find(p => p.code === code);
+  if (!existing) return;
+  const patch = { duration_minutes: dur };
+  if (myCoachId && (!existing.coach_id)) {
+    const { error } = await sb.from("intensity_presets").insert({
+      coach_id: myCoachId,
+      code: existing.code,
+      label: existing.label,
+      color: existing.color,
+      is_workout: existing.is_workout,
+      position: existing.position,
+      ...patch
+    });
+    if (error) { showToast(error.message, "error"); return; }
+  } else {
+    const { error } = await sb.from("intensity_presets").update(patch).eq("id", existing.id);
+    if (error) { showToast(error.message, "error"); return; }
+  }
+  showToast("Duração salva ✓", "success");
+  await reloadPresets();
+};
+
 window.onApprove = async (id) => {
   await approveStudent(id, "approved");
   // pergunta se quer criar a periodização padrão
@@ -5354,9 +5434,58 @@ window.openStudentWorkoutsSheet = async function(studentId) {
     `).join("")}
     ${(globals||[]).filter(g => customCodes.has(g.code)).length > 0 ? `<p class="text-xs muted">Os treinos já personalizados não aparecem aqui.</p>` : ""}
 
-    <div style="margin-top:14px"><button class="btn-ghost" onclick="onStudentDetail('${studentId}')">Voltar</button></div>
+    <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-primary" onclick="openCreateWorkoutSheet('${studentId}')">+ Criar novo treino</button>
+      <button class="btn-ghost" onclick="onStudentDetail('${studentId}')">Voltar</button>
+    </div>
   `;
   openSheet(html);
+};
+
+window.openCreateWorkoutSheet = function(studentId) {
+  openSheet(`
+    <h3>Criar novo treino</h3>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 16px">Este treino ficará disponível apenas para este aluno.</p>
+    <div class="form-group">
+      <label class="form-label">Código do treino <span style="color:var(--red)">*</span></label>
+      <input class="input" id="nw-code" placeholder="Ex: E, F, SUPERIOR2..." maxlength="20" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+      <div style="font-size:11px;color:var(--text-3);margin-top:3px">Use letras maiúsculas. Ex: E, CARDIO, LOWER2</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nome do treino <span style="color:var(--red)">*</span></label>
+      <input class="input" id="nw-name" placeholder="Ex: Treino E · Membros Inferiores">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Foco / descrição</label>
+      <input class="input" id="nw-focus" placeholder="Ex: Glúteos e Quadríceps">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn-primary" style="flex:1" onclick="createWorkoutForStudent('${studentId}')">Criar treino</button>
+      <button class="btn-ghost" onclick="openStudentWorkoutsSheet('${studentId}')">Cancelar</button>
+    </div>
+  `);
+};
+
+window.createWorkoutForStudent = async function(studentId) {
+  const code = (document.getElementById("nw-code")?.value || "").trim().toUpperCase();
+  const name = (document.getElementById("nw-name")?.value || "").trim();
+  const focus = (document.getElementById("nw-focus")?.value || "").trim();
+  if (!code) { showToast("Informe o código do treino", "error"); return; }
+  if (!name) { showToast("Informe o nome do treino", "error"); return; }
+  // Verifica se o código já existe para este aluno
+  const { data: existing } = await sb.from("workouts").select("id").eq("student_id", studentId).eq("code", code).limit(1);
+  if (existing && existing.length > 0) { showToast("Já existe um treino com esse código para este aluno", "error"); return; }
+  const { data, error } = await sb.from("workouts").insert({
+    code,
+    name,
+    focus: focus || null,
+    student_id: studentId
+  }).select().single();
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast("Treino criado! Agora adicione exercícios.", "success");
+  await loadWorkouts();
+  // Abre o editor do novo treino direto
+  openWorkoutEditor(code);
 };
 
 window.cloneForStudent = async function(workoutId, studentId) {
@@ -5978,17 +6107,45 @@ async function postLoginInit() {
 
   // [M-04] Restaurar timer se o aluno voltou ao app após ligação/troca de app
   restoreTimerIfActive();
-  document.addEventListener("visibilitychange", () => {
+  document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState === "visible") {
       restoreTimerIfActive();
+
       // Re-bind modal de série se ainda estiver aberto (iOS pode perder listeners)
       const sdm = document.getElementById("serie-done-modal");
       if (sdm && window._sdmModal) {
         const confirmBtn = document.getElementById("sdm-confirm-btn");
-        if (confirmBtn && !confirmBtn._bound) {
-          confirmBtn._bound = true;
-          confirmBtn.onclick = () => confirmSerieDone(false);
-        }
+        if (confirmBtn) confirmBtn.onclick = () => confirmSerieDone(false);
+        const skipBtn = sdm.querySelector(".sdm-skip");
+        if (skipBtn) skipBtn.onclick = () => confirmSerieDone(true);
+      }
+
+      // Refresh da sessão Supabase para garantir JWT válido após lock prolongado
+      try {
+        const { data: { session: authSess } } = await sb.auth.getSession();
+        if (!authSess) return; // usuário deslogado
+      } catch(e) { return; }
+
+      // Se estamos na view de treino, re-validar STATE.currentSession e STATE.workouts
+      if (STATE.view === "workout") {
+        try {
+          const date = STATE.selectedDate || todayISO();
+          const code = STATE.selectedWorkout;
+          if (code && (!STATE.currentSession || STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code)) {
+            await loadOrCreateSession(date, code, STATE.selectedIntensity);
+          }
+          if (code && (!STATE.workouts || !STATE.workouts[code])) {
+            await loadWorkouts();
+          }
+          // Re-bind dos checkboxes de série para garantir funcionamento
+          document.querySelectorAll(".set-check:not([disabled])").forEach(btn => {
+            const pos = parseInt(btn.closest("[data-pos]")?.dataset.pos);
+            const idx = parseInt(btn.dataset.idx || btn.getAttribute("data-idx") || "0");
+            if (!isNaN(pos) && !isNaN(idx)) {
+              btn.onclick = () => window.onToggleSet(pos, idx);
+            }
+          });
+        } catch(e) { console.warn("workout re-init:", e); }
       }
     }
   });
@@ -6835,13 +6992,28 @@ window.exportStudentPDF = exportStudentPDF;
 
 /* ---------- ASAAS (criar cobrança via Edge Function) ---------- */
 async function createAsaasCharge({ paymentId, billingType="PIX" }) {
-  // Chama Edge Function "asaas-create-charge"
-  const { data, error } = await sb.functions.invoke("asaas-create-charge", {
-    body: { payment_id: paymentId, billing_type: billingType }
-  });
-  if (error) { showToast("Erro ao criar cobrança: "+error.message, "error"); return null; }
-  if (data && data.error) { showToast(data.error, "error"); return null; }
-  return data;
+  try {
+    const { data, error } = await sb.functions.invoke("asaas-create-charge", {
+      body: { payment_id: paymentId, billing_type: billingType }
+    });
+    if (error) {
+      const msg = error.message || String(error);
+      // Mensagem amigável para erros comuns
+      if (msg.includes("404") || msg.includes("not found") || msg.toLowerCase().includes("function")) {
+        showToast("Edge Function não encontrada. Configure asaas-create-charge no Supabase.", "error");
+      } else if (msg.includes("ASAAS") || msg.includes("apiKey") || msg.includes("api_key")) {
+        showToast("Chave Asaas não configurada. Adicione ASAAS_API_KEY nas variáveis da Edge Function.", "error");
+      } else {
+        showToast("Erro: " + msg, "error");
+      }
+      return null;
+    }
+    if (data && data.error) { showToast(data.error, "error"); return null; }
+    return data;
+  } catch(e) {
+    showToast("Erro de conexão com Asaas: " + (e.message||e), "error");
+    return null;
+  }
 }
 
 async function openAsaasSheet(paymentId) {
@@ -6883,8 +7055,12 @@ async function openAsaasSheet(paymentId) {
 
   async function gen(type) {
     const r = document.getElementById("ax-result");
-    r.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-2)">Gerando…</div>`;
+    const pixBtn = document.getElementById("ax-btn-pix");
+    const bolBtn = document.getElementById("ax-btn-bol");
+    pixBtn.disabled = true; bolBtn.disabled = true;
+    r.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-2);display:flex;align-items:center;justify-content:center;gap:8px"><div class="spinner" style="width:18px;height:18px"></div> Gerando cobrança…</div>`;
     const result = await createAsaasCharge({ paymentId, billingType: type });
+    pixBtn.disabled = false; bolBtn.disabled = false;
     if (!result) { r.innerHTML = ""; return; }
     if (type === "PIX" && result.pix_qr) {
       r.innerHTML = `
