@@ -686,9 +686,10 @@ const iconFor = c => ICONS[c] || ICONS.mobility;
 function getExThumb(ex) {
   const url = ex.image_url
     || ((STATE.library || []).find(l => l.name === ex.name && l.image_url) || {}).image_url;
+  const generic = "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 360'><defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'><stop stop-color='#1a2236'/><stop offset='1' stop-color='#0f1524'/></linearGradient></defs><rect width='640' height='360' fill='url(#g)'/><circle cx='128' cy='98' r='34' fill='#2a3654'/><rect x='86' y='152' width='468' height='24' rx='12' fill='#2a3654'/><rect x='86' y='194' width='300' height='18' rx='9' fill='#1f2942'/><path d='M190 286h260' stroke='#00b4ff' stroke-width='14' stroke-linecap='round'/><circle cx='220' cy='286' r='26' fill='none' stroke='#00b4ff' stroke-width='12'/><circle cx='420' cy='286' r='26' fill='none' stroke='#00b4ff' stroke-width='12'/></svg>`);
   return url
     ? `<img src="${escape(url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" />`
-    : iconFor(ex.cat);
+    : `<img src="${generic}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" />`;
 }
 
 const REP_SCHEMES = {
@@ -1648,6 +1649,7 @@ function startTimer(sec, label, onDone) {
 }
 function tickTimer() {
   if (!STATE.timer.running) return;
+  if (STATE.timer.raf) { clearTimeout(STATE.timer.raf); STATE.timer.raf = null; }
   if (!STATE.timer.paused) {
     const elapsed = Math.floor((Date.now() - STATE.timer.startedAt) / 1000);
     STATE.timer.secondsLeft = Math.max(0, STATE.timer.secondsTotal - elapsed);
@@ -1697,6 +1699,7 @@ function finishTimer() {
 }
 function cancelTimer() {
   if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
+  STATE.timer.raf = null;
   STATE.timer.running = false; STATE.timer.paused = false;
 }
 function closeTimer() {
@@ -1728,6 +1731,14 @@ function setTimerIcon(paused) {
 }
 function openFsTimer() { document.getElementById("timer-fs").classList.add("active"); }
 function closeFsTimer() { document.getElementById("timer-fs").classList.remove("active"); }
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  if (STATE.timer && STATE.timer.running) tickTimer();
+  if (STATE.view === "workout") renderWorkout();
+});
+window.addEventListener("pageshow", () => {
+  if (STATE.timer && STATE.timer.running) tickTimer();
+});
 
 /* =============================================================================
    SHEET (modal)
@@ -2032,7 +2043,7 @@ function renderCurrentView() {
   const role = STATE.profile?.role;
 
   // BUG-007: guard de acesso por role — impede aluno de forçar views de staff via navTo()
-  const staffViews = ["students", "admin-workouts", "payments"];
+  const staffViews = ["students", "admin-workouts"];
   const adminViews = ["trainers"];
   if (staffViews.includes(v) && !["coach", "admin"].includes(role)) {
     STATE.view = "home"; renderHome(); return;
@@ -2100,7 +2111,7 @@ function renderBottomNav() {
       { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
       { id: "calendar", label: "Periodiz.", svg: `<rect x="3" y="4.5" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>` },
       { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/><path d="M9.5 9.5 7 7l3-3 3 3"/>` },
-      { id: "feed", label: "Feed", svg: `<path d="M4 4h16v4H4zM4 11h16v4H4zM4 18h10v4H4z"/>` },
+      { id: "payments", label: "Financeiro", svg: `<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>` },
       { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
     ];
   }
@@ -2562,8 +2573,38 @@ async function renderPayments() {
   const el = document.getElementById("view-payments");
   const isAdmin = STATE.profile.role === "admin";
   const isCoach = STATE.profile.role === "coach";
-  if (!isAdmin && !isCoach) {
+  const isStudent = STATE.profile.role === "student";
+  if (!isAdmin && !isCoach && !isStudent) {
     el.innerHTML = `<div class="empty"><h3>Sem acesso</h3></div>`; return;
+  }
+  if (isStudent) {
+    const list = await loadPaymentsForUser(STATE.profile.id);
+    const open = list.filter(p => p.status !== 'paid' && p.status !== 'cancelled');
+    const paid = list.filter(p => p.status === 'paid');
+    el.innerHTML = `
+      <h1 class="view-title">Financeiro</h1>
+      <p class="view-subtitle">Minhas mensalidades e histórico</p>
+      <div class="section-title">Em aberto (${open.length})</div>
+      ${open.length === 0 ? `<div class="empty"><p>Nenhuma pendência</p></div>` : open.map(p => `
+        <div class="card mb-8"><div class="row-flex">
+          <div style="flex:1; min-width:0;">
+            <div class="fw-700 text-sm">${fmtMoney(p.amount)} · venc. ${fmtDateBR(p.due_date)}</div>
+            ${p.reference ? `<div class="text-xs muted" style="margin-top:2px;">${escape(p.reference)}</div>` : ''}
+          </div>
+          <span class="today-pill ${p.status === 'overdue' ? 'pill-red' : 'pill-pending'}">${p.status === 'overdue' ? 'Atrasado' : 'Pendente'}</span>
+        </div></div>`).join("")}
+      <div class="section-title">Histórico (${paid.length})</div>
+      ${paid.length === 0 ? `<div class="empty"><p>Sem histórico ainda</p></div>` : paid.slice(0, 12).map(p => `
+        <div class="card mb-8"><div class="row-flex">
+          <div style="flex:1; min-width:0;">
+            <div class="fw-700 text-sm">${fmtMoney(p.amount)} · venc. ${fmtDateBR(p.due_date)}</div>
+            ${p.reference ? `<div class="text-xs muted" style="margin-top:2px;">${escape(p.reference)}</div>` : ''}
+            ${p.paid_at ? `<div class="text-xs" style="color:var(--green); margin-top:2px;">Pago em ${fmtDateBR(p.paid_at.slice(0,10))}</div>` : ''}
+          </div>
+          <span class="today-pill pill-approved">✓ Pago</span>
+        </div></div>`).join("")}
+    `;
+    return;
   }
 
   // Atualiza dados
@@ -5385,7 +5426,7 @@ async function loadLoadHistory(studentId) {
 }
 
 async function renderHistory() {
-  const el = document.getElementById("view-home");
+  const el = document.getElementById("view-history");
   if (!el) return;
   el.innerHTML = `
     <div style="padding:16px 16px 100px">
@@ -5672,7 +5713,7 @@ async function loadWeeklyRanking() {
 }
 
 async function renderRanking() {
-  const el = document.getElementById("view-home");
+  const el = document.getElementById("view-ranking");
   if (!el) return;
   await loadWeeklyRanking();
   const rows = STATE.ranking || [];
@@ -6272,7 +6313,7 @@ if (_origRenderHome) {
 
 /* ---------- FOTO DE PROGRESSO ---------- */
 async function renderProgress() {
-  const el = document.getElementById("view-home");
+  const el = document.getElementById("view-progress");
   if (!el) return;
   const sid = STATE.profile.id;
   const { data: photos } = await sb.from("progress_photos")
@@ -6337,7 +6378,8 @@ async function openProgressUpload() {
         <div style="flex:1;font-weight:700;font-size:18px">Nova foto</div>
         <button onclick="document.getElementById('pp-overlay').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
       </div>
-      <input type="file" id="pp-file" accept="image/*" capture="user" style="margin-top:8px;width:100%;padding:11px;border-radius:10px;border:1px dashed var(--line);background:var(--bg-card);color:var(--text)">
+      <input type="file" id="pp-file" accept="image/*" style="margin-top:8px;width:100%;padding:11px;border-radius:10px;border:1px dashed var(--line);background:var(--bg-card);color:var(--text)">
+      <div style="font-size:11px;color:var(--text-3);margin-top:6px">Você pode tirar foto na câmera ou escolher da galeria.</div>
       <label>Peso (kg)</label>
       <div class="row">
         <input type="number" id="pp-weight" step="0.1" placeholder="Ex: 78.5">
@@ -6393,7 +6435,7 @@ window.deleteProgressPhoto = deleteProgressPhoto;
 /* ---------- AERÓBIO ---------- */
 let AERO_TIMER = null;
 async function renderAero() {
-  const el = document.getElementById("view-home");
+  const el = document.getElementById("view-aero");
   if (!el) return;
   const sid = STATE.profile.id;
   const { data: logs } = await sb.from("aero_logs")
@@ -6522,7 +6564,7 @@ window.deleteAeroLog = deleteAeroLog;
 
 /* ---------- 1RM (calibração) ---------- */
 async function renderOneRM() {
-  const el = document.getElementById("view-home");
+  const el = document.getElementById("view-onerm");
   if (!el) return;
   const sid = STATE.profile.id;
   const { data: rms } = await sb.from("one_rep_max")
