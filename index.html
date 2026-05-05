@@ -368,6 +368,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @keyframes slideup { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
 .timer-label { font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; opacity: 0.85; font-weight: 800; }
 .timer-time { font-size: 26px; font-weight: 900; letter-spacing: -1px; line-height: 1; font-variant-numeric: tabular-nums; }
+.timer-sub { margin-top: 3px; font-size: 11px; opacity: .82; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; }
 .timer-info { flex: 1; min-width: 0; }
 .timer-actions { display: flex; gap: 6px; }
 .timer-btn { width: 36px; height: 36px; border-radius: 9px; background: rgba(255,255,255,0.18);
@@ -398,6 +399,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .timer-controls .icon-btn { width: 48px; height: 48px; background: var(--bg-2); }
 .timer-fs-skip { background: transparent; border: 1px solid var(--line); color: var(--text);
   border-radius: 12px; padding: 12px 22px; font-weight: 700; font-size: 13px; }
+.timer-fs-next { display: none; margin-top: 10px; background: var(--green); color: #03140a;
+  border: 0; padding: 13px 18px; border-radius: 12px; font-weight: 900; font-size: 13px; }
+.timer-fs.done .timer-fs-next { display: inline-flex; align-items: center; justify-content: center; }
 
 /* Bottom nav */
 .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex;
@@ -766,6 +770,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       <div class="timer-info">
         <div class="timer-label">Descanso</div>
         <div class="timer-time" id="timer-bar-time">01:00</div>
+        <div class="timer-sub" id="timer-bar-sub">Próxima série</div>
       </div>
       <div class="timer-actions">
         <button class="timer-btn" id="timer-bar-add">+15</button>
@@ -799,6 +804,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       <button class="icon-btn" id="timer-fs-plus"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="6" x2="12" y2="18"/><line x1="6" y1="12" x2="18" y2="12"/></svg></button>
     </div>
     <button class="timer-fs-skip" id="timer-fs-skip">Pular descanso</button>
+    <button class="timer-fs-next" id="timer-fs-next">Iniciar próximo exercício</button>
   </div>
 
   <nav class="bottom-nav">
@@ -1215,8 +1221,9 @@ const STATE = {
   authRole: "student",
   branding: { ...DEFAULT_BRANDING },
   theme: "dark",         // dark | light
-  timer: { running:false, paused:false, secondsLeft:0, secondsTotal:0,
-           startedAt:null, pausedAt:null, raf:null, onDone:null, label:"Próxima série" }
+  timer: { id:null, running:false, paused:false, status:"idle", secondsLeft:0, secondsTotal:0,
+           startedAt:null, startTimestamp:null, pausedAt:null, pausedRemaining:null,
+           raf:null, onDone:null, label:"Próxima série", exerciseName:"Próxima série" }
 };
 
 let _PULL_TO_REFRESH_BOUND = false;
@@ -1824,7 +1831,13 @@ async function signOut() {
   if (!await showConfirm({ title: "Sair da conta?", confirm: "Sair", cancel: "Cancelar" })) return;
   cleanupRealtime();
   // M-01 FIX: limpar dados do timer para não vazar entre usuários do mesmo dispositivo
-  try { localStorage.removeItem("timer_start"); localStorage.removeItem("timer_duration"); localStorage.removeItem("timer_total"); localStorage.removeItem("timer_label"); } catch(e) {}
+  try {
+    localStorage.removeItem("treinova_rest_timer_v2");
+    localStorage.removeItem("timer_start");
+    localStorage.removeItem("timer_duration");
+    localStorage.removeItem("timer_total");
+    localStorage.removeItem("timer_label");
+  } catch(e) {}
   await sb.auth.signOut();
   location.reload();
 }
@@ -2271,8 +2284,14 @@ window.confirmSerieDone = async function(skipTimer) {
     }
   }
 
+  const WForTimer = STATE.workouts[STATE.selectedWorkout];
+  const timerExercises = (WForTimer && WForTimer.exercises) || [];
+  const timerCurIdx = timerExercises.findIndex(e => e.position === exPos);
+  const timerNextEx = timerExercises[timerCurIdx + 1];
+  const timerLabel = timerNextEx && isLastEx ? timerNextEx.name : nextLabel;
+
   if (!skipTimer) {
-    startTimer(pauseSec, nextLabel, () => {
+    startTimer(pauseSec, timerLabel, () => {
       if (navigator.vibrate) navigator.vibrate([200,100,200]);
       if (isLastEx) setTimeout(autoAdvanceExercise, 600);
     });
@@ -2887,8 +2906,10 @@ function bindAppResumeHandlers() {
    TIMER
    ============================================================================= */
 const RING_CIRC = 2 * Math.PI * 45;
+const REST_TIMER_KEY = "treinova_rest_timer_v2";
 let _wakeLock = null;
 let _TIMER_CLEANUP_HANDLE = null;
+let _REST_TIMER_FINISHING = false;
 async function _acquireWakeLock() {
   try {
     if ('wakeLock' in navigator) {
@@ -2900,12 +2921,195 @@ async function _acquireWakeLock() {
 function _releaseWakeLock() {
   try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
 }
+function resetTimerState() {
+  if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
+  STATE.timer = {
+    id: null,
+    running: false,
+    paused: false,
+    status: "idle",
+    secondsLeft: 0,
+    secondsTotal: 0,
+    startedAt: null,
+    startTimestamp: null,
+    pausedAt: null,
+    pausedRemaining: null,
+    raf: null,
+    onDone: null,
+    label: "Próxima série",
+    exerciseName: "Próxima série"
+  };
+}
 function clearPersistedTimer() {
   try {
+    localStorage.removeItem(REST_TIMER_KEY);
     localStorage.removeItem("timer_start");
     localStorage.removeItem("timer_duration");
     localStorage.removeItem("timer_label");
   } catch(e) {}
+}
+function readPersistedTimer() {
+  try {
+    const raw = localStorage.getItem(REST_TIMER_KEY);
+    if (raw) {
+      const state = JSON.parse(raw);
+      if (!state || typeof state !== "object") throw new Error("invalid timer");
+      const duration = Number(state.duration);
+      const startTimestamp = Number(state.startTimestamp);
+      if (!duration || duration < 1 || duration > 60 * 60 || !startTimestamp) throw new Error("invalid timer values");
+      return {
+        id: String(state.id || `rest-${startTimestamp}`),
+        startTimestamp,
+        duration,
+        exerciseName: String(state.exerciseName || state.label || "Próxima série"),
+        label: String(state.label || state.exerciseName || "Próxima série"),
+        status: state.status === "paused" ? "paused" : "running",
+        pausedAt: state.pausedAt ? Number(state.pausedAt) : null,
+        pausedRemaining: Number.isFinite(Number(state.pausedRemaining)) ? Number(state.pausedRemaining) : null,
+        notified: state.notified === true
+      };
+    }
+    const start = parseInt(localStorage.getItem("timer_start") || "0", 10);
+    const duration = parseInt(localStorage.getItem("timer_duration") || "0", 10);
+    const label = localStorage.getItem("timer_label") || "Próxima série";
+    if (start && duration) return {
+      id: `legacy-${start}`,
+      startTimestamp: start,
+      duration,
+      exerciseName: label,
+      label,
+      status: "running",
+      pausedAt: null,
+      pausedRemaining: null,
+      notified: false
+    };
+  } catch(e) {
+    console.warn("[rest timer read]", e);
+    clearPersistedTimer();
+  }
+  return null;
+}
+function persistTimerState(extra = {}) {
+  try {
+    if (!STATE.timer || (!STATE.timer.running && !STATE.timer.paused)) return;
+    const state = {
+      id: STATE.timer.id || `rest-${STATE.timer.startTimestamp || Date.now()}`,
+      startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+      duration: STATE.timer.secondsTotal,
+      exerciseName: STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
+      label: STATE.timer.label || "Próxima série",
+      status: STATE.timer.paused ? "paused" : "running",
+      pausedAt: STATE.timer.pausedAt || null,
+      pausedRemaining: STATE.timer.paused ? STATE.timer.secondsLeft : null,
+      notified: false,
+      ...extra
+    };
+    localStorage.setItem(REST_TIMER_KEY, JSON.stringify(state));
+    localStorage.setItem("timer_start", String(state.startTimestamp));
+    localStorage.setItem("timer_duration", String(state.duration));
+    localStorage.setItem("timer_label", state.label);
+  } catch(e) {
+    console.warn("[rest timer persist]", e);
+  }
+}
+function getTimerRemainingSeconds(state, now = Date.now()) {
+  if (!state) return 0;
+  if (state.status === "paused") {
+    return Math.max(0, Math.ceil(Number(state.pausedRemaining ?? 0)));
+  }
+  return Math.max(0, Math.ceil(Number(state.duration || 0) - ((now - Number(state.startTimestamp || 0)) / 1000)));
+}
+function hydrateTimerFromPersisted(state, onDone) {
+  if (!state) return false;
+  if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
+  const remaining = getTimerRemainingSeconds(state);
+  STATE.timer.id = state.id;
+  STATE.timer.secondsTotal = state.duration;
+  STATE.timer.secondsLeft = remaining;
+  STATE.timer.startedAt = state.startTimestamp;
+  STATE.timer.startTimestamp = state.startTimestamp;
+  STATE.timer.running = state.status !== "paused";
+  STATE.timer.paused = state.status === "paused";
+  STATE.timer.status = state.status;
+  STATE.timer.pausedAt = state.pausedAt || null;
+  STATE.timer.pausedRemaining = state.pausedRemaining || null;
+  STATE.timer.label = state.label || "Próxima série";
+  STATE.timer.exerciseName = state.exerciseName || STATE.timer.label;
+  STATE.timer.onDone = onDone || STATE.timer.onDone || null;
+  return true;
+}
+function markPersistedTimerNotified(state) {
+  try {
+    const next = { ...(state || readPersistedTimer() || {}), notified: true };
+    localStorage.setItem(REST_TIMER_KEY, JSON.stringify(next));
+  } catch(e) {}
+}
+async function ensureRestNotificationPermission() {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      subscribePushNotifications().catch(()=>{});
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+async function notifyRestFinished(exerciseName) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return false;
+  const title = "Descanso finalizado";
+  const body = `Próximo exercício: ${exerciseName || "Próxima série"}`;
+  const opts = {
+    body,
+    tag: "treinova-rest-timer",
+    renotify: true,
+    vibrate: [160, 80, 160],
+    icon: "/assets/icon-192.png",
+    badge: "/assets/favicon-32x32.png",
+    data: { url: location.pathname || "/" }
+  };
+  try {
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg && reg.showNotification) {
+        await reg.showNotification(title, opts);
+        return true;
+      }
+    }
+  } catch(e) {
+    console.warn("[rest notification sw]", e);
+  }
+  try {
+    new Notification(title, opts);
+    return true;
+  } catch(e) {
+    console.warn("[rest notification api]", e);
+  }
+  return false;
+}
+function postRestTimerToServiceWorker(type, payload = {}) {
+  try {
+    if (!("serviceWorker" in navigator)) return;
+    const send = (sw) => sw && sw.postMessage({ type, payload });
+    if (navigator.serviceWorker.controller) send(navigator.serviceWorker.controller);
+    navigator.serviceWorker.ready.then((reg) => send(reg.active || reg.waiting || reg.installing)).catch(()=>{});
+  } catch(e) {}
+}
+function scheduleBackgroundRestNotification() {
+  const saved = readPersistedTimer();
+  if (!saved || saved.status !== "running" || !("Notification" in window) || Notification.permission !== "granted") return;
+  const remaining = getTimerRemainingSeconds(saved);
+  if (remaining <= 0) return;
+  postRestTimerToServiceWorker("SCHEDULE_REST_TIMER", {
+    id: saved.id,
+    fireAt: Date.now() + remaining * 1000,
+    exerciseName: saved.exerciseName || saved.label || "Próxima série"
+  });
+}
+function cancelBackgroundRestNotification() {
+  postRestTimerToServiceWorker("CANCEL_REST_TIMER", { id: STATE.timer?.id || readPersistedTimer()?.id || "all" });
 }
 function scheduleTimerChromeCleanup(delay = 800) {
   if (_TIMER_CLEANUP_HANDLE) clearTimeout(_TIMER_CLEANUP_HANDLE);
@@ -2918,47 +3122,53 @@ function scheduleTimerChromeCleanup(delay = 800) {
 }
 function reconcileTimerAfterLifecycle(reason = "resume") {
   try {
-    const start = parseInt(localStorage.getItem("timer_start") || "0", 10);
-    const duration = parseInt(localStorage.getItem("timer_duration") || "0", 10);
-    if (!start || !duration) {
-      if (!STATE.timer.running) closeFsTimer();
+    const saved = readPersistedTimer();
+    if (!saved) {
+      if (!STATE.timer.running && !STATE.timer.paused) closeFsTimer();
       return;
     }
-    const elapsed = Math.floor((Date.now() - start) / 1000);
-    const remaining = duration - elapsed;
+    const remaining = getTimerRemainingSeconds(saved);
     if (remaining <= 0) {
-      if (STATE.timer.raf) {
-        clearTimeout(STATE.timer.raf);
-        STATE.timer.raf = null;
-      }
+      if (_REST_TIMER_FINISHING) return;
+      _REST_TIMER_FINISHING = true;
       const doneCallback = STATE.timer.onDone;
-      STATE.timer.secondsTotal = duration;
+      hydrateTimerFromPersisted(saved, doneCallback);
       STATE.timer.secondsLeft = 0;
       STATE.timer.running = false;
       STATE.timer.paused = false;
+      STATE.timer.status = "finished";
       _releaseWakeLock();
+      cancelBackgroundRestNotification();
+      markPersistedTimerNotified(saved);
+      notifyRestFinished(saved.exerciseName || saved.label).catch(()=>{});
       clearPersistedTimer();
       document.getElementById("timer-bar")?.classList.add("active","done");
       document.getElementById("timer-ring")?.classList.add("done");
+      document.getElementById("timer-fs")?.classList.add("done");
       const barTime = document.getElementById("timer-bar-time");
       const fsTime = document.getElementById("timer-fs-time");
       const fsLabel = document.getElementById("timer-fs-label");
+      const barSub = document.getElementById("timer-bar-sub");
       if (barTime) barTime.textContent = "00:00";
       if (fsTime) fsTime.textContent = "00:00";
       if (fsLabel) fsLabel.textContent = "Vamos lá!";
+      if (barSub) barSub.textContent = saved.exerciseName || saved.label || "Próxima série";
       closeFsTimer();
       if (typeof doneCallback === "function") {
         try { doneCallback(); } catch(e) { console.warn("[timer resume callback]", e); }
       }
       showToast("Descanso concluído ✓", "success");
       scheduleTimerChromeCleanup(1400);
+      setTimeout(() => { _REST_TIMER_FINISHING = false; }, 500);
       return;
     }
+    hydrateTimerFromPersisted(saved);
+    STATE.timer.secondsLeft = remaining;
+    document.getElementById("timer-bar")?.classList.add("active");
+    updateTimerLabels();
+    setTimerIcon(STATE.timer.paused);
+    updateTimerUI();
     if (STATE.timer.running) {
-      STATE.timer.secondsTotal = duration;
-      STATE.timer.secondsLeft = remaining;
-      STATE.timer.startedAt = start;
-      STATE.timer.paused = false;
       tickTimer();
     }
     // Ao voltar do bloqueio, deixa só a barra compacta para não bloquear a tela.
@@ -2980,54 +3190,45 @@ document.addEventListener('visibilitychange', () => {
 function startTimer(sec, label, onDone) {
   cancelTimer();
   _acquireWakeLock();
+  ensureRestNotificationPermission().catch(()=>{});
+  const exerciseName = label || "Próxima série";
+  const startTimestamp = Date.now();
+  STATE.timer.id = `rest-${startTimestamp}`;
   STATE.timer.secondsTotal = sec;
   STATE.timer.secondsLeft = sec;
-  STATE.timer.startedAt = Date.now();
+  STATE.timer.startedAt = startTimestamp;
+  STATE.timer.startTimestamp = startTimestamp;
   STATE.timer.running = true;
   STATE.timer.paused = false;
+  STATE.timer.status = "running";
+  STATE.timer.pausedAt = null;
+  STATE.timer.pausedRemaining = null;
   STATE.timer.label = label || "Próxima série";
+  STATE.timer.exerciseName = exerciseName;
   STATE.timer.onDone = onDone || null;
-  // [M-04] Fix: persistir timer no localStorage para sobreviver a ligações/saída do app
-  try {
-    localStorage.setItem("timer_start", String(STATE.timer.startedAt));
-    localStorage.setItem("timer_duration", String(sec));
-    localStorage.setItem("timer_label", STATE.timer.label);
-  } catch(e) {}
+  persistTimerState();
   document.getElementById("timer-bar").classList.add("active");
-  document.getElementById("timer-fs-label").textContent = STATE.timer.label;
-  document.getElementById("timer-fs-eyebrow").textContent = "Descanso";
+  document.getElementById("timer-fs")?.classList.remove("done");
+  updateTimerLabels();
   setTimerIcon(false);
   tickTimer();
   openFsTimer();
 }
 
 function restoreTimerIfActive() {
-  // [M-04] Fix: ao voltar ao app, restaurar timer se ainda estiver dentro do tempo
   try {
-    const start = parseInt(localStorage.getItem("timer_start") || "0");
-    const duration = parseInt(localStorage.getItem("timer_duration") || "0");
-    const label = localStorage.getItem("timer_label") || "Próxima série";
-    if (!start || !duration) return;
-    const elapsed = Math.floor((Date.now() - start) / 1000);
-    const remaining = duration - elapsed;
+    const saved = readPersistedTimer();
+    if (!saved) return;
+    const remaining = getTimerRemainingSeconds(saved);
     if (remaining > 1) {
-      // Reconstruir o timer com o tempo correto
-      if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
-      STATE.timer.secondsTotal = duration;
+      hydrateTimerFromPersisted(saved, null);
       STATE.timer.secondsLeft = remaining;
-      STATE.timer.startedAt = start;
-      STATE.timer.running = true;
-      STATE.timer.paused = false;
-      STATE.timer.label = label;
-      STATE.timer.onDone = null;
       document.getElementById("timer-bar").classList.add("active");
-      document.getElementById("timer-fs-label").textContent = label;
-      document.getElementById("timer-fs-eyebrow").textContent = "Descanso";
-      setTimerIcon(false);
-      tickTimer();
-      // Não abre o fullscreen automaticamente ao restaurar — apenas mantém a barra
+      document.getElementById("timer-fs")?.classList.remove("done");
+      updateTimerLabels();
+      setTimerIcon(STATE.timer.paused);
+      if (STATE.timer.running) tickTimer();
     } else {
-      // Timer expirou enquanto estava fora. Fecha qualquer camada cheia para não bloquear toques.
       reconcileTimerAfterLifecycle("restore-expired");
     }
   } catch(e) {}
@@ -3039,8 +3240,11 @@ function tickTimer() {
     STATE.timer.raf = null;
   }
   if (!STATE.timer.paused) {
-    const elapsed = Math.floor((Date.now() - STATE.timer.startedAt) / 1000);
-    STATE.timer.secondsLeft = Math.max(0, STATE.timer.secondsTotal - elapsed);
+    STATE.timer.secondsLeft = getTimerRemainingSeconds({
+      startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+      duration: STATE.timer.secondsTotal,
+      status: "running"
+    });
   }
   updateTimerUI();
   if (STATE.timer.secondsLeft <= 0) { finishTimer(); return; }
@@ -3050,36 +3254,64 @@ function updateTimerUI() {
   const s = STATE.timer.secondsLeft;
   const m = Math.floor(s / 60), r = s % 60;
   const txt = `${m.toString().padStart(2,"0")}:${r.toString().padStart(2,"0")}`;
-  document.getElementById("timer-bar-time").textContent = txt;
-  document.getElementById("timer-fs-time").textContent = txt;
+  const barTime = document.getElementById("timer-bar-time");
+  const fsTime = document.getElementById("timer-fs-time");
+  if (barTime) barTime.textContent = txt;
+  if (fsTime) fsTime.textContent = txt;
   const pct = STATE.timer.secondsTotal > 0 ? (s / STATE.timer.secondsTotal) : 0;
   const ringFill = document.getElementById("ring-fill");
-  ringFill.setAttribute("stroke-dasharray", RING_CIRC.toFixed(2));
-  ringFill.setAttribute("stroke-dashoffset", (RING_CIRC * (1 - pct)).toFixed(2));
+  if (ringFill) {
+    ringFill.setAttribute("stroke-dasharray", RING_CIRC.toFixed(2));
+    ringFill.setAttribute("stroke-dashoffset", (RING_CIRC * (1 - pct)).toFixed(2));
+  }
   const bar = document.getElementById("timer-bar");
   const ring = document.getElementById("timer-ring");
+  if (!bar || !ring) return;
   bar.classList.remove("warning","done"); ring.classList.remove("warning","done");
   if (s <= 0) { bar.classList.add("done"); ring.classList.add("done"); }
   else if (s <= 10) { bar.classList.add("warning"); ring.classList.add("warning"); }
 }
+function updateTimerLabels() {
+  const label = STATE.timer.label || "Próxima série";
+  const exerciseName = STATE.timer.exerciseName || label;
+  const fsLabel = document.getElementById("timer-fs-label");
+  const fsEyebrow = document.getElementById("timer-fs-eyebrow");
+  const barSub = document.getElementById("timer-bar-sub");
+  if (fsLabel) fsLabel.textContent = label;
+  if (fsEyebrow) fsEyebrow.textContent = "Descanso";
+  if (barSub) barSub.textContent = exerciseName;
+}
 function finishTimer() {
+  if (_REST_TIMER_FINISHING) return;
+  _REST_TIMER_FINISHING = true;
   if (STATE.timer.raf) {
     clearTimeout(STATE.timer.raf);
     STATE.timer.raf = null;
   }
   STATE.timer.running = false;
+  STATE.timer.paused = false;
+  STATE.timer.status = "finished";
   _releaseWakeLock();
+  cancelBackgroundRestNotification();
+  notifyRestFinished(STATE.timer.exerciseName || STATE.timer.label).catch(()=>{});
   clearPersistedTimer();
-  document.getElementById("timer-bar").classList.add("done");
-  document.getElementById("timer-ring").classList.add("done");
-  document.getElementById("timer-bar-time").textContent = "00:00";
-  document.getElementById("timer-fs-time").textContent = "00:00";
-  document.getElementById("timer-fs-label").textContent = "Vamos lá!";
+  document.getElementById("timer-bar")?.classList.add("done");
+  document.getElementById("timer-ring")?.classList.add("done");
+  document.getElementById("timer-fs")?.classList.add("done");
+  const barTime = document.getElementById("timer-bar-time");
+  const fsTime = document.getElementById("timer-fs-time");
+  const fsLabel = document.getElementById("timer-fs-label");
+  const barSub = document.getElementById("timer-bar-sub");
+  if (barTime) barTime.textContent = "00:00";
+  if (fsTime) fsTime.textContent = "00:00";
+  if (fsLabel) fsLabel.textContent = "Vamos lá!";
+  if (barSub) barSub.textContent = STATE.timer.exerciseName || STATE.timer.label || "Próxima série";
   if (STATE.timer.onDone) STATE.timer.onDone();
   // Auto-fechar fullscreen e barra após 2.5s
   setTimeout(() => {
     closeFsTimer();
     scheduleTimerChromeCleanup(800);
+    _REST_TIMER_FINISHING = false;
   }, 2500);
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -3098,31 +3330,63 @@ function finishTimer() {
 }
 function cancelTimer() {
   if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
-  STATE.timer.running = false; STATE.timer.paused = false;
+  resetTimerState();
   _releaseWakeLock();
-  // [M-04] Limpar persistência ao cancelar
+  cancelBackgroundRestNotification();
   clearPersistedTimer();
 }
 function closeTimer() {
   cancelTimer();
   document.getElementById("timer-bar").classList.remove("active","warning","done");
   document.getElementById("timer-ring").classList.remove("warning","done");
+  document.getElementById("timer-fs")?.classList.remove("done");
   closeFsTimer();
 }
 function adjustTimer(delta) {
-  if (!STATE.timer.running) return;
+  if (!STATE.timer.running && !STATE.timer.paused) return;
   STATE.timer.secondsTotal = Math.max(5, STATE.timer.secondsTotal + delta);
-  const elapsed = Math.floor((Date.now() - STATE.timer.startedAt) / 1000);
-  STATE.timer.secondsLeft = Math.max(0, STATE.timer.secondsTotal - elapsed);
+  if (STATE.timer.paused) {
+    STATE.timer.secondsLeft = Math.max(5, STATE.timer.secondsLeft + delta);
+    STATE.timer.pausedRemaining = STATE.timer.secondsLeft;
+  } else {
+    STATE.timer.secondsLeft = getTimerRemainingSeconds({
+      startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+      duration: STATE.timer.secondsTotal,
+      status: "running"
+    });
+  }
+  persistTimerState();
   updateTimerUI();
 }
 function pauseToggle() {
-  if (!STATE.timer.running) return;
+  if (!STATE.timer.running && !STATE.timer.paused) return;
   if (!STATE.timer.paused) {
-    STATE.timer.paused = true; STATE.timer.pausedAt = Date.now(); setTimerIcon(true);
+    STATE.timer.secondsLeft = getTimerRemainingSeconds({
+      startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+      duration: STATE.timer.secondsTotal,
+      status: "running"
+    });
+    STATE.timer.paused = true;
+    STATE.timer.running = false;
+    STATE.timer.status = "paused";
+    STATE.timer.pausedAt = Date.now();
+    STATE.timer.pausedRemaining = STATE.timer.secondsLeft;
+    if (STATE.timer.raf) { clearTimeout(STATE.timer.raf); STATE.timer.raf = null; }
+    persistTimerState();
+    setTimerIcon(true);
   } else {
-    STATE.timer.startedAt += (Date.now() - STATE.timer.pausedAt);
-    STATE.timer.paused = false; setTimerIcon(false); tickTimer();
+    const elapsedBeforePause = STATE.timer.secondsTotal - (STATE.timer.pausedRemaining || STATE.timer.secondsLeft || 0);
+    const newStart = Date.now() - elapsedBeforePause * 1000;
+    STATE.timer.startedAt = newStart;
+    STATE.timer.startTimestamp = newStart;
+    STATE.timer.paused = false;
+    STATE.timer.running = true;
+    STATE.timer.status = "running";
+    STATE.timer.pausedAt = null;
+    STATE.timer.pausedRemaining = null;
+    persistTimerState();
+    setTimerIcon(false);
+    tickTimer();
   }
 }
 function setTimerIcon(paused) {
@@ -3130,8 +3394,32 @@ function setTimerIcon(paused) {
     ? `<polygon points="6 4 20 12 6 20" />`
     : `<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>`;
 }
-function openFsTimer() { document.getElementById("timer-fs").classList.add("active"); }
-function closeFsTimer() { document.getElementById("timer-fs").classList.remove("active"); }
+function openFsTimer() { document.getElementById("timer-fs")?.classList.add("active"); }
+function closeFsTimer() { document.getElementById("timer-fs")?.classList.remove("active"); }
+function bindRestTimerLifecycle() {
+  const persistBeforeBackground = () => {
+    if (STATE.timer && (STATE.timer.running || STATE.timer.paused)) {
+      if (STATE.timer.running) STATE.timer.secondsLeft = getTimerRemainingSeconds({
+        startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+        duration: STATE.timer.secondsTotal,
+        status: "running"
+      });
+      persistTimerState();
+      scheduleBackgroundRestNotification();
+    }
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") persistBeforeBackground();
+    if (document.visibilityState === "visible") {
+      cancelBackgroundRestNotification();
+      reconcileTimerAfterLifecycle("timer-visible");
+    }
+  });
+  window.addEventListener("pagehide", persistBeforeBackground);
+  window.addEventListener("blur", persistBeforeBackground);
+  window.addEventListener("pageshow", () => { cancelBackgroundRestNotification(); reconcileTimerAfterLifecycle("timer-pageshow"); });
+  window.addEventListener("focus", () => { cancelBackgroundRestNotification(); reconcileTimerAfterLifecycle("timer-focus"); });
+}
 
 /* =============================================================================
    SHEET (modal)
@@ -7439,6 +7727,10 @@ function bindTimerHandlers() {
   document.getElementById("timer-fs-plus").addEventListener("click", () => adjustTimer(15));
   document.getElementById("timer-fs-minus").addEventListener("click", () => adjustTimer(-15));
   document.getElementById("timer-fs-toggle").addEventListener("click", pauseToggle);
+  document.getElementById("timer-fs-next").addEventListener("click", () => {
+    closeFsTimer();
+    scheduleTimerChromeCleanup(300);
+  });
 }
 
 /* =============================================================================
@@ -7522,6 +7814,7 @@ async function boot() {
 
     bindAuthHandlers();
     bindTimerHandlers();
+    bindRestTimerLifecycle();
 
     if (!SUPABASE_URL || !SUPABASE_ANON) { doneBoot(); showCfg(); return; }
     if (!window.supabase) { doneBoot(); showToast("Falha ao carregar SDK", "error"); showCfg(); return; }

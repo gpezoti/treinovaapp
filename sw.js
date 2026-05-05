@@ -4,9 +4,10 @@
    - Cache-first com revalidação para assets estáticos (CDN, imagens)
    - Push notifications nativos
 */
-const VERSION = "v6";
+const VERSION = "v7";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
+const REST_TIMER_HANDLES = new Map();
 
 self.addEventListener("install", (event) => {
   // Não pré-cacheia HTML — sempre buscar da network
@@ -94,7 +95,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/app/";
+  const url = (event.notification.data && event.notification.data.url) || "/";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
       for (const w of wins) {
@@ -107,4 +108,45 @@ self.addEventListener("notificationclick", (event) => {
 
 self.addEventListener("message", (e) => {
   if (e.data === "SKIP_WAITING") self.skipWaiting();
+  if (e.data && e.data.type === "SCHEDULE_REST_TIMER") {
+    const data = e.data.payload || {};
+    const id = data.id || "rest";
+    const delay = Math.max(0, Math.min(60 * 60 * 1000, Number(data.fireAt || 0) - Date.now()));
+    if (REST_TIMER_HANDLES.has(id)) clearTimeout(REST_TIMER_HANDLES.get(id));
+    const handle = setTimeout(() => {
+      REST_TIMER_HANDLES.delete(id);
+      self.registration.showNotification("Descanso finalizado", {
+        body: `Próximo exercício: ${data.exerciseName || "Próxima série"}`,
+        icon: "/assets/icon-192.png",
+        badge: "/assets/favicon-32x32.png",
+        tag: "treinova-rest-timer",
+        renotify: true,
+        vibrate: [160, 80, 160],
+        data: { url: "/" },
+      }).catch(()=>{});
+    }, delay);
+    REST_TIMER_HANDLES.set(id, handle);
+  }
+  if (e.data && e.data.type === "CANCEL_REST_TIMER") {
+    const id = e.data.payload && e.data.payload.id;
+    if (!id || id === "all") {
+      for (const handle of REST_TIMER_HANDLES.values()) clearTimeout(handle);
+      REST_TIMER_HANDLES.clear();
+    } else if (REST_TIMER_HANDLES.has(id)) {
+      clearTimeout(REST_TIMER_HANDLES.get(id));
+      REST_TIMER_HANDLES.delete(id);
+    }
+  }
+  if (e.data && e.data.type === "SHOW_NOTIFICATION") {
+    const data = e.data.payload || {};
+    e.waitUntil(self.registration.showNotification(data.title || "Treinova", {
+      body: data.body || "",
+      icon: data.icon || "/assets/icon-192.png",
+      badge: data.badge || "/assets/favicon-32x32.png",
+      tag: data.tag || "treinova-local",
+      renotify: data.renotify !== false,
+      vibrate: data.vibrate || [80, 40, 80],
+      data: data.url ? { url: data.url } : {},
+    }));
+  }
 });
