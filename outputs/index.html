@@ -13,9 +13,11 @@
 <meta name="description" content="Treinova — seu app, seu treino, sua marca." />
 <title>Treinova</title>
 <link rel="manifest" href="manifest.webmanifest" />
-<link rel="icon" id="favicon" href="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" />
-<link rel="apple-touch-icon" href="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" />
-<link rel="apple-touch-icon" sizes="180x180" href="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" />
+<link rel="icon" id="favicon" href="/assets/favicon.ico?v=20260505" />
+<link rel="shortcut icon" href="/assets/favicon.ico?v=20260505" />
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png?v=20260505" />
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png?v=20260505" />
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=20260505" />
 <style>
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 /* ---------- DARK THEME (default) ---------- */
@@ -366,6 +368,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @keyframes slideup { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
 .timer-label { font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; opacity: 0.85; font-weight: 800; }
 .timer-time { font-size: 26px; font-weight: 900; letter-spacing: -1px; line-height: 1; font-variant-numeric: tabular-nums; }
+.timer-sub { margin-top: 3px; font-size: 11px; opacity: .82; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; }
 .timer-info { flex: 1; min-width: 0; }
 .timer-actions { display: flex; gap: 6px; }
 .timer-btn { width: 36px; height: 36px; border-radius: 9px; background: rgba(255,255,255,0.18);
@@ -396,6 +399,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .timer-controls .icon-btn { width: 48px; height: 48px; background: var(--bg-2); }
 .timer-fs-skip { background: transparent; border: 1px solid var(--line); color: var(--text);
   border-radius: 12px; padding: 12px 22px; font-weight: 700; font-size: 13px; }
+.timer-fs-next { display: none; margin-top: 10px; background: var(--green); color: #03140a;
+  border: 0; padding: 13px 18px; border-radius: 12px; font-weight: 900; font-size: 13px; }
+.timer-fs.done .timer-fs-next { display: inline-flex; align-items: center; justify-content: center; }
 
 /* Bottom nav */
 .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex;
@@ -544,6 +550,57 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .spinner { width: 30px; height: 30px; border: 3px solid var(--line); border-top-color: var(--brand);
   border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Beta UX polish: mobile touch comfort + clearer hierarchy */
+button, .btn-primary, .btn-ghost, .mini-btn, .icon-btn, .action-card, .insight-card, .list-row, .day-pill, .set-check {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.btn-primary, .btn-ghost { min-height: 46px; }
+.mini-btn { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.icon-btn, .shortcut-back { min-width: 44px; min-height: 44px; }
+button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-allowed !important; transform: none !important; }
+.input, select.input, textarea.input { min-height: 46px; font-size: 16px; }
+.view-subtitle { line-height: 1.42; max-width: 44ch; }
+.list-row { min-height: 68px; }
+.list-row .lr-name { line-height: 1.25; }
+.list-row .lr-sub { line-height: 1.35; }
+.list-row .lr-actions { align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.action-card, .insight-card { transition: transform .12s ease, border-color .12s ease, background .12s ease; }
+.action-card:hover, .insight-card:hover { border-color: var(--line-2); }
+.action-card:active, .insight-card:active { transform: scale(.985); }
+.teacher-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin: 8px 0 12px; }
+.teacher-toolbar .mini-btn { min-height: 38px; padding-inline: 12px; }
+.ux-helper { margin: -2px 0 12px; color: var(--text-3); font-size: 12px; line-height: 1.4; }
+.beta-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.mobile-action-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.student-card-actions, .payment-actions-stack { display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
+.period-toolbar { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0 12px; }
+.period-toolbar .mini-btn { min-height:40px; }
+.period-week-card { padding:12px; }
+.period-day-editor-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; position:sticky; top:-20px; z-index:2; background:var(--bg-2); padding:10px 0; }
+.preset-chip-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+.exercise-card { scroll-margin-top: 92px; }
+.exercise-card.expanded { border-color: color-mix(in srgb, var(--brand) 52%, var(--line)); box-shadow: 0 10px 28px rgba(0,0,0,.18); }
+.ex-head { min-height: 84px; }
+.set-row { min-height: 54px; }
+.set-check { width: 42px; height: 42px; border-radius: 12px; }
+.toast { min-height: 36px; display:flex; align-items:center; justify-content:center; line-height:1.25; }
+@media (max-width: 430px) {
+  .view { padding-inline: 14px; }
+  .view-title { font-size: 21px; }
+  .today-title, .wh-title { font-size: 24px; }
+  .list-row { align-items: flex-start; padding: 13px; }
+  .list-row .lr-actions { width: 100%; margin-top: 8px; justify-content: flex-start; }
+  .list-row .lr-info { min-width: calc(100% - 58px); }
+  .student-card-actions, .payment-actions-stack { width:100%; justify-content:flex-start; }
+  .beta-grid-2 { grid-template-columns:1fr; }
+  .period-toolbar { grid-template-columns:1fr; }
+  .preset-chip-grid { grid-template-columns:1fr 1fr; }
+  .ex-head { gap: 10px; padding: 12px; }
+  .ex-thumb { width: 58px; height: 58px; flex-basis: 58px; }
+  .set-row { grid-template-columns: 30px 1fr 88px 42px; gap: 7px; padding: 8px; }
+}
 
 /* History */
 .hist-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px;
@@ -725,6 +782,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       <div class="timer-info">
         <div class="timer-label">Descanso</div>
         <div class="timer-time" id="timer-bar-time">01:00</div>
+        <div class="timer-sub" id="timer-bar-sub">Próxima série</div>
       </div>
       <div class="timer-actions">
         <button class="timer-btn" id="timer-bar-add">+15</button>
@@ -758,6 +816,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       <button class="icon-btn" id="timer-fs-plus"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="6" x2="12" y2="18"/><line x1="6" y1="12" x2="18" y2="12"/></svg></button>
     </div>
     <button class="timer-fs-skip" id="timer-fs-skip">Pular descanso</button>
+    <button class="timer-fs-next" id="timer-fs-next">Iniciar próximo exercício</button>
   </div>
 
   <nav class="bottom-nav">
@@ -1088,11 +1147,16 @@ function getExerciseSpecificPrompt(ex = {}) {
   const name = ex && ex.name ? ex.name : "exercício personalizado";
   return `Ultra realistic fitness image of a person performing ${name}, correct form, equipment and variation exactly matching the exercise name, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo.`;
 }
+function getCategoryExerciseAssetUrl(ex) {
+  const kind = inferExerciseImageKind(ex || {});
+  return (STANDARD_EXERCISE_IMAGES[kind] || STANDARD_EXERCISE_IMAGES.generic).assetPath || null;
+}
 function getStandardExerciseAssetUrl(ex) {
   const exact = getExactExerciseAssetUrl(ex || {});
   if (exact) return exact;
-  // Não usar foto genérica de outro movimento: exercícios sem asset específico ficam neutros.
-  return getMissingExerciseImageUrl(ex || {});
+  // Sem asset exato, usa foto realista por categoria/movimento inferido.
+  // Último fallback continua neutro se o asset local não carregar.
+  return getCategoryExerciseAssetUrl(ex || {}) || getMissingExerciseImageUrl(ex || {});
 }
 function isGenericExerciseImage(url) {
   const value = String(url || "");
@@ -1174,8 +1238,9 @@ const STATE = {
   authRole: "student",
   branding: { ...DEFAULT_BRANDING },
   theme: "dark",         // dark | light
-  timer: { running:false, paused:false, secondsLeft:0, secondsTotal:0,
-           startedAt:null, pausedAt:null, raf:null, onDone:null, label:"Próxima série" }
+  timer: { id:null, running:false, paused:false, status:"idle", secondsLeft:0, secondsTotal:0,
+           startedAt:null, startTimestamp:null, pausedAt:null, pausedRemaining:null,
+           raf:null, onDone:null, label:"Próxima série", exerciseName:"Próxima série" }
 };
 
 let _PULL_TO_REFRESH_BOUND = false;
@@ -1247,6 +1312,16 @@ function withTimeout(promise, ms, label = "timeout") {
   });
   return Promise.race([Promise.resolve(promise), timeout])
     .finally(() => clearTimeout(timeoutId));
+}
+
+async function safeLoad(label, task, ms = 10000) {
+  try {
+    const promise = typeof task === "function" ? task() : task;
+    return await withTimeout(promise, ms, `${label} timeout`);
+  } catch (e) {
+    console.warn(`[safeLoad] ${label}:`, e);
+    return null;
+  }
 }
 
 // ============================================================
@@ -1325,7 +1400,7 @@ function applyBranding(b) {
   if (STATE.branding.primary_color) {
     root.style.setProperty('--brand-on', luminance(STATE.branding.primary_color) > 0.55 ? '#001a2a' : '#ffffff');
   }
-  // Title + favicon (usa o branding atual — app ou coach)
+  // Title + favicon. O nome acompanha o branding; o ícone instalado fica estável.
   document.title = STATE.branding.app_name;
   updateFavicon();
   // Header do app (pós-login): sempre usa o branding corrente do usuário
@@ -1347,19 +1422,10 @@ function brandLogoHTML() {
 function updateFavicon() {
   const fav = document.getElementById('favicon');
   if (!fav) return;
-  const b = STATE.branding;
-  // Usa logo_url se disponível (mesmo logo da tela de login)
-  if (b.logo_url) {
-    fav.href = b.logo_url;
-    // Atualiza também apple-touch-icon
-    document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(el => { el.href = b.logo_url; });
-    return;
-  }
-  // Fallback: SVG com iniciais e cor da marca
-  const bg = STATE.theme === 'light' ? '%23f5f7fb' : '%230a0e1a';
-  const fg = (b.primary_color || '#00b4ff').replace('#','%23');
-  const txt = (b.logo_text || b.app_name.slice(0,2)).toUpperCase();
-  fav.href = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='${bg}'/%3E%3Ctext x='50%25' y='58%25' text-anchor='middle' font-family='Arial Black' font-size='28' fill='${fg}'%3E${encodeURIComponent(txt)}%3C/text%3E%3C/svg%3E`;
+  fav.href = "/assets/favicon.ico?v=20260505";
+  document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(el => {
+    el.href = "/assets/apple-touch-icon.png?v=20260505";
+  });
 }
 
 function luminance(hex) {
@@ -1538,6 +1604,34 @@ function pickImageFile(onPicked) {
   };
   document.body.appendChild(input);
   input.click();
+}
+
+function validateImageFile(file) {
+  if (!file) throw new Error("Nenhuma imagem selecionada.");
+  if (!/^image\//i.test(file.type || "")) throw new Error("Selecione um arquivo de imagem.");
+  if (file.size > 12 * 1024 * 1024) throw new Error("Imagem muito grande. Use até 12 MB.");
+}
+
+async function uploadAvatarImage(file) {
+  validateImageFile(file);
+  const blob = await compressImage(file, 512, 0.85);
+  const path = `${STATE.profile.id}/avatar.jpg`;
+  const { error } = await sb.storage.from("avatars").upload(path, blob, {
+    upsert: true,
+    contentType: "image/jpeg",
+    cacheControl: "3600"
+  });
+  if (error) {
+    if (/bucket|not found|404/i.test(error.message || "")) {
+      throw new Error("Bucket de avatares não configurado. Rode a migration de Storage.");
+    }
+    if (/permission|policy|row-level|rls|unauthorized/i.test(error.message || "")) {
+      throw new Error("Permissão de upload de avatar bloqueada. Verifique as policies do bucket avatars.");
+    }
+    throw error;
+  }
+  const { data } = sb.storage.from("avatars").getPublicUrl(path);
+  return `${data.publicUrl}?t=${Date.now()}`;
 }
 
 function pickVideoFile(onPicked) {
@@ -1762,10 +1856,14 @@ window.submitPasswordRecovery = async function() {
 };
 
 async function loadProfile() {
-  const { data: { user } } = await sb.auth.getUser();
+  const { data: { user } } = await withTimeout(sb.auth.getUser(), 8000, "profile user timeout");
   if (!user) return null;
   STATE.user = user;
-  const { data, error } = await sb.from("profiles").select("*").eq("id", user.id).single();
+  const { data, error } = await withTimeout(
+    sb.from("profiles").select("*").eq("id", user.id).single(),
+    9000,
+    "profile data timeout"
+  );
   if (error) {
     console.error(error);
     return null;
@@ -1778,7 +1876,13 @@ async function signOut() {
   if (!await showConfirm({ title: "Sair da conta?", confirm: "Sair", cancel: "Cancelar" })) return;
   cleanupRealtime();
   // M-01 FIX: limpar dados do timer para não vazar entre usuários do mesmo dispositivo
-  try { localStorage.removeItem("timer_start"); localStorage.removeItem("timer_duration"); localStorage.removeItem("timer_total"); localStorage.removeItem("timer_label"); } catch(e) {}
+  try {
+    localStorage.removeItem("treinova_rest_timer_v2");
+    localStorage.removeItem("timer_start");
+    localStorage.removeItem("timer_duration");
+    localStorage.removeItem("timer_total");
+    localStorage.removeItem("timer_label");
+  } catch(e) {}
   await sb.auth.signOut();
   location.reload();
 }
@@ -1791,7 +1895,10 @@ async function loadWorkouts() {
   const role = STATE.profile && STATE.profile.role;
   const myId = STATE.profile && STATE.profile.id;
   if (role === "student") {
-    q = q.or(`is_global.eq.true,student_id.eq.${myId}`);
+    const coachId = STATE.profile && STATE.profile.coach_id;
+    q = coachId
+      ? q.or(`is_global.eq.true,student_id.eq.${myId},coach_id.eq.${coachId}`)
+      : q.or(`is_global.eq.true,student_id.eq.${myId}`);
   } else if (role === "coach") {
     q = q.or(`is_global.eq.true,coach_id.eq.${myId}`);
   }
@@ -2225,8 +2332,14 @@ window.confirmSerieDone = async function(skipTimer) {
     }
   }
 
+  const WForTimer = STATE.workouts[STATE.selectedWorkout];
+  const timerExercises = (WForTimer && WForTimer.exercises) || [];
+  const timerCurIdx = timerExercises.findIndex(e => e.position === exPos);
+  const timerNextEx = timerExercises[timerCurIdx + 1];
+  const timerLabel = timerNextEx && isLastEx ? timerNextEx.name : nextLabel;
+
   if (!skipTimer) {
-    startTimer(pauseSec, nextLabel, () => {
+    startTimer(pauseSec, timerLabel, () => {
       if (navigator.vibrate) navigator.vibrate([200,100,200]);
       if (isLastEx) setTimeout(autoAdvanceExercise, 600);
     });
@@ -2315,13 +2428,24 @@ async function completeSession() {
 }
 
 async function approveStudent(id, status) {
+  if (STATE.profile?.role !== "coach") {
+    showToast("Apenas professores podem aprovar, recusar ou reativar alunos.", "error");
+    return false;
+  }
   const patch = { status };
-  // Coach aprova → vincula a si mesmo. Admin aprova → mantém coach_id existente (ou null)
-  if (status === "approved" && STATE.profile.role === "coach") patch.coach_id = STATE.profile.id;
+  if (status === "approved") patch.coach_id = STATE.profile.id;
   const { error } = await sb.from("profiles").update(patch).eq("id", id);
-  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  if (error) { showToast("Erro: " + error.message, "error"); return false; }
   showToast(status === "approved" ? "Aluno aprovado" : status === "blocked" ? "Aluno bloqueado" : "Atualizado", "success");
   await loadStudents(); renderStudents();
+  return true;
+}
+
+function removeUsersFromLocalLists(ids) {
+  const set = new Set(Array.isArray(ids) ? ids : [ids]);
+  STATE.students = (STATE.students || []).filter(s => !set.has(s.student_id || s.id));
+  STATE.trainers = (STATE.trainers || []).filter(t => !set.has(t.id));
+  set.forEach(id => { _studentSelected.delete(id); _trainerSelected.delete(id); });
 }
 
 async function setStudentCoach(studentId, coachId) {
@@ -2405,7 +2529,7 @@ function setupPullToRefresh() {
   _PULL_TO_REFRESH_BOUND = true;
 
   const THRESHOLD = 72;
-  let startY = 0, pulling = false, indicator = null;
+  let startY = 0, pulling = false, indicator = null, refreshing = false;
 
   function getIndicator() {
     if (!indicator) {
@@ -2426,6 +2550,8 @@ function setupPullToRefresh() {
   }
 
   async function doRefresh() {
+    if (refreshing) return;
+    refreshing = true;
     const sp = document.getElementById("ptr-spinner");
     if (sp) sp.style.animation = "spin 0.7s linear infinite";
     try {
@@ -2443,18 +2569,24 @@ function setupPullToRefresh() {
       }
       else if (STATE.view === "chat")     { await renderChat(); }
       else renderCurrentView();
+      showToast("Atualizado", "success");
+    } catch(e) {
+      console.warn("[pull refresh]", e);
+      showToast("Não foi possível atualizar", "error");
     } finally {
       if (sp) sp.style.animation = "";
       const ind = getIndicator();
       ind.style.transform = "translateX(-50%) translateY(-60px)";
       pulling = false;
+      refreshing = false;
     }
   }
 
   document.addEventListener("touchstart", e => {
-    const main = document.querySelector(".view.active") || document.getElementById("app");
-    const scrollEl = (main && main.scrollTop !== undefined) ? main : window;
-    const scrollY  = (scrollEl === window) ? window.scrollY : scrollEl.scrollTop;
+    if (refreshing || document.getElementById("sheet") || document.getElementById("chat-thread-overlay") || document.getElementById("asaas-overlay")) return;
+    const tag = (e.target && e.target.tagName || "").toLowerCase();
+    if (["input","textarea","select","button"].includes(tag)) return;
+    const scrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
     if (scrollY <= 0 && e.touches.length === 1) {
       startY  = e.touches[0].clientY;
       pulling = true;
@@ -2465,6 +2597,7 @@ function setupPullToRefresh() {
     if (!pulling) return;
     const dy = e.touches[0].clientY - startY;
     if (dy <= 0) { pulling = false; return; }
+    if ((window.scrollY || document.documentElement.scrollTop || 0) > 0) { pulling = false; return; }
     const progress = Math.min(dy / THRESHOLD, 1);
     const translateY = -60 + progress * 80;
     getIndicator().style.transform = `translateX(-50%) translateY(${translateY}px)`;
@@ -2707,6 +2840,11 @@ async function handleAppResume(reason = "resume") {
   _APP_RESUME_RUNNING = true;
   _APP_RESUME_LAST_AT = now;
   const awayMs = _APP_HIDDEN_AT ? now - _APP_HIDDEN_AT : 0;
+  const resumeWatchdog = setTimeout(() => {
+    console.warn("[resume] watchdog released interaction layer:", reason);
+    _APP_RESUME_RUNNING = false;
+    repairInteractionLayer(reason + ":watchdog");
+  }, 18000);
 
   try {
     restoreTimerIfActive();
@@ -2714,6 +2852,11 @@ async function handleAppResume(reason = "resume") {
     repairInteractionLayer(reason);
 
     if (!sb || !STATE.profile) return;
+
+    if (navigator.onLine === false) {
+      showToast("Sem conexão. O app continua aberto e tenta novamente ao voltar a internet.", "error");
+      return;
+    }
 
     let authSess = null;
     try {
@@ -2731,7 +2874,7 @@ async function handleAppResume(reason = "resume") {
         console.warn("[resume] refresh de sessão falhou:", e);
       }
       if (!authSess) {
-        showToast("Reconectando sessão...", "error");
+        showToast("Sessão não respondeu. Tente novamente em instantes.", "error");
         return;
       }
     }
@@ -2771,6 +2914,7 @@ async function handleAppResume(reason = "resume") {
       }
     }
   } finally {
+    clearTimeout(resumeWatchdog);
     _APP_RESUME_RUNNING = false;
     setTimeout(() => repairInteractionLayer(reason + ":final"), 50);
   }
@@ -2819,8 +2963,10 @@ function bindAppResumeHandlers() {
    TIMER
    ============================================================================= */
 const RING_CIRC = 2 * Math.PI * 45;
+const REST_TIMER_KEY = "treinova_rest_timer_v2";
 let _wakeLock = null;
 let _TIMER_CLEANUP_HANDLE = null;
+let _REST_TIMER_FINISHING = false;
 async function _acquireWakeLock() {
   try {
     if ('wakeLock' in navigator) {
@@ -2832,12 +2978,229 @@ async function _acquireWakeLock() {
 function _releaseWakeLock() {
   try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
 }
+function resetTimerState() {
+  if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
+  STATE.timer = {
+    id: null,
+    running: false,
+    paused: false,
+    status: "idle",
+    secondsLeft: 0,
+    secondsTotal: 0,
+    startedAt: null,
+    startTimestamp: null,
+    pausedAt: null,
+    pausedRemaining: null,
+    raf: null,
+    onDone: null,
+    label: "Próxima série",
+    exerciseName: "Próxima série"
+  };
+}
 function clearPersistedTimer() {
   try {
+    localStorage.removeItem(REST_TIMER_KEY);
     localStorage.removeItem("timer_start");
     localStorage.removeItem("timer_duration");
     localStorage.removeItem("timer_label");
   } catch(e) {}
+}
+function readPersistedTimer() {
+  try {
+    const raw = localStorage.getItem(REST_TIMER_KEY);
+    if (raw) {
+      const state = JSON.parse(raw);
+      if (!state || typeof state !== "object") throw new Error("invalid timer");
+      const duration = Number(state.duration);
+      const startTimestamp = Number(state.startTimestamp);
+      if (!duration || duration < 1 || duration > 60 * 60 || !startTimestamp) throw new Error("invalid timer values");
+      return {
+        id: String(state.id || `rest-${startTimestamp}`),
+        startTimestamp,
+        duration,
+        exerciseName: String(state.exerciseName || state.label || "Próxima série"),
+        label: String(state.label || state.exerciseName || "Próxima série"),
+        status: state.status === "paused" ? "paused" : "running",
+        pausedAt: state.pausedAt ? Number(state.pausedAt) : null,
+        pausedRemaining: Number.isFinite(Number(state.pausedRemaining)) ? Number(state.pausedRemaining) : null,
+        notified: state.notified === true
+      };
+    }
+    const start = parseInt(localStorage.getItem("timer_start") || "0", 10);
+    const duration = parseInt(localStorage.getItem("timer_duration") || "0", 10);
+    const label = localStorage.getItem("timer_label") || "Próxima série";
+    if (start && duration) return {
+      id: `legacy-${start}`,
+      startTimestamp: start,
+      duration,
+      exerciseName: label,
+      label,
+      status: "running",
+      pausedAt: null,
+      pausedRemaining: null,
+      notified: false
+    };
+  } catch(e) {
+    console.warn("[rest timer read]", e);
+    clearPersistedTimer();
+  }
+  return null;
+}
+function persistTimerState(extra = {}) {
+  try {
+    if (!STATE.timer || (!STATE.timer.running && !STATE.timer.paused)) return;
+    const state = {
+      id: STATE.timer.id || `rest-${STATE.timer.startTimestamp || Date.now()}`,
+      startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+      duration: STATE.timer.secondsTotal,
+      exerciseName: STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
+      label: STATE.timer.label || "Próxima série",
+      status: STATE.timer.paused ? "paused" : "running",
+      pausedAt: STATE.timer.pausedAt || null,
+      pausedRemaining: STATE.timer.paused ? STATE.timer.secondsLeft : null,
+      selectedDate: STATE.selectedDate || todayISO(),
+      selectedWorkout: STATE.selectedWorkout || null,
+      selectedIntensity: STATE.selectedIntensity || null,
+      notified: false,
+      ...extra
+    };
+    localStorage.setItem(REST_TIMER_KEY, JSON.stringify(state));
+    localStorage.setItem("timer_start", String(state.startTimestamp));
+    localStorage.setItem("timer_duration", String(state.duration));
+    localStorage.setItem("timer_label", state.label);
+  } catch(e) {
+    console.warn("[rest timer persist]", e);
+  }
+}
+function getTimerRemainingSeconds(state, now = Date.now()) {
+  if (!state) return 0;
+  if (state.status === "paused") {
+    return Math.max(0, Math.ceil(Number(state.pausedRemaining ?? 0)));
+  }
+  return Math.max(0, Math.ceil(Number(state.duration || 0) - ((now - Number(state.startTimestamp || 0)) / 1000)));
+}
+function hydrateTimerFromPersisted(state, onDone) {
+  if (!state) return false;
+  if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
+  const remaining = getTimerRemainingSeconds(state);
+  STATE.timer.id = state.id;
+  STATE.timer.secondsTotal = state.duration;
+  STATE.timer.secondsLeft = remaining;
+  STATE.timer.startedAt = state.startTimestamp;
+  STATE.timer.startTimestamp = state.startTimestamp;
+  STATE.timer.running = state.status !== "paused";
+  STATE.timer.paused = state.status === "paused";
+  STATE.timer.status = state.status;
+  STATE.timer.pausedAt = state.pausedAt || null;
+  STATE.timer.pausedRemaining = state.pausedRemaining || null;
+  STATE.timer.label = state.label || "Próxima série";
+  STATE.timer.exerciseName = state.exerciseName || STATE.timer.label;
+  STATE.timer.onDone = onDone || STATE.timer.onDone || null;
+  if (state.selectedDate) STATE.selectedDate = state.selectedDate;
+  if (state.selectedWorkout) STATE.selectedWorkout = state.selectedWorkout;
+  if (state.selectedIntensity) STATE.selectedIntensity = state.selectedIntensity;
+  return true;
+}
+function markPersistedTimerNotified(state) {
+  try {
+    const next = { ...(state || readPersistedTimer() || {}), notified: true };
+    localStorage.setItem(REST_TIMER_KEY, JSON.stringify(next));
+  } catch(e) {}
+}
+async function ensureRestNotificationPermission() {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      subscribePushNotifications().catch(()=>{});
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+async function notifyRestFinished(exerciseName) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return false;
+  const title = "Descanso finalizado";
+  const body = `Próximo exercício: ${exerciseName || "Próxima série"}`;
+  const opts = {
+    body,
+    tag: "treinova-rest-timer",
+    renotify: true,
+    vibrate: [160, 80, 160],
+    icon: "/assets/icon-192.png",
+    badge: "/assets/favicon-32x32.png",
+    data: { url: `${location.pathname || "/"}?view=workout&restTimer=1` }
+  };
+  try {
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg && reg.showNotification) {
+        await reg.showNotification(title, opts);
+        return true;
+      }
+    }
+  } catch(e) {
+    console.warn("[rest notification sw]", e);
+  }
+  try {
+    new Notification(title, opts);
+    return true;
+  } catch(e) {
+    console.warn("[rest notification api]", e);
+  }
+  return false;
+}
+function postRestTimerToServiceWorker(type, payload = {}) {
+  try {
+    if (!("serviceWorker" in navigator)) return;
+    const send = (sw) => sw && sw.postMessage({ type, payload });
+    if (navigator.serviceWorker.controller) send(navigator.serviceWorker.controller);
+    navigator.serviceWorker.ready.then((reg) => send(reg.active || reg.waiting || reg.installing)).catch(()=>{});
+  } catch(e) {}
+}
+function scheduleBackgroundRestNotification() {
+  const saved = readPersistedTimer();
+  if (!saved || saved.status !== "running" || !("Notification" in window) || Notification.permission !== "granted") return;
+  const remaining = getTimerRemainingSeconds(saved);
+  if (remaining <= 0) return;
+  postRestTimerToServiceWorker("SCHEDULE_REST_TIMER", {
+    id: saved.id,
+    fireAt: Date.now() + remaining * 1000,
+    exerciseName: saved.exerciseName || saved.label || "Próxima série",
+    url: `${location.pathname || "/"}?view=workout&restTimer=1`
+  });
+}
+function cancelBackgroundRestNotification() {
+  postRestTimerToServiceWorker("CANCEL_REST_TIMER", { id: STATE.timer?.id || readPersistedTimer()?.id || "all" });
+}
+async function scheduleServerRestPush(seconds, exerciseName) {
+  try {
+    if (!sb || !STATE.user || !STATE.timer?.id) return;
+    await sb.functions.invoke("rest-timer-push", {
+      body: {
+        action: "schedule",
+        timer_id: STATE.timer.id,
+        fire_at: new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString(),
+        exercise_name: exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
+        url: `${location.pathname || "/"}?view=workout&restTimer=1`
+      }
+    });
+  } catch(e) {
+    console.warn("[rest timer server schedule]", e);
+  }
+}
+async function cancelServerRestPush(timerId) {
+  try {
+    const id = timerId || STATE.timer?.id || readPersistedTimer()?.id;
+    if (!sb || !STATE.user || !id) return;
+    await sb.functions.invoke("rest-timer-push", {
+      body: { action: "cancel", timer_id: id }
+    });
+  } catch(e) {
+    console.warn("[rest timer server cancel]", e);
+  }
 }
 function scheduleTimerChromeCleanup(delay = 800) {
   if (_TIMER_CLEANUP_HANDLE) clearTimeout(_TIMER_CLEANUP_HANDLE);
@@ -2850,47 +3213,53 @@ function scheduleTimerChromeCleanup(delay = 800) {
 }
 function reconcileTimerAfterLifecycle(reason = "resume") {
   try {
-    const start = parseInt(localStorage.getItem("timer_start") || "0", 10);
-    const duration = parseInt(localStorage.getItem("timer_duration") || "0", 10);
-    if (!start || !duration) {
-      if (!STATE.timer.running) closeFsTimer();
+    const saved = readPersistedTimer();
+    if (!saved) {
+      if (!STATE.timer.running && !STATE.timer.paused) closeFsTimer();
       return;
     }
-    const elapsed = Math.floor((Date.now() - start) / 1000);
-    const remaining = duration - elapsed;
+    const remaining = getTimerRemainingSeconds(saved);
     if (remaining <= 0) {
-      if (STATE.timer.raf) {
-        clearTimeout(STATE.timer.raf);
-        STATE.timer.raf = null;
-      }
+      if (_REST_TIMER_FINISHING) return;
+      _REST_TIMER_FINISHING = true;
       const doneCallback = STATE.timer.onDone;
-      STATE.timer.secondsTotal = duration;
+      hydrateTimerFromPersisted(saved, doneCallback);
       STATE.timer.secondsLeft = 0;
       STATE.timer.running = false;
       STATE.timer.paused = false;
+      STATE.timer.status = "finished";
       _releaseWakeLock();
+      cancelBackgroundRestNotification();
+      markPersistedTimerNotified(saved);
+      notifyRestFinished(saved.exerciseName || saved.label).catch(()=>{});
       clearPersistedTimer();
       document.getElementById("timer-bar")?.classList.add("active","done");
       document.getElementById("timer-ring")?.classList.add("done");
+      document.getElementById("timer-fs")?.classList.add("done");
       const barTime = document.getElementById("timer-bar-time");
       const fsTime = document.getElementById("timer-fs-time");
       const fsLabel = document.getElementById("timer-fs-label");
+      const barSub = document.getElementById("timer-bar-sub");
       if (barTime) barTime.textContent = "00:00";
       if (fsTime) fsTime.textContent = "00:00";
       if (fsLabel) fsLabel.textContent = "Vamos lá!";
+      if (barSub) barSub.textContent = saved.exerciseName || saved.label || "Próxima série";
       closeFsTimer();
       if (typeof doneCallback === "function") {
         try { doneCallback(); } catch(e) { console.warn("[timer resume callback]", e); }
       }
       showToast("Descanso concluído ✓", "success");
       scheduleTimerChromeCleanup(1400);
+      setTimeout(() => { _REST_TIMER_FINISHING = false; }, 500);
       return;
     }
+    hydrateTimerFromPersisted(saved);
+    STATE.timer.secondsLeft = remaining;
+    document.getElementById("timer-bar")?.classList.add("active");
+    updateTimerLabels();
+    setTimerIcon(STATE.timer.paused);
+    updateTimerUI();
     if (STATE.timer.running) {
-      STATE.timer.secondsTotal = duration;
-      STATE.timer.secondsLeft = remaining;
-      STATE.timer.startedAt = start;
-      STATE.timer.paused = false;
       tickTimer();
     }
     // Ao voltar do bloqueio, deixa só a barra compacta para não bloquear a tela.
@@ -2912,54 +3281,46 @@ document.addEventListener('visibilitychange', () => {
 function startTimer(sec, label, onDone) {
   cancelTimer();
   _acquireWakeLock();
+  ensureRestNotificationPermission().catch(()=>{});
+  const exerciseName = label || "Próxima série";
+  const startTimestamp = Date.now();
+  STATE.timer.id = `rest-${startTimestamp}`;
   STATE.timer.secondsTotal = sec;
   STATE.timer.secondsLeft = sec;
-  STATE.timer.startedAt = Date.now();
+  STATE.timer.startedAt = startTimestamp;
+  STATE.timer.startTimestamp = startTimestamp;
   STATE.timer.running = true;
   STATE.timer.paused = false;
+  STATE.timer.status = "running";
+  STATE.timer.pausedAt = null;
+  STATE.timer.pausedRemaining = null;
   STATE.timer.label = label || "Próxima série";
+  STATE.timer.exerciseName = exerciseName;
   STATE.timer.onDone = onDone || null;
-  // [M-04] Fix: persistir timer no localStorage para sobreviver a ligações/saída do app
-  try {
-    localStorage.setItem("timer_start", String(STATE.timer.startedAt));
-    localStorage.setItem("timer_duration", String(sec));
-    localStorage.setItem("timer_label", STATE.timer.label);
-  } catch(e) {}
+  persistTimerState();
+  scheduleServerRestPush(sec, exerciseName);
   document.getElementById("timer-bar").classList.add("active");
-  document.getElementById("timer-fs-label").textContent = STATE.timer.label;
-  document.getElementById("timer-fs-eyebrow").textContent = "Descanso";
+  document.getElementById("timer-fs")?.classList.remove("done");
+  updateTimerLabels();
   setTimerIcon(false);
   tickTimer();
   openFsTimer();
 }
 
 function restoreTimerIfActive() {
-  // [M-04] Fix: ao voltar ao app, restaurar timer se ainda estiver dentro do tempo
   try {
-    const start = parseInt(localStorage.getItem("timer_start") || "0");
-    const duration = parseInt(localStorage.getItem("timer_duration") || "0");
-    const label = localStorage.getItem("timer_label") || "Próxima série";
-    if (!start || !duration) return;
-    const elapsed = Math.floor((Date.now() - start) / 1000);
-    const remaining = duration - elapsed;
+    const saved = readPersistedTimer();
+    if (!saved) return;
+    const remaining = getTimerRemainingSeconds(saved);
     if (remaining > 1) {
-      // Reconstruir o timer com o tempo correto
-      if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
-      STATE.timer.secondsTotal = duration;
+      hydrateTimerFromPersisted(saved, null);
       STATE.timer.secondsLeft = remaining;
-      STATE.timer.startedAt = start;
-      STATE.timer.running = true;
-      STATE.timer.paused = false;
-      STATE.timer.label = label;
-      STATE.timer.onDone = null;
       document.getElementById("timer-bar").classList.add("active");
-      document.getElementById("timer-fs-label").textContent = label;
-      document.getElementById("timer-fs-eyebrow").textContent = "Descanso";
-      setTimerIcon(false);
-      tickTimer();
-      // Não abre o fullscreen automaticamente ao restaurar — apenas mantém a barra
+      document.getElementById("timer-fs")?.classList.remove("done");
+      updateTimerLabels();
+      setTimerIcon(STATE.timer.paused);
+      if (STATE.timer.running) tickTimer();
     } else {
-      // Timer expirou enquanto estava fora. Fecha qualquer camada cheia para não bloquear toques.
       reconcileTimerAfterLifecycle("restore-expired");
     }
   } catch(e) {}
@@ -2971,8 +3332,11 @@ function tickTimer() {
     STATE.timer.raf = null;
   }
   if (!STATE.timer.paused) {
-    const elapsed = Math.floor((Date.now() - STATE.timer.startedAt) / 1000);
-    STATE.timer.secondsLeft = Math.max(0, STATE.timer.secondsTotal - elapsed);
+    STATE.timer.secondsLeft = getTimerRemainingSeconds({
+      startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+      duration: STATE.timer.secondsTotal,
+      status: "running"
+    });
   }
   updateTimerUI();
   if (STATE.timer.secondsLeft <= 0) { finishTimer(); return; }
@@ -2982,36 +3346,65 @@ function updateTimerUI() {
   const s = STATE.timer.secondsLeft;
   const m = Math.floor(s / 60), r = s % 60;
   const txt = `${m.toString().padStart(2,"0")}:${r.toString().padStart(2,"0")}`;
-  document.getElementById("timer-bar-time").textContent = txt;
-  document.getElementById("timer-fs-time").textContent = txt;
+  const barTime = document.getElementById("timer-bar-time");
+  const fsTime = document.getElementById("timer-fs-time");
+  if (barTime) barTime.textContent = txt;
+  if (fsTime) fsTime.textContent = txt;
   const pct = STATE.timer.secondsTotal > 0 ? (s / STATE.timer.secondsTotal) : 0;
   const ringFill = document.getElementById("ring-fill");
-  ringFill.setAttribute("stroke-dasharray", RING_CIRC.toFixed(2));
-  ringFill.setAttribute("stroke-dashoffset", (RING_CIRC * (1 - pct)).toFixed(2));
+  if (ringFill) {
+    ringFill.setAttribute("stroke-dasharray", RING_CIRC.toFixed(2));
+    ringFill.setAttribute("stroke-dashoffset", (RING_CIRC * (1 - pct)).toFixed(2));
+  }
   const bar = document.getElementById("timer-bar");
   const ring = document.getElementById("timer-ring");
+  if (!bar || !ring) return;
   bar.classList.remove("warning","done"); ring.classList.remove("warning","done");
   if (s <= 0) { bar.classList.add("done"); ring.classList.add("done"); }
   else if (s <= 10) { bar.classList.add("warning"); ring.classList.add("warning"); }
 }
+function updateTimerLabels() {
+  const label = STATE.timer.label || "Próxima série";
+  const exerciseName = STATE.timer.exerciseName || label;
+  const fsLabel = document.getElementById("timer-fs-label");
+  const fsEyebrow = document.getElementById("timer-fs-eyebrow");
+  const barSub = document.getElementById("timer-bar-sub");
+  if (fsLabel) fsLabel.textContent = label;
+  if (fsEyebrow) fsEyebrow.textContent = "Descanso";
+  if (barSub) barSub.textContent = exerciseName;
+}
 function finishTimer() {
+  if (_REST_TIMER_FINISHING) return;
+  _REST_TIMER_FINISHING = true;
   if (STATE.timer.raf) {
     clearTimeout(STATE.timer.raf);
     STATE.timer.raf = null;
   }
   STATE.timer.running = false;
+  STATE.timer.paused = false;
+  STATE.timer.status = "finished";
   _releaseWakeLock();
+  cancelBackgroundRestNotification();
+  cancelServerRestPush(STATE.timer.id);
+  notifyRestFinished(STATE.timer.exerciseName || STATE.timer.label).catch(()=>{});
   clearPersistedTimer();
-  document.getElementById("timer-bar").classList.add("done");
-  document.getElementById("timer-ring").classList.add("done");
-  document.getElementById("timer-bar-time").textContent = "00:00";
-  document.getElementById("timer-fs-time").textContent = "00:00";
-  document.getElementById("timer-fs-label").textContent = "Vamos lá!";
+  document.getElementById("timer-bar")?.classList.add("done");
+  document.getElementById("timer-ring")?.classList.add("done");
+  document.getElementById("timer-fs")?.classList.add("done");
+  const barTime = document.getElementById("timer-bar-time");
+  const fsTime = document.getElementById("timer-fs-time");
+  const fsLabel = document.getElementById("timer-fs-label");
+  const barSub = document.getElementById("timer-bar-sub");
+  if (barTime) barTime.textContent = "00:00";
+  if (fsTime) fsTime.textContent = "00:00";
+  if (fsLabel) fsLabel.textContent = "Vamos lá!";
+  if (barSub) barSub.textContent = STATE.timer.exerciseName || STATE.timer.label || "Próxima série";
   if (STATE.timer.onDone) STATE.timer.onDone();
   // Auto-fechar fullscreen e barra após 2.5s
   setTimeout(() => {
     closeFsTimer();
     scheduleTimerChromeCleanup(800);
+    _REST_TIMER_FINISHING = false;
   }, 2500);
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -3029,32 +3422,66 @@ function finishTimer() {
   } catch(e) {}
 }
 function cancelTimer() {
+  const timerId = STATE.timer?.id;
   if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
-  STATE.timer.running = false; STATE.timer.paused = false;
+  resetTimerState();
   _releaseWakeLock();
-  // [M-04] Limpar persistência ao cancelar
+  cancelBackgroundRestNotification();
+  cancelServerRestPush(timerId);
   clearPersistedTimer();
 }
 function closeTimer() {
   cancelTimer();
   document.getElementById("timer-bar").classList.remove("active","warning","done");
   document.getElementById("timer-ring").classList.remove("warning","done");
+  document.getElementById("timer-fs")?.classList.remove("done");
   closeFsTimer();
 }
 function adjustTimer(delta) {
-  if (!STATE.timer.running) return;
+  if (!STATE.timer.running && !STATE.timer.paused) return;
   STATE.timer.secondsTotal = Math.max(5, STATE.timer.secondsTotal + delta);
-  const elapsed = Math.floor((Date.now() - STATE.timer.startedAt) / 1000);
-  STATE.timer.secondsLeft = Math.max(0, STATE.timer.secondsTotal - elapsed);
+  if (STATE.timer.paused) {
+    STATE.timer.secondsLeft = Math.max(5, STATE.timer.secondsLeft + delta);
+    STATE.timer.pausedRemaining = STATE.timer.secondsLeft;
+  } else {
+    STATE.timer.secondsLeft = getTimerRemainingSeconds({
+      startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+      duration: STATE.timer.secondsTotal,
+      status: "running"
+    });
+  }
+  persistTimerState();
   updateTimerUI();
 }
 function pauseToggle() {
-  if (!STATE.timer.running) return;
+  if (!STATE.timer.running && !STATE.timer.paused) return;
   if (!STATE.timer.paused) {
-    STATE.timer.paused = true; STATE.timer.pausedAt = Date.now(); setTimerIcon(true);
+    STATE.timer.secondsLeft = getTimerRemainingSeconds({
+      startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+      duration: STATE.timer.secondsTotal,
+      status: "running"
+    });
+    STATE.timer.paused = true;
+    STATE.timer.running = false;
+    STATE.timer.status = "paused";
+    STATE.timer.pausedAt = Date.now();
+    STATE.timer.pausedRemaining = STATE.timer.secondsLeft;
+    if (STATE.timer.raf) { clearTimeout(STATE.timer.raf); STATE.timer.raf = null; }
+    persistTimerState();
+    setTimerIcon(true);
   } else {
-    STATE.timer.startedAt += (Date.now() - STATE.timer.pausedAt);
-    STATE.timer.paused = false; setTimerIcon(false); tickTimer();
+    const elapsedBeforePause = STATE.timer.secondsTotal - (STATE.timer.pausedRemaining || STATE.timer.secondsLeft || 0);
+    const newStart = Date.now() - elapsedBeforePause * 1000;
+    STATE.timer.startedAt = newStart;
+    STATE.timer.startTimestamp = newStart;
+    STATE.timer.paused = false;
+    STATE.timer.running = true;
+    STATE.timer.status = "running";
+    STATE.timer.pausedAt = null;
+    STATE.timer.pausedRemaining = null;
+    persistTimerState();
+    setTimerIcon(false);
+    tickTimer();
   }
 }
 function setTimerIcon(paused) {
@@ -3062,8 +3489,32 @@ function setTimerIcon(paused) {
     ? `<polygon points="6 4 20 12 6 20" />`
     : `<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>`;
 }
-function openFsTimer() { document.getElementById("timer-fs").classList.add("active"); }
-function closeFsTimer() { document.getElementById("timer-fs").classList.remove("active"); }
+function openFsTimer() { document.getElementById("timer-fs")?.classList.add("active"); }
+function closeFsTimer() { document.getElementById("timer-fs")?.classList.remove("active"); }
+function bindRestTimerLifecycle() {
+  const persistBeforeBackground = () => {
+    if (STATE.timer && (STATE.timer.running || STATE.timer.paused)) {
+      if (STATE.timer.running) STATE.timer.secondsLeft = getTimerRemainingSeconds({
+        startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+        duration: STATE.timer.secondsTotal,
+        status: "running"
+      });
+      persistTimerState();
+      scheduleBackgroundRestNotification();
+    }
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") persistBeforeBackground();
+    if (document.visibilityState === "visible") {
+      cancelBackgroundRestNotification();
+      reconcileTimerAfterLifecycle("timer-visible");
+    }
+  });
+  window.addEventListener("pagehide", persistBeforeBackground);
+  window.addEventListener("blur", persistBeforeBackground);
+  window.addEventListener("pageshow", () => { cancelBackgroundRestNotification(); reconcileTimerAfterLifecycle("timer-pageshow"); });
+  window.addEventListener("focus", () => { cancelBackgroundRestNotification(); reconcileTimerAfterLifecycle("timer-focus"); });
+}
 
 /* =============================================================================
    SHEET (modal)
@@ -3481,6 +3932,28 @@ function navTo(view) {
   window.scrollTo({ top: 0, behavior: "instant" });
 }
 window.navTo = navTo;
+
+function prepareWorkoutDeepLinkFromRestTimer() {
+  try {
+    const saved = typeof readPersistedTimer === "function" ? readPersistedTimer() : null;
+    if (saved) {
+      hydrateTimerFromPersisted(saved);
+      if (saved.selectedDate) STATE.selectedDate = saved.selectedDate;
+      if (saved.selectedWorkout) STATE.selectedWorkout = saved.selectedWorkout;
+      if (saved.selectedIntensity) STATE.selectedIntensity = saved.selectedIntensity;
+      return true;
+    }
+    if (STATE.currentSession && STATE.currentSession.workout_code) {
+      STATE.selectedDate = STATE.currentSession.date || STATE.selectedDate || todayISO();
+      STATE.selectedWorkout = STATE.currentSession.workout_code;
+      STATE.selectedIntensity = STATE.currentSession.intensity || STATE.selectedIntensity || "yellow";
+      return true;
+    }
+  } catch(e) {
+    console.warn("[rest timer deeplink]", e);
+  }
+  return false;
+}
 
 function updateFeedBadge() {
   const badge = document.getElementById("feed-nav-badge");
@@ -3908,8 +4381,7 @@ function renderAdminHome(el) {
 
 function renderTrainers() {
   const el = document.getElementById("view-trainers");
-  const pending = STATE.trainers.filter(t => t.status === "pending");
-  const approved = STATE.trainers.filter(t => t.status === "approved");
+  const approved = STATE.trainers.filter(t => t.status !== "blocked");
   const blocked = STATE.trainers.filter(t => t.status === "blocked");
   const selMode = _trainerSelected.size > 0;
 
@@ -3924,14 +4396,13 @@ function renderTrainers() {
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Treinadores</h1>
-      <div style="display:flex;gap:6px">
+      <div class="mobile-action-row">
         <button class="mini-btn" onclick="toggleTrainerSelectAll()" title="Selecionar todos"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
-        <button class="mini-btn mini-btn-primary" onclick="openNewTrainerSheet()">+ Novo</button>
+        <button class="mini-btn mini-btn-primary" onclick="openNewTrainerSheet()">Novo treinador</button>
       </div>
     </div>
-    <p class="view-subtitle">${approved.length} ativos · ${pending.length} pendentes · ${blocked.length} bloqueados</p>
+    <p class="view-subtitle">${approved.length} ativos · ${blocked.length} bloqueados</p>
     ${bulkBar}
-    ${pending.length ? `<div class="section-title">Pendentes (${pending.length})</div>${pending.map(t => trainerRow(t, selMode)).join("")}` : ""}
     <div class="section-title">Ativos (${approved.length})</div>
     ${approved.length ? approved.map(t => trainerRow(t, selMode)).join("") : `<div class="empty"><p>Nenhum treinador ativo</p></div>`}
     ${blocked.length ? `<div class="section-title">Bloqueados (${blocked.length})</div>${blocked.map(t => trainerRow(t, selMode)).join("")}` : ""}
@@ -3957,8 +4428,8 @@ function trainerRow(t, selMode) {
       <div class="lr-name">${escape(t.full_name || t.email || "Treinador")}</div>
       <div class="lr-sub">${escape(t.email || "")} ${studs ? "· " + studs : ""} · <span style="color:var(--brand)">tocar para editar</span></div>
     </div>
-    <div class="lr-actions" onclick="event.stopPropagation()">
-      <span class="today-pill pill-${t.status === 'approved' ? 'approved' : t.status === 'pending' ? 'pending' : 'blocked'}">${t.status}</span>
+    <div class="lr-actions student-card-actions" onclick="event.stopPropagation()">
+      <span class="today-pill pill-${t.status === 'blocked' ? 'blocked' : 'approved'}">${t.status === 'blocked' ? 'Bloqueado' : 'Ativo'}</span>
     </div>
   </div>`;
 }
@@ -3991,7 +4462,8 @@ window.bulkDeleteTrainers = async function() {
   const { error } = await sb.from("profiles").delete().in("id", ids);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
   showToast(`${ids.length} treinador(es) excluído(s)`, "success");
-  _trainerSelected.clear();
+  removeUsersFromLocalLists(ids);
+  renderTrainers();
   await loadTrainers(); renderTrainers();
 };
 
@@ -4007,6 +4479,8 @@ window.removeTrainer = async function(id, email) {
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Treinador removido", "success");
   closeSheet();
+  removeUsersFromLocalLists(id);
+  if (STATE.view === "trainers") renderTrainers();
   await loadTrainers();
   if (STATE.view === "trainers") renderTrainers();
 };
@@ -4127,7 +4601,7 @@ async function renderPayments() {
               <div style="font-weight:700;font-size:13px">${nome}</div>
               <div style="font-size:11px;color:var(--text-3)">${fmtMoney(p.open_amount)} · ${p.overdue_count||0} cobrança(s)</div>
             </div>
-            <div style="display:flex;gap:6px">
+            <div class="mobile-action-row">
               <a href="${whatsUrl}" target="_blank" class="mini-btn mini-btn-success" style="text-decoration:none;font-size:11px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Cobrar</a>
               <button class="mini-btn mini-btn-primary" style="font-size:11px" onclick="openPaymentSheet('${pid}','${nome}')">Ver</button>
             </div>
@@ -4141,7 +4615,7 @@ async function renderPayments() {
     <p class="view-subtitle">${items.length} ${isAdmin ? 'professor(es)' : 'aluno(s)'} · ${overdueCount} em atraso</p>
 
     <!-- Dashboard 4 cards -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+    <div class="beta-grid-2" style="margin-bottom:16px">
       <div class="card card-lg" style="border-color:var(--green);background:linear-gradient(135deg,var(--green-soft,#e8f8f0),var(--bg-card))">
         <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--green);font-weight:700;margin-bottom:6px"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Este mês</div>
         <div style="font-size:22px;font-weight:900;color:var(--text)">${fmtMoney(totalReceita)}</div>
@@ -4380,7 +4854,7 @@ function paymentRow(p, idKey) {
       </div>
       ${p.open_amount > 0 ? `<div class="text-xs muted" style="margin-top:2px;">${fmtMoney(p.open_amount)} em aberto</div>` : ''}
     </div>
-    <div class="lr-actions" onclick="event.stopPropagation()">${overdueLabel}</div>
+    <div class="lr-actions payment-actions-stack" onclick="event.stopPropagation()">${overdueLabel}</div>
   </div>`;
 }
 
@@ -4426,7 +4900,7 @@ function renderPaymentSheetList(filter) {
         ? `<div class="empty"><p>Nenhum lançamento nessa categoria.</p></div>`
         : filtered.map(p => paymentItem(p, safeId, name)).join("")}
     </div>
-    <div style="margin-top:14px"><button class="btn-ghost" onclick="navTo('payments')">Voltar</button></div>
+    <div style="margin-top:14px"><button class="btn-ghost" onclick="closeSheet(); renderPayments();">Voltar</button></div>
   `;
   openSheet(html);
 }
@@ -4950,6 +5424,8 @@ async function renderWorkout() {
 
     ${completed ? `<div class="complete-banner show"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Treino concluído! Bom trabalho.</div>` : ""}
 
+    <div class="section-title">Exercícios do treino</div>
+    <div class="ux-helper">Toque em um exercício para abrir séries, carga, descanso e instruções.</div>
     <div id="exercise-list"></div>
 
     ${!completed ? `<div style="height:96px"></div>` : `
@@ -4980,7 +5456,9 @@ async function renderWorkout() {
         #workout-fixed-bar .wfb-track{height:6px;background:var(--bg-card);border-radius:3px;overflow:hidden;border:1px solid var(--line)}
         #workout-fixed-bar .wfb-fill{height:100%;border-radius:3px;transition:width .4s ease;
           background:${allDone ? 'var(--green)' : 'linear-gradient(90deg,var(--brand),var(--brand-2,#818cf8))'}}
-        #workout-fixed-bar .wfb-pct{font-size:10px;color:${allDone ? 'var(--green)' : 'var(--brand)'};font-weight:800;margin-top:3px}
+        #workout-fixed-bar .wfb-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px}
+        #workout-fixed-bar .wfb-pct{font-size:10px;color:${allDone ? 'var(--green)' : 'var(--brand)'};font-weight:800}
+        #workout-fixed-bar .wfb-hint{font-size:10px;color:var(--text-3);white-space:nowrap}
         #workout-fixed-bar #btn-complete-session{
           flex:0 0 auto;padding:13px 18px;border-radius:14px;font-size:14px;font-weight:800;
           border:0;cursor:pointer;white-space:nowrap;transition:all .2s;
@@ -4993,7 +5471,10 @@ async function renderWorkout() {
         <div class="wfb-stats">
           <div class="wfb-label">${doneCount} de ${totalTarget} séries</div>
           <div class="wfb-track"><div class="wfb-fill" style="width:${pct}%"></div></div>
-          <div class="wfb-pct">${pct}% concluído</div>
+          <div class="wfb-foot">
+            <div class="wfb-pct">${pct}% concluído</div>
+            <div class="wfb-hint">${doneCount === 0 ? "Marque a 1ª série" : allDone ? "Pronto para finalizar" : "Progresso salvo"}</div>
+          </div>
         </div>
         <button id="btn-complete-session" ${doneCount === 0 ? 'disabled' : ''}>
           ${allDone ? 'Concluir ✓' : 'Concluir'}
@@ -5759,9 +6240,22 @@ window.saveProfile = async function() {
 
 window.onAvatarUpload = function() {
   pickImageFile(async (file) => {
+    const btn = document.querySelector('button[onclick="onAvatarUpload()"]');
+    const avatarEl = document.getElementById("profile-avatar-big");
+    let previewUrl = "";
+    if (btn) { btn.disabled = true; btn.dataset.oldText = btn.textContent; btn.textContent = "Enviando..."; }
+    try {
+      validateImageFile(file);
+      previewUrl = URL.createObjectURL(file);
+      if (avatarEl) avatarEl.innerHTML = `<img src="${previewUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;opacity:.72" />`;
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = btn.dataset.oldText || "Subir da galeria"; }
+      showToast("Erro: " + e.message, "error");
+      return;
+    }
     showToast("Enviando foto...");
     try {
-      const url = await uploadImage("avatars", STATE.profile.id, file, 512);
+      const url = await uploadAvatarImage(file);
       const { error } = await sb.from("profiles").update({ avatar_url: url }).eq("id", STATE.profile.id);
       if (error) throw error;
       STATE.profile.avatar_url = url;
@@ -5770,12 +6264,27 @@ window.onAvatarUpload = function() {
     } catch (e) {
       console.error(e);
       showToast("Erro: " + (e.message || "upload falhou"), "error");
+      renderProfile();
+    } finally {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (btn) { btn.disabled = false; btn.textContent = btn.dataset.oldText || "Subir da galeria"; }
     }
   });
 };
 window.clearAvatar = async function() {
+  let oldPath = "";
+  try {
+    const raw = String(STATE.profile.avatar_url || "");
+    const parsed = new URL(raw, location.href);
+    const publicParts = parsed.pathname.split("/storage/v1/object/public/avatars/");
+    const signedParts = parsed.pathname.split("/storage/v1/object/sign/avatars/");
+    oldPath = decodeURIComponent((publicParts[1] || signedParts[1] || "").split("?")[0]);
+  } catch(e) {}
   const { error } = await sb.from("profiles").update({ avatar_url: null }).eq("id", STATE.profile.id);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
+  if (oldPath && oldPath.startsWith(STATE.profile.id + "/")) {
+    sb.storage.from("avatars").remove([oldPath]).catch(()=>null);
+  }
   STATE.profile.avatar_url = null;
   showToast("Foto removida", "success");
   renderProfile();
@@ -5832,12 +6341,13 @@ function renderStudents() {
   const approved = allStudents.filter(s => s.status === "approved");
   const blocked = allStudents.filter(s => s.status === "blocked");
   const selMode = _studentSelected.size > 0;
+  const canManageStudents = STATE.profile.role === "coach";
 
   const bulkBar = selMode ? `
     <div style="display:flex;align-items:center;gap:8px;padding:10px 0;flex-wrap:wrap">
       <span class="text-xs muted">${_studentSelected.size} selecionado(s)</span>
-      <button class="mini-btn" style="background:var(--brand-soft);color:var(--brand);border:1px solid var(--brand-soft)" onclick="bulkMessageStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Mensagem</button>
-      <button class="mini-btn mini-btn-danger" onclick="bulkBlockStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Bloquear</button>
+      ${canManageStudents ? `<button class="mini-btn" style="background:var(--brand-soft);color:var(--brand);border:1px solid var(--brand-soft)" onclick="bulkMessageStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Mensagem</button>
+      <button class="mini-btn mini-btn-danger" onclick="bulkBlockStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Bloquear</button>` : ""}
       <button class="mini-btn" style="background:var(--red-soft);color:var(--red);border:1px solid var(--red-soft)" onclick="bulkDeleteStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Excluir</button>
       <button class="mini-btn" onclick="clearStudentSelection()">Cancelar</button>
     </div>` : "";
@@ -5873,11 +6383,17 @@ function renderStudents() {
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Alunos</h1>
-      <div style="display:flex;gap:6px">
+      <div class="mobile-action-row">
         <button class="mini-btn" onclick="toggleStudentSelectAll()" title="Selecionar todos"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
-        <button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">+ Novo</button>
+        ${canManageStudents ? `<button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">Novo aluno</button>` : ""}
       </div>
     </div>
+    <p class="view-subtitle" style="margin-bottom:10px">${canManageStudents ? "Gerencie alunos, treinos, pagamentos e acompanhamento em um só lugar." : "Visão geral dos alunos cadastrados na plataforma."}</p>
+    ${canManageStudents ? `<div class="teacher-toolbar">
+      <button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">Adicionar aluno</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openShareLinkSheet()">Compartilhar link</button>
+      <button class="mini-btn mini-btn-ghost" onclick="setStudentTab('overdue')">Ver inadimplentes</button>
+    </div>` : ""}
     <div class="insight-strip">
       <button class="insight-card" onclick="setStudentTab('active')">
         <div class="insight-value">${approved.length}</div><div class="insight-label">ativos</div>
@@ -5903,7 +6419,7 @@ function renderStudents() {
     ` : ""}
     ${_studentTab !== "overdue" && _studentTab !== "inactive" ? `
       <div class="section-title">${_studentTab === "all" ? `Ativos (${filteredApproved.length})` : `Resultados (${filteredApproved.length})`}</div>
-      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>${_studentSearch ? "Nenhum aluno encontrado." : "Nenhum aluno ativo ainda. Use '+ Novo' para incluir."}</p>${!_studentSearch ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewStudentSheet()">Adicionar aluno</button><button class="btn-ghost" style="width:auto" onclick="openShareLinkSheet()">Compartilhar link</button></div>` : ""}</div>`}
+      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>${_studentSearch ? "Nenhum aluno encontrado." : canManageStudents ? "Nenhum aluno ativo ainda. Adicione um aluno ou compartilhe o link de cadastro." : "Nenhum aluno ativo encontrado."}</p>${!_studentSearch && canManageStudents ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewStudentSheet()">Adicionar aluno</button><button class="btn-ghost" style="width:auto" onclick="openShareLinkSheet()">Compartilhar link</button></div>` : ""}</div>`}
     ` : `
       <div class="section-title">Resultados (${filteredApproved.length})</div>
       ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>Nenhum aluno nessa categoria.</p><div class="empty-actions"><button class="btn-ghost" style="width:auto" onclick="setStudentTab('all')">Ver todos</button></div></div>`}
@@ -5942,13 +6458,18 @@ function studentRow(s, selMode) {
     </div>`;
   }
   let actions = "";
+  const canManageStatus = STATE.profile?.role === "coach";
   if (s.status === "pending") {
-    actions = `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Aprovar</button>
-               <button class="mini-btn mini-btn-danger" onclick="onBlock('${id}')">Recusar</button>`;
+    actions = canManageStatus
+      ? `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Aprovar</button>
+         <button class="mini-btn mini-btn-danger" onclick="onBlock('${id}')">Recusar</button>`
+      : `<button class="mini-btn mini-btn-primary" onclick="onStudentDetail('${id}')">Abrir</button>`;
   } else if (s.status === "approved") {
     actions = `<button class="mini-btn mini-btn-primary" onclick="onStudentDetail('${id}')">Abrir</button>`;
   } else {
-    actions = `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Reativar</button>`;
+    actions = canManageStatus
+      ? `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Reativar</button>`
+      : `<button class="mini-btn mini-btn-primary" onclick="onStudentDetail('${id}')">Abrir</button>`;
   }
   return `<div class="list-row" onclick="onStudentDetail('${id}')" style="cursor:pointer">
     <div class="lr-avatar" style="font-size:14px;font-weight:700;background:var(--brand-soft);color:var(--brand);overflow:hidden">${s.avatar_url ? `<img src="${escape(s.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">` : (s.avatar_emoji || (s.full_name||'A').slice(0,1).toUpperCase())}</div>
@@ -5956,7 +6477,7 @@ function studentRow(s, selMode) {
       <div class="lr-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${escape(s.full_name || s.email || "Aluno")} ${badges}</div>
       <div class="lr-sub">${escape(s.email || "")} · ${lastTxt} · ${s.sessions_done || 0} treinos</div>
     </div>
-    <div class="lr-actions" onclick="event.stopPropagation()">${actions}</div>
+    <div class="lr-actions student-card-actions" onclick="event.stopPropagation()">${actions}</div>
   </div>`;
 }
 
@@ -5972,6 +6493,10 @@ window.toggleStudentSelectAll = function() {
 window.clearStudentSelection = function() { _studentSelected.clear(); renderStudents(); };
 
 window.bulkBlockStudents = async function() {
+  if (STATE.profile?.role !== "coach") {
+    showToast("Apenas professores podem bloquear alunos.", "error");
+    return;
+  }
   if (!_studentSelected.size) return;
   if (!await showConfirm({ title: "Bloquear alunos?", msg: `${_studentSelected.size} aluno(s) serão bloqueados.`, confirm: "Bloquear", danger: true })) return;
   const ids = [..._studentSelected];
@@ -5988,7 +6513,8 @@ window.bulkDeleteStudents = async function() {
   const { error } = await sb.from("profiles").delete().in("id", ids);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
   showToast(`${ids.length} aluno(s) excluído(s)`, "success");
-  _studentSelected.clear();
+  removeUsersFromLocalLists(ids);
+  renderStudents();
   await loadStudents(); renderStudents();
 };
 
@@ -6042,13 +6568,18 @@ window.sendBulkMessage = async function(ids) {
 };
 
 window.openNewStudentSheet = function() {
+  if (STATE.profile?.role !== "coach") {
+    showToast("Apenas professores podem criar alunos.", "error");
+    return;
+  }
   openSheet(`
     <h3>Novo aluno</h3>
-    <p>Cria a conta com role <b>aluno</b> já aprovada e vinculada a você. O aluno entra com este email + senha.</p>
+    <p>Cria uma conta de aluno já vinculada a você. Depois, ele entra com o email e a senha temporária.</p>
     <div class="form-group"><label class="form-label">Nome completo</label><input class="input" id="ns-name" placeholder="Nome" /></div>
     <div class="form-group"><label class="form-label">Email</label><input class="input" id="ns-email" type="email" placeholder="email@exemplo.com" /></div>
     <div class="form-group"><label class="form-label">Telefone</label><input class="input" id="ns-phone" type="tel" placeholder="(11) 99999-0000" /></div>
     <div class="form-group"><label class="form-label">Senha temporária</label><input class="input" id="ns-pass" type="text" placeholder="Mínimo 6 caracteres" /></div>
+    <div class="ux-helper">Dica: o aluno será orientado a trocar a senha no primeiro acesso.</div>
     <label class="row-flex" style="margin-bottom:10px">
       <input type="checkbox" id="ns-seed" checked /> <span class="text-sm">Criar periodização padrão de 12 semanas</span>
     </label>
@@ -6076,6 +6607,10 @@ function createTempClient() {
 }
 
 window.submitNewStudent = async function() {
+  if (STATE.profile?.role !== "coach") {
+    showToast("Apenas professores podem criar alunos.", "error");
+    return;
+  }
   const btn = document.querySelector('#sheet-content .btn-primary');
   const setBusy = (b) => { if (btn) { btn.disabled = b; btn.textContent = b ? 'Criando...' : 'Criar aluno'; } };
   const name = document.getElementById("ns-name").value.trim();
@@ -6178,6 +6713,8 @@ window.deleteStudent = async function(id, email) {
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Aluno removido", "success");
   closeSheet();
+  removeUsersFromLocalLists(id);
+  renderStudents();
   await loadStudents(); renderStudents();
 };
 
@@ -6231,14 +6768,14 @@ window.openStudentPeriodSheet = async function(id) {
   const html = `
     <h3>Periodização do aluno</h3>
     <p style="font-size:13px;color:var(--text-2);margin:0 0 10px">Toque em um dia para editar os blocos. Você pode ter <b>vários blocos por dia</b> (ex: aeróbio + hipertrofia).</p>
-    <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap">
+    <div class="period-toolbar">
       <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ Semana</button>
       <button class="mini-btn" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line)" onclick="removePeriodWeek('${id}')">− Semana</button>
       <button class="mini-btn mini-btn-ghost" onclick="openPeriodConfig('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Configurar período</button>
       <button class="mini-btn mini-btn-ghost" onclick="openPresetEditor()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Tipos</button>
     </div>
     ${grouped.length === 0 ? `<div class="empty"><p>Nenhuma semana ainda. Clique em "+ 1 Semana".</p></div>` : grouped.map((week, wi) => `
-      <div class="card mb-8">
+      <div class="card mb-8 period-week-card">
         <div class="text-xs muted" style="margin-bottom:6px">Semana ${wi+1}</div>
         <div class="week-grid">
           ${week.map(d => {
@@ -6363,7 +6900,7 @@ window.editPeriodDay = async function(dayId, studentId) {
   const sheetContent = document.getElementById("sheet-content");
 
   const html = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <div class="period-day-editor-head">
       <button class="mini-btn" onclick="backToPeriodSheet('${studentId}')" style="padding:6px 12px">← Voltar</button>
       <div>
         <div style="font-weight:700;font-size:15px">${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}/${MONTH_SHORT[dt.getMonth()]}</div>
@@ -6374,7 +6911,7 @@ window.editPeriodDay = async function(dayId, studentId) {
       ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId, (blocks||[]).length)).join("") || '<div style="padding:14px;text-align:center;color:var(--text-3);font-size:13px">Nenhum bloco. Adicione abaixo.</div>'}
     </div>
     <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">+ Adicionar bloco</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">
+    <div class="preset-chip-grid">
       ${_PRESETS.map(p => `
         <button class="mini-btn" style="background:${p.color}22;color:${p.color};border:1px solid ${p.color}55;font-size:11px" onclick="addBlockToDay('${dayId}','${studentId}','${p.code}',${p.is_workout})">${p.label}</button>
       `).join("")}
@@ -6631,7 +7168,8 @@ window.savePresetDuration = async function(code) {
 };
 
 window.onApprove = async (id) => {
-  await approveStudent(id, "approved");
+  const ok = await approveStudent(id, "approved");
+  if (!ok) return;
   // pergunta se quer criar a periodização padrão
   if (await showConfirm({ title: "Criar periodização?", msg: "Criar periodização padrão de 12 semanas (Ciclo 5) para este aluno?", confirm: "Criar", cancel: "Agora não" })) {
     await seedPeriodizationFor(id);
@@ -6724,7 +7262,7 @@ window.onStudentDetail = async function(id) {
       <button class="btn-ghost" onclick="openStudentWorkoutsSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11M6.5 17.5h11"/><path d="M3 8.5V15.5a1 1 0 0 0 1 1h1V7.5H4a1 1 0 0 0-1 1z"/><path d="M21 8.5a1 1 0 0 0-1-1h-1v9h1a1 1 0 0 0 1-1v-7z"/><path d="M6.5 7.5v9a1 1 0 0 0 1 1h1v-11h-1a1 1 0 0 0-1 1z"/><path d="M17.5 7.5a1 1 0 0 0-1-1h-1v11h1a1 1 0 0 0 1-1v-9z"/></svg> Treinos personalizados</button>
       <button class="btn-ghost" onclick="exportStudentPDF('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Relatório (PDF)</button>
       <button class="btn-ghost" onclick="openChatThread('${id}')">\n              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Conversar</button>
-      ${prof.status === 'approved' ? `<button class="btn-ghost" onclick="onBlock('${id}')" style="color:var(--orange); border-color:var(--orange-soft);">🚫 Bloquear</button>` : ''}
+      ${!isAdmin && prof.status === 'approved' ? `<button class="btn-ghost" onclick="onBlock('${id}')" style="color:var(--orange); border-color:var(--orange-soft);">🚫 Bloquear</button>` : ''}
     </div>
     <div style="margin-top:8px;">
       <button class="btn-ghost" onclick="deleteStudent('${id}','${escape(prof.email||'')}')" style="color:var(--red); border-color:var(--red-soft);"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Excluir aluno</button>
@@ -6882,26 +7420,97 @@ window.deleteCustomWorkout = async function(workoutId, studentId) {
    ============================================================================= */
 function renderAdminWorkouts() {
   const el = document.getElementById("view-admin-workouts");
-  const codes = ["A","B","C","D","FLEX"];
+  const workouts = Object.values(STATE.workouts || {})
+    .filter(Boolean)
+    .sort((a,b) => String(a.code || "").localeCompare(String(b.code || ""), "pt-BR", { numeric: true }));
   el.innerHTML = `
-    <h1 class="view-title">Treinos</h1>
-    <p class="view-subtitle">Edite os exercícios visíveis a todos os alunos</p>
-    ${codes.map(code => {
-      const w = STATE.workouts[code];
-      if (!w) return "";
+    <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
+      <h1 class="view-title" style="margin:0">Treinos</h1>
+      <button class="mini-btn mini-btn-primary" onclick="openCreateWorkoutTypeSheet()">Novo tipo</button>
+    </div>
+    <p class="view-subtitle">Crie e edite modelos de treino para os alunos. Ex.: A, B, C, D, FLEX ou um nome personalizado.</p>
+    ${workouts.length ? workouts.map(w => {
+      const code = w.code;
       return `<div class="card mb-14">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
           <div>
-            <div class="fw-700">${escape(w.name)}</div>
-            <div class="text-xs muted">${escape(w.focus || "")}</div>
+            <div class="fw-700">${escape(w.name || code)}</div>
+            <div class="text-xs muted">${escape(code)}${w.focus ? " · " + escape(w.focus) : ""}</div>
           </div>
-          <button class="mini-btn mini-btn-primary" onclick="openWorkoutEditor('${code}')">Editar</button>
+          <button class="mini-btn mini-btn-primary" onclick="openWorkoutEditor('${escapeAttr(code)}')">Editar</button>
         </div>
-        <div class="text-xs muted">${w.exercises.length} exercícios</div>
+        <div class="text-xs muted">${(w.exercises || []).length} exercícios</div>
       </div>`;
-    }).join("")}
+    }).join("") : `<div class="empty"><p>Nenhum tipo de treino cadastrado.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openCreateWorkoutTypeSheet()">Criar primeiro tipo</button></div></div>`}
   `;
 }
+
+window.openCreateWorkoutTypeSheet = function() {
+  if (!["admin", "coach"].includes(STATE.profile?.role)) {
+    showToast("Sem permissão para criar tipos de treino", "error");
+    return;
+  }
+  openSheet(`
+    <h3>Novo tipo de treino</h3>
+    <p style="font-size:13px;color:var(--text-2);margin-top:0">Use um código curto para aparecer na periodização do aluno.</p>
+    <div class="form-group">
+      <label class="form-label">Código</label>
+      <input class="input" id="new-workout-code" maxlength="12" placeholder="Ex.: A, B, FLEX, MOB" style="text-transform:uppercase" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nome</label>
+      <input class="input" id="new-workout-name" maxlength="60" placeholder="Ex.: Treino A" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Foco/objetivo</label>
+      <input class="input" id="new-workout-focus" maxlength="80" placeholder="Ex.: Inferiores, força, mobilidade" />
+    </div>
+    <button class="btn-primary" onclick="createWorkoutType()">Criar tipo</button>
+    <button class="btn-ghost" onclick="closeSheet()">Cancelar</button>
+  `);
+  setTimeout(() => document.getElementById("new-workout-code")?.focus(), 50);
+};
+
+window.createWorkoutType = async function() {
+  if (STATE._creatingWorkoutType) return;
+  const codeEl = document.getElementById("new-workout-code");
+  const nameEl = document.getElementById("new-workout-name");
+  const focusEl = document.getElementById("new-workout-focus");
+  const code = String(codeEl?.value || "").trim().toUpperCase().replace(/\s+/g, "_");
+  const name = String(nameEl?.value || "").trim() || `Treino ${code}`;
+  const focus = String(focusEl?.value || "").trim();
+  if (!/^[A-Z0-9_-]{1,12}$/.test(code)) {
+    showToast("Use um código curto, sem espaços ou acentos", "error");
+    codeEl?.focus();
+    return;
+  }
+  if (STATE.workouts && STATE.workouts[code]) {
+    showToast("Já existe um treino com esse código", "error");
+    return;
+  }
+  STATE._creatingWorkoutType = true;
+  try {
+    const payload = {
+      code,
+      name,
+      focus,
+      student_id: null,
+      coach_id: STATE.profile?.role === "coach" ? STATE.profile.id : null,
+      is_global: STATE.profile?.role === "admin"
+    };
+    const { data, error } = await sb.from("workouts").insert(payload).select("*").single();
+    if (error) throw error;
+    showToast("Tipo de treino criado", "success");
+    await loadWorkouts();
+    closeSheet();
+    renderAdminWorkouts();
+    openWorkoutEditor(code, data?.id);
+  } catch (e) {
+    showToast("Erro ao criar tipo: " + (e.message || "verifique permissões"), "error");
+  } finally {
+    STATE._creatingWorkoutType = false;
+  }
+};
 
 // Bug #21/#22 fix: aceita workoutId explícito para workouts de aluno
 // (STATE.workouts[code] retorna o global quando o coach edita treino de aluno)
@@ -6926,7 +7535,7 @@ window.openWorkoutEditor = async function(code, workoutId) {
   const html = `
     <h3>Editar ${escape(w.name)}</h3>
     <p>${escape(w.focus || "")}</p>
-    ${(w.exercises || []).length === 0 ? `<div class="empty" style="padding:20px 0"><p>Nenhum exercício ainda.</p></div>` : ""}
+    ${(w.exercises || []).length === 0 ? `<div class="empty" style="padding:20px 0"><h3>Treino vazio</h3><p>Adicione o primeiro exercício para montar a sequência do aluno.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openExercisePicker('${code}', null, '${workoutId||w.id||''}')">Adicionar exercício</button></div></div>` : ""}
     ${(w.exercises || []).map((ex, i) => `
       <div class="card mb-8">
         <div class="row-flex" style="margin-bottom:8px;">
@@ -7334,6 +7943,10 @@ function bindTimerHandlers() {
   document.getElementById("timer-fs-plus").addEventListener("click", () => adjustTimer(15));
   document.getElementById("timer-fs-minus").addEventListener("click", () => adjustTimer(-15));
   document.getElementById("timer-fs-toggle").addEventListener("click", pauseToggle);
+  document.getElementById("timer-fs-next").addEventListener("click", () => {
+    closeFsTimer();
+    scheduleTimerChromeCleanup(300);
+  });
 }
 
 /* =============================================================================
@@ -7345,6 +7958,12 @@ let _POST_SIGN_IN_RUNNING = false;
 let _SW_RELOADING = false;
 
 function showStuckEscape(reason) {
+  if (_BOOT_DONE && STATE.profile) {
+    console.warn("[stuck suppressed after boot]", reason);
+    showToast(reason || "Conexão instável. O app continua aberto.", "error");
+    repairInteractionLayer("stuck-suppressed");
+    return;
+  }
   if (document.getElementById("stuck-overlay")) return;
   const div = document.createElement("div");
   div.id = "stuck-overlay";
@@ -7411,6 +8030,7 @@ async function boot() {
 
     bindAuthHandlers();
     bindTimerHandlers();
+    bindRestTimerLifecycle();
 
     if (!SUPABASE_URL || !SUPABASE_ANON) { doneBoot(); showCfg(); return; }
     if (!window.supabase) { doneBoot(); showToast("Falha ao carregar SDK", "error"); showCfg(); return; }
@@ -7428,10 +8048,20 @@ async function boot() {
     // Durante o boot, getSession() abaixo cuida do postSignIn inicial.
     sb.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN") {
+        if (STATE.profile && session?.user?.id === STATE.profile.id) {
+          STATE.user = session.user;
+          repairInteractionLayer("auth-signed-in-existing-session");
+          return;
+        }
         if (_BOOT_DONE && !_POST_SIGN_IN_RUNNING) {
           await postSignIn().catch(e => {
             console.error("postSignIn (auth event):", e);
-            showStuckEscape("Erro ao carregar perfil.");
+            if (STATE.profile) {
+              showToast("Sessão reconectada, mas o perfil demorou para atualizar.", "error");
+              repairInteractionLayer("auth-postsign-failed-existing-profile");
+            } else {
+              showStuckEscape("Erro ao carregar perfil.");
+            }
           });
         }
       } else if (event === "SIGNED_OUT") {
@@ -7500,31 +8130,31 @@ async function postSignIn() {
   // === GRUPO 1: loaders independentes — executam em paralelo ===
   // (branding, workouts, library, follows, presets, blocks, periodização, cargas)
   await Promise.all([
-    loadBranding(),
-    loadWorkouts(),
-    loadExerciseLibrary(),
-    loadFollows(),
-    loadPresets().catch(e => console.warn("presets:", e)),
-    loadTodayBlocks().catch(e => console.warn("blocks:", e)),
-    loadPeriodization(),
-    loadLastLoads(),
+    safeLoad("branding", loadBranding),
+    safeLoad("workouts", loadWorkouts),
+    safeLoad("exercise library", loadExerciseLibrary),
+    safeLoad("follows", loadFollows),
+    safeLoad("presets", loadPresets),
+    safeLoad("today blocks", loadTodayBlocks),
+    safeLoad("periodization", loadPeriodization),
+    safeLoad("last loads", loadLastLoads),
   ]);
 
   // === GRUPO 2: precisa de follows (feed) + role definido — paralelo ===
   const _roleLoads = [];
   if (profile.role === "coach") {
-    _roleLoads.push(loadStudents(), loadCoachPayments());
+    _roleLoads.push(safeLoad("students", loadStudents), safeLoad("coach payments", loadCoachPayments));
   } else if (profile.role === "admin") {
-    _roleLoads.push(loadTrainers(), loadStudents(), loadAdminPayments());
+    _roleLoads.push(safeLoad("trainers", loadTrainers), safeLoad("students", loadStudents), safeLoad("admin payments", loadAdminPayments));
   }
   await Promise.all([
-    loadFeed(),            // usa STATE.follows (pronto do grupo 1)
-    checkMyPaymentStatus(),
+    safeLoad("feed", loadFeed),            // usa STATE.follows (pronto do grupo 1)
+    safeLoad("payment status", checkMyPaymentStatus),
     ..._roleLoads,
   ]);
 
   // === GRUPO 3: notificações (rápidas, sem dependências críticas) ===
-  await loadNotifications();
+  await safeLoad("notifications", loadNotifications, 7000);
   // Auto-gera lembretes (não bloqueia)
   setTimeout(() => {
     generateOverduePaymentNotifications().catch(()=>{});
@@ -7595,6 +8225,7 @@ async function postSignIn() {
         }
       }, 250);
     } else if (view) {
+      if (view === "workout") prepareWorkoutDeepLinkFromRestTimer();
       navTo(view);
       try { history.replaceState({}, "", location.pathname); } catch(e){}
     }
@@ -8546,15 +9177,15 @@ async function createAsaasCharge({ paymentId, billingType="PIX" }) {
   if (STATE._creatingCharge) return null;
   STATE._creatingCharge = true;
   try {
-    const { data, error } = await sb.functions.invoke("asaas-create-charge", {
+    const { data, error } = await withTimeout(sb.functions.invoke("asaas-create-charge", {
       body: { payment_id: paymentId, billing_type: billingType }
-    });
+    }), 25000, "asaas-create-charge timeout");
     if (error) {
       const msg = error.message || String(error);
       // Mensagem amigável para erros comuns
       if (msg.includes("404") || msg.includes("not found") || msg.toLowerCase().includes("function")) {
         showToast("Edge Function não encontrada. Configure asaas-create-charge no Supabase.", "error");
-      } else if (msg.includes("ASAAS") || msg.includes("apiKey") || msg.includes("api_key")) {
+      } else if (msg.includes("ASAAS") || msg.includes("apiKey") || msg.includes("api_key") || msg.includes("ASAAS_API_KEY")) {
         showToast("Chave Asaas não configurada. Adicione ASAAS_API_KEY nas variáveis da Edge Function.", "error");
       } else {
         showToast("Erro: " + msg, "error");
@@ -8572,7 +9203,13 @@ async function createAsaasCharge({ paymentId, billingType="PIX" }) {
 }
 
 async function openAsaasSheet(paymentId) {
-  const { data: p } = await sb.from("payments").select("*, user:profiles!payments_user_id_fkey(full_name,email,phone)").eq("id", paymentId).single();
+  const { data: p, error: pErr } = await sb.from("payments").select("*").eq("id", paymentId).single();
+  if (pErr || !p) { showToast("Pagamento não encontrado", "error"); return; }
+  const payerId = p.user_id || p.payer_id;
+  const { data: payer } = payerId
+    ? await sb.from("profiles").select("full_name,email,phone").eq("id", payerId).maybeSingle()
+    : { data: null };
+  p.user = payer || {};
   if (!p) { showToast("Pagamento não encontrado", "error"); return; }
   const sheet = document.createElement("div");
   sheet.id = "asaas-overlay";
@@ -8616,7 +9253,10 @@ async function openAsaasSheet(paymentId) {
     r.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-2);display:flex;align-items:center;justify-content:center;gap:8px"><div class="spinner" style="width:18px;height:18px"></div> Gerando cobrança…</div>`;
     const result = await createAsaasCharge({ paymentId, billingType: type });
     pixBtn.disabled = false; bolBtn.disabled = false;
-    if (!result) { r.innerHTML = ""; return; }
+    if (!result) {
+      r.innerHTML = `<div style="margin-top:12px;padding:12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-size:13px">Não foi possível gerar a cobrança. Verifique se a Edge Function está publicada e se a chave ASAAS_API_KEY está configurada.</div>`;
+      return;
+    }
     if (type === "PIX" && result.pix_qr) {
       r.innerHTML = `
         <div class="ax-qr">
@@ -8685,7 +9325,7 @@ async function renderChat() {
             const isMine = t.last_from === me;
             const unread = !t.last_read_at && t.last_to === me;
             const o = t.other || {};
-            return `<div style="display:flex;align-items:center;border-bottom:1px solid var(--line);${unread ? 'background:rgba(var(--brand-rgb,99,102,241),0.08);' : ''}">
+            return `<div data-chat-other="${escapeAttr(o.id)}" style="display:flex;align-items:center;border-bottom:1px solid var(--line);${unread ? 'background:rgba(var(--brand-rgb,99,102,241),0.08);' : ''}">
               <div onclick="openChatThread('${o.id}')" style="display:flex;gap:12px;padding:14px 16px;cursor:pointer;flex:1;min-width:0;align-items:center">
                 <div style="position:relative;flex:0 0 auto">
                   <div style="width:46px;height:46px;border-radius:50%;background:var(--bg-2);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:20px">${o.avatar_url ? `<img src="${o.avatar_url}" style="width:100%;height:100%;object-fit:cover">` : (o.avatar_emoji || '👤')}</div>
@@ -8754,13 +9394,52 @@ window.openChatNewSheet = openChatNewSheet;
 let CHAT_ACTIVE_OTHER = null;
 let CHAT_RT_CHANNEL = null;
 let _chatThreadInHistory = false;
+const MESSAGE_BUCKET = "messages";
+
+function canOpenChatWith(other) {
+  const me = STATE.profile;
+  if (!me || !other || other.id === me.id) return false;
+  if (me.role === "admin") return true;
+  if (me.role === "coach") return other.role === "admin" || other.coach_id === me.id;
+  if (me.role === "student") return other.role === "admin" || other.id === me.coach_id;
+  return false;
+}
+
+function getMessageImagePath(raw) {
+  raw = String(raw || "").trim();
+  if (!raw || /^(data|blob):/i.test(raw)) return "";
+  if (!/^https?:\/\//i.test(raw)) return raw.replace(/^\/+/, "");
+  try {
+    const parsed = new URL(raw, location.href);
+    const publicParts = parsed.pathname.split(`/storage/v1/object/public/${MESSAGE_BUCKET}/`);
+    if (publicParts[1]) return decodeURIComponent(publicParts[1]);
+    const signedParts = parsed.pathname.split(`/storage/v1/object/sign/${MESSAGE_BUCKET}/`);
+    if (signedParts[1]) return decodeURIComponent(signedParts[1]);
+  } catch(e) {}
+  return "";
+}
+
+async function resolveMessageImageUrl(raw) {
+  raw = String(raw || "").trim();
+  if (!raw || /^(data|blob):/i.test(raw)) return raw;
+  const path = getMessageImagePath(raw);
+  if (!path) return raw;
+  try {
+    const { data, error } = await sb.storage.from(MESSAGE_BUCKET).createSignedUrl(path, 60 * 30);
+    if (!error && data?.signedUrl) return data.signedUrl;
+  } catch(e) {}
+  return raw;
+}
 
 async function openChatThread(otherUserId) {
   if (!otherUserId) { showToast("Usuário não encontrado", "error"); return; }
   CHAT_ACTIVE_OTHER = otherUserId;
 
-  const { data: other, error: profileErr } = await sb.from("profiles").select("*").eq("id", otherUserId).single();
+  const { data: other, error: profileErr } = await sb.from("profiles")
+    .select("id, full_name, avatar_emoji, avatar_url, role, coach_id")
+    .eq("id", otherUserId).single();
   if (profileErr || !other) { showToast("Usuário não encontrado", "error"); return; }
+  if (!canOpenChatWith(other)) { showToast("Você não tem permissão para conversar com este usuário.", "error"); return; }
 
   // Fecha overlay anterior se aberto
   const existing = document.getElementById("chat-thread-overlay");
@@ -8822,13 +9501,17 @@ async function openChatThread(otherUserId) {
       if (list) list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3)">Não foi possível carregar as mensagens.<br><small>${escapeHtml(error.message||'')}</small></div>`;
       return;
     }
-    const data = [...(sent.data||[]), ...(recv.data||[])].sort((a,b) => a.created_at.localeCompare(b.created_at));
+    const rawData = [...(sent.data||[]), ...(recv.data||[])].sort((a,b) => a.created_at.localeCompare(b.created_at));
+    const data = await Promise.all(rawData.map(async (m) => ({
+      ...m,
+      _imageSrc: m.image_url ? await safeLoad("message image url", () => resolveMessageImageUrl(m.image_url), 5000) : ""
+    })));
     if (!list) return;
     list.innerHTML = (data||[]).map(m => {
       const mine = m.from_user === me;
       return `<div style="display:flex;flex-direction:column;align-items:${mine?'flex-end':'flex-start'}">
         <div class="ct-msg ${mine?'ct-mine':'ct-them'}">
-          ${m.image_url ? `<img src="${m.image_url}" style="max-width:100%;border-radius:8px;margin-bottom:4px">` : ''}
+          ${m._imageSrc ? `<img src="${escapeAttr(m._imageSrc)}" style="max-width:100%;border-radius:8px;margin-bottom:4px">` : ''}
           ${escapeHtml(m.content||'').replace(/\n/g,'<br>')}
         </div>
         <div class="ct-time">${timeAgo(m.created_at)}</div>
@@ -8854,12 +9537,11 @@ async function openChatThread(otherUserId) {
     try {
       const compressed = await compressImage(f, 1024, 0.85);
       const path = `${STATE.profile.id}/${Date.now()}.jpg`;
-      const { error: upErr } = await sb.storage.from("messages").upload(path, compressed);
+      const { error: upErr } = await sb.storage.from(MESSAGE_BUCKET).upload(path, compressed);
       if (upErr) throw upErr;
-      const { data: pub } = sb.storage.from("messages").getPublicUrl(path);
       const { error: insErr } = await sb.from("messages").insert({
         from_user: STATE.profile.id, to_user: otherUserId,
-        content: "[imagem]", image_url: pub.publicUrl
+        content: "[imagem]", image_url: path
       });
       if (insErr) throw insErr;
       await load();
@@ -8884,6 +9566,10 @@ async function sendChatMessage(otherUserId, reload) {
   const inp = document.getElementById("ct-input");
   const content = (inp.value||'').trim();
   if (!content) return;
+  const { data: target } = await sb.from("profiles")
+    .select("id, role, coach_id")
+    .eq("id", otherUserId).maybeSingle();
+  if (!canOpenChatWith(target)) { showToast("Você não tem permissão para enviar mensagem para este usuário.", "error"); return; }
   inp.value = '';
   const { error } = await sb.from("messages").insert({
     from_user: STATE.profile.id, to_user: otherUserId, content
@@ -8927,8 +9613,17 @@ window.deleteConversation = async function(otherUserId) {
     .delete()
     .or(`and(from_user.eq.${me},to_user.eq.${otherUserId}),and(from_user.eq.${otherUserId},to_user.eq.${me})`);
   if (error) { showToast("Erro ao excluir conversa", "error"); return; }
+  STATE.chatThreads = (STATE.chatThreads || []).filter(t => {
+    const other = t.other?.id || (t.a === me ? t.b : t.a);
+    return other !== otherUserId;
+  });
+  document.querySelectorAll("[data-chat-other]").forEach(row => {
+    if (row.dataset.chatOther === otherUserId) row.remove();
+  });
   showToast("Conversa excluída", "success");
   closeChatThread();
+  await loadChatThreads();
+  if (STATE.view === "chat") renderChat().catch(() => {});
 };
 
 /* =============================================================================
@@ -9081,12 +9776,15 @@ async function resolveProgressPhotoUrl(photo) {
 
 async function loadProgressPhotos() {
   const sid = STATE.profile.id;
-  const { data, error } = await sb.from("progress_photos")
-    .select("*").eq("student_id", sid).order("date", { ascending: false }).limit(60);
+  const { data, error } = await withTimeout(
+    sb.from("progress_photos").select("*").eq("student_id", sid).order("date", { ascending: false }).limit(60),
+    9000,
+    "progress photos load timeout"
+  );
   if (error) throw error;
   return await Promise.all((data || []).map(async (p) => ({
     ...p,
-    _src: await resolveProgressPhotoUrl(p),
+    _src: await safeLoad("progress photo url", () => resolveProgressPhotoUrl(p), 5000),
     _storagePath: getProgressPhotoPath(p)
   })));
 }
@@ -9169,16 +9867,29 @@ window.openPhotoFull = (url) => {
   document.body.appendChild(div);
 };
 
+async function insertProgressPhotoRecord(payload, storagePath) {
+  const withPath = { ...payload, storage_path: storagePath };
+  const first = await sb.from("progress_photos").insert(withPath);
+  if (!first.error) return first;
+  const msg = String(first.error.message || "");
+  if (!/storage_path|schema cache|column/i.test(msg)) return first;
+  return await sb.from("progress_photos").insert(payload);
+}
+
 async function openProgressUpload() {
   const existing = document.getElementById("pp-overlay");
   if (existing) existing.remove();
   const sheet = document.createElement("div");
   sheet.id = "pp-overlay";
+  let selectedFile = null;
+  let previewUrl = "";
   sheet.innerHTML = `
     <style>
       #pp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:9500;display:flex;align-items:flex-end;justify-content:center;padding-top:24px}
       #pp-overlay .pc{background:var(--bg);border:1px solid var(--line);border-bottom:0;border-top-left-radius:18px;border-top-right-radius:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto;padding:16px 16px calc(16px + var(--safe-bottom));box-shadow:var(--shadow)}
       #pp-overlay .row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+      #pp-overlay .pick-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+      #pp-overlay .pick-btn{padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font-weight:800}
       #pp-overlay input{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg-card);color:var(--text)}
       #pp-overlay textarea{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font:inherit;min-height:60px;margin:10px 0}
       #pp-overlay .pp-up{background:var(--brand);color:var(--brand-on);padding:12px;border-radius:10px;border:0;font-weight:700;width:100%;margin-top:12px}
@@ -9190,9 +9901,14 @@ async function openProgressUpload() {
     <div class="pc">
       <div style="display:flex;align-items:center;margin-bottom:8px">
         <div style="flex:1;font-weight:700;font-size:18px">Nova foto</div>
-        <button onclick="document.getElementById('pp-overlay').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
+        <button id="pp-close" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
       </div>
-      <input type="file" id="pp-file" accept="image/*" capture="user" style="margin-top:8px;width:100%;padding:11px;border-radius:10px;border:1px dashed var(--line);background:var(--bg-card);color:var(--text)">
+      <div class="pick-row">
+        <button class="pick-btn" id="pp-gallery-btn" type="button">Galeria</button>
+        <button class="pick-btn" id="pp-camera-btn" type="button">Câmera</button>
+      </div>
+      <input type="file" id="pp-gallery-file" accept="image/*" style="display:none">
+      <input type="file" id="pp-camera-file" accept="image/*" capture="environment" style="display:none">
       <div class="preview" id="pp-preview"></div>
       <label>Peso (kg)</label>
       <div class="row">
@@ -9200,50 +9916,77 @@ async function openProgressUpload() {
         <input type="number" id="pp-fat" step="0.1" placeholder="% gordura (opcional)">
       </div>
       <textarea id="pp-notes" placeholder="Notas (como está se sentindo, mudanças notadas…)" maxlength="500"></textarea>
-      <button class="pp-up" id="pp-submit">Enviar foto</button>
+      <button class="pp-up" id="pp-submit" disabled>Selecione uma foto</button>
     </div>`;
   document.body.appendChild(sheet);
-  sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.remove(); });
-  document.getElementById("pp-file").onchange = (e) => {
+  const cleanup = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    sheet.remove();
+  };
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) cleanup(); });
+  document.getElementById("pp-close").onclick = cleanup;
+  document.getElementById("pp-gallery-btn").onclick = () => document.getElementById("pp-gallery-file").click();
+  document.getElementById("pp-camera-btn").onclick = () => document.getElementById("pp-camera-file").click();
+
+  const onPicked = (e) => {
     const file = e.target.files && e.target.files[0];
     const preview = document.getElementById("pp-preview");
     if (!file || !preview) return;
+    selectedFile = file;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(file);
     preview.style.display = "block";
-    preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Prévia da foto">`;
+    preview.innerHTML = `<img src="${previewUrl}" alt="Prévia da foto">`;
+    const btn = document.getElementById("pp-submit");
+    btn.disabled = false;
+    btn.textContent = "Salvar foto";
+    e.target.value = "";
   };
+  document.getElementById("pp-gallery-file").onchange = onPicked;
+  document.getElementById("pp-camera-file").onchange = onPicked;
 
   document.getElementById("pp-submit").onclick = async () => {
-    const file = document.getElementById("pp-file").files[0];
+    const file = selectedFile;
     if (!file) { showToast("Selecione uma foto", "error"); return; }
     const btn = document.getElementById("pp-submit");
     btn.disabled = true; btn.textContent = "Enviando…";
     try {
-      const compressed = await compressImage(file, 1200, 0.85);
+      const compressed = await withTimeout(compressImage(file, 1200, 0.85), 12000, "progress photo compress timeout");
       const path = `${STATE.profile.id}/${Date.now()}.jpg`;
-      const { error: upErr } = await sb.storage.from(PROGRESS_PHOTO_BUCKET).upload(path, compressed, {
-        cacheControl: "3600",
-        contentType: "image/jpeg",
-        upsert: false
-      });
+      const { error: upErr } = await withTimeout(
+        sb.storage.from(PROGRESS_PHOTO_BUCKET).upload(path, compressed, {
+          cacheControl: "3600",
+          contentType: "image/jpeg",
+          upsert: false
+        }),
+        20000,
+        "progress photo upload timeout"
+      );
       if (upErr) throw upErr;
       const { data: pub } = sb.storage.from(PROGRESS_PHOTO_BUCKET).getPublicUrl(path);
       const weight = document.getElementById("pp-weight").value;
       const fat = document.getElementById("pp-fat").value;
       const notes = document.getElementById("pp-notes").value || null;
-      const { error: insErr } = await sb.from("progress_photos").insert({
+      const payload = {
         student_id: STATE.profile.id,
+        date: todayISO(),
         url: pub.publicUrl,
         weight: weight ? Number(weight) : null,
         body_fat: fat ? Number(fat) : null,
         notes
-      });
+      };
+      const { error: insErr } = await withTimeout(
+        insertProgressPhotoRecord(payload, path),
+        12000,
+        "progress photo save timeout"
+      );
       if (insErr) throw insErr;
       showToast("Foto registrada ✓", "success");
-      sheet.remove();
+      cleanup();
       await renderProgress();
     } catch (e) {
       showToast(e.message || "Erro ao enviar", "error");
-      btn.disabled = false; btn.textContent = "Enviar foto";
+      btn.disabled = false; btn.textContent = "Salvar foto";
     }
   };
 }
