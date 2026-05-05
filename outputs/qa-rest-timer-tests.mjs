@@ -41,6 +41,13 @@ const checks = [
       html.includes('new Notification(title, opts)'),
   },
   {
+    name: "timer agenda web push real no backend",
+    pass: html.includes("scheduleServerRestPush") &&
+      html.includes('sb.functions.invoke("rest-timer-push"') &&
+      html.includes('action: "schedule"') &&
+      html.includes('action: "cancel"'),
+  },
+  {
     name: "UI exibe contexto e CTA de proximo exercicio",
     pass: html.includes('id="timer-bar-sub"') &&
       html.includes('id="timer-fs-next"') &&
@@ -56,6 +63,27 @@ const checks = [
       sw.includes("self.registration.showNotification"),
   },
 ];
+
+const edge = fs.readFileSync("outputs/edge-functions/rest-timer-push/index.ts", "utf8");
+const sql = fs.readFileSync("sql/rest_timer_push_jobs_2026_05_05.sql", "utf8");
+
+checks.push(
+  {
+    name: "edge function processa jobs vencidos com VAPID",
+    pass: edge.includes("webpush.setVapidDetails") &&
+      edge.includes("processDueJobs") &&
+      edge.includes("rest_timer_push_jobs") &&
+      edge.includes("push_subscriptions") &&
+      edge.includes("Descanso finalizado"),
+  },
+  {
+    name: "migration cria tabela e indices do timer push",
+    pass: sql.includes("create table if not exists public.rest_timer_push_jobs") &&
+      sql.includes("idx_rest_timer_push_jobs_due") &&
+      sql.includes("enable row level security") &&
+      sql.includes("treinova-rest-timer-push-every-minute"),
+  },
+);
 
 const failed = checks.filter((check) => !check.pass);
 
