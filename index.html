@@ -9746,19 +9746,22 @@ window.closeChatThread = closeChatThread;
 window.deleteConversation = async function(otherUserId) {
   if (!await showConfirm({ title: "Excluir conversa?", msg: "Toda a conversa será apagada. Esta ação não pode ser desfeita.", confirm: "Excluir", danger: true })) return;
   const me = STATE.profile.id;
-  // Deleta as mensagens onde o usuário é o remetente OU destinatário desta conversa
-  const { data: deletedRows, error } = await sb.from("messages")
-    .delete()
-    .or(`and(from_user.eq.${me},to_user.eq.${otherUserId}),and(from_user.eq.${otherUserId},to_user.eq.${me})`)
-    .select("id,image_url");
-  if (error) { showToast("Erro ao excluir conversa", "error"); return; }
+  const { data: deletedCount, error: rpcError } = await sb.rpc("delete_conversation_with_user", { p_other_user_id: otherUserId });
+  if (rpcError) {
+    const { data: deletedRows, error } = await sb.from("messages")
+      .delete()
+      .or(`and(from_user.eq.${me},to_user.eq.${otherUserId}),and(from_user.eq.${otherUserId},to_user.eq.${me})`)
+      .select("id,image_url");
+    if (error) { showToast("Erro ao excluir conversa: " + (rpcError.message || error.message), "error"); return; }
+    if (!(deletedRows || []).length) console.warn("deleteConversation: fallback apagou 0 linhas", { rpcError, error });
+  }
   await loadChatThreads();
   const stillExists = (STATE.chatThreads || []).some(t => {
     const other = t.other?.id || (t.a === me ? t.b : t.a);
     return other === otherUserId;
   });
-  if (!(deletedRows || []).length && stillExists) {
-    showToast("Não foi possível excluir. Verifique a policy de delete das mensagens.", "error");
+  if (stillExists) {
+    showToast("Não foi possível excluir. Rode a migration beta_messages_delete_fix_2026_05_05.sql.", "error");
     if (STATE.view === "chat") renderChat().catch(() => {});
     return;
   }
