@@ -3572,6 +3572,7 @@ let _sheetInHistory = false;
 let _studentSelected = new Set();   // ids selecionados em bulk
 let _studentSearch = "";            // busca de alunos
 let _studentTab = "all";            // aba ativa: all | active | inactive | overdue
+let _coachFinanceTab = "mine";      // aba ativa no financeiro do professor: mine | receivables
 let _trainerSelected = new Set();
 let _periodScrollTop = 0;           // preservar scroll da sheet de periodização
 let _editingStudentId = null;       // aluno sendo editado na periodização
@@ -3691,6 +3692,21 @@ async function isUserPaymentBlocked(userId) {
   return data && data.length > 0;
 }
 
+function renderCoachFinanceTabs() {
+  const tabs = [
+    { id: "mine", label: "Minha mensalidade" },
+    { id: "receivables", label: "Recebimentos" }
+  ];
+  return `<div class="student-tabs" style="margin:0 0 16px;overflow-x:auto;-webkit-overflow-scrolling:touch">
+    ${tabs.map(t => `<button class="${_coachFinanceTab === t.id ? 'active' : ''}" onclick="setCoachFinanceTab('${t.id}')">${t.label}</button>`).join("")}
+  </div>`;
+}
+
+window.setCoachFinanceTab = function(tab) {
+  _coachFinanceTab = tab === "receivables" ? "receivables" : "mine";
+  renderPayments();
+};
+
 function renderCoachOwnFinancePanel() {
   const list = (STATE.myPayments || []).map(p => ({ ...p, _status: paymentEffectiveStatus(p) }));
   const pending = list
@@ -3704,18 +3720,18 @@ function renderCoachOwnFinancePanel() {
   const nextDue = pending[0];
   const lastPaid = paid[0];
   return `
-    <div class="section-title">Minha mensalidade com o ADM</div>
+    <div class="section-title">Minha mensalidade</div>
     <div class="card card-lg" style="margin-bottom:16px;border-color:${overdue.length ? 'var(--red)' : pending.length ? 'rgba(245,158,11,.45)' : 'var(--line)'}">
       <div class="finance-summary-grid" style="margin-bottom:14px">
-        ${studentFinanceSummaryCard("Total que devo", fmtMoney(openAmount), `${pending.length} lançamento(s) em aberto`, overdue.length ? "danger" : pending.length ? "warn" : "")}
+        ${studentFinanceSummaryCard("Total pendente", fmtMoney(openAmount), `${pending.length} lançamento(s) em aberto`, overdue.length ? "danger" : pending.length ? "warn" : "")}
         ${studentFinanceSummaryCard("Próximo vencimento", nextDue ? fmtDateBR(nextDue.due_date) : "—", nextDue ? fmtMoney(nextDue.amount || 0) : "Sem cobrança futura", nextDue && nextDue._status === "overdue" ? "danger" : "")}
         ${studentFinanceSummaryCard("Em atraso", String(overdue.length), overdue.length ? fmtMoney(overdue.reduce((s,p)=>s+Number(p.amount||0),0)) : "Nenhum atraso", overdue.length ? "danger" : "")}
         ${studentFinanceSummaryCard("Último pagamento", lastPaid ? fmtMoney(lastPaid.amount || 0) : "—", lastPaid ? fmtDateBR(String(lastPaid.paid_at || lastPaid.due_date).slice(0,10)) : "Sem histórico pago")}
       </div>
       ${list.length === 0
-        ? `<div class="shortcut-empty"><div class="title">Nenhuma cobrança do ADM</div><div class="sub">Quando o ADM criar uma mensalidade para você, ela aparecerá aqui.</div></div>`
+        ? `<div class="shortcut-empty"><div class="title">Nenhuma mensalidade registrada</div><div class="sub">Quando uma mensalidade for criada para você, ela aparecerá aqui.</div></div>`
         : `
-          ${pending.length ? `<div class="section-title" style="margin-top:0">Em aberto</div><div class="finance-list">${pending.slice(0, 4).map(studentFinanceItem).join("")}</div>` : `<div class="shortcut-empty"><div class="title">Tudo em dia</div><div class="sub">Você não tem cobranças abertas com o ADM.</div></div>`}
+          ${pending.length ? `<div class="section-title" style="margin-top:0">Em aberto</div><div class="finance-list">${pending.slice(0, 4).map(studentFinanceItem).join("")}</div>` : `<div class="shortcut-empty"><div class="title">Tudo em dia</div><div class="sub">Você não tem cobranças abertas.</div></div>`}
           ${paid.length ? `<div class="section-title">Pagos recentes</div><div class="finance-list">${paid.slice(0, 3).map(studentFinanceItem).join("")}</div>` : ""}
         `}
     </div>
@@ -4679,8 +4695,13 @@ async function renderPayments() {
   const taxaPagamento = items.length > 0
     ? Math.round(((items.length - overdueCount) / items.length) * 100) : 100;
 
-  const title = isAdmin ? "Financeiro · Professores" : "Financeiro · Alunos";
+  const title = isAdmin ? "Financeiro · Professores" : isCoach ? "Financeiro" : "Financeiro · Alunos";
   const idKey = isAdmin ? "coach_id" : "student_id";
+  const subtitle = isAdmin
+    ? `${items.length} professor(es) · ${overdueCount} em atraso`
+    : isCoach && _coachFinanceTab === "mine"
+      ? "Acompanhe sua mensalidade, vencimentos e histórico."
+      : `${items.length} aluno(s) · ${overdueCount} em atraso`;
 
   // Seção de inadimplentes com PIX rápido
   const overdueSection = overdueCount > 0 ? `
@@ -4713,10 +4734,11 @@ async function renderPayments() {
 
   el.innerHTML = `
     <h1 class="view-title">${title}</h1>
-    <p class="view-subtitle">${items.length} ${isAdmin ? 'professor(es)' : 'aluno(s)'} · ${overdueCount} em atraso</p>
+    <p class="view-subtitle">${subtitle}</p>
 
-    ${isCoach ? renderCoachOwnFinancePanel() : ""}
+    ${isCoach ? renderCoachFinanceTabs() : ""}
 
+    ${isCoach && _coachFinanceTab === "mine" ? renderCoachOwnFinancePanel() : `
     <!-- Dashboard 4 cards -->
     <div class="beta-grid-2" style="margin-bottom:16px">
       <div class="card card-lg" style="border-color:var(--green);background:linear-gradient(135deg,var(--green-soft,#e8f8f0),var(--bg-card))">
@@ -4746,6 +4768,7 @@ async function renderPayments() {
 
     <div class="section-title">Pessoas (${items.length})</div>
     ${items.length === 0 ? `<div class="empty"><p>Nenhum cadastro ainda.</p></div>` : items.map(p => paymentRow(p, idKey)).join("")}
+    `}
   `;
 }
 
