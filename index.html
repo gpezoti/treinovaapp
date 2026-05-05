@@ -8806,13 +8806,52 @@ window.openChatNewSheet = openChatNewSheet;
 let CHAT_ACTIVE_OTHER = null;
 let CHAT_RT_CHANNEL = null;
 let _chatThreadInHistory = false;
+const MESSAGE_BUCKET = "messages";
+
+function canOpenChatWith(other) {
+  const me = STATE.profile;
+  if (!me || !other || other.id === me.id) return false;
+  if (me.role === "admin") return true;
+  if (me.role === "coach") return other.role === "admin" || other.coach_id === me.id;
+  if (me.role === "student") return other.role === "admin" || other.id === me.coach_id;
+  return false;
+}
+
+function getMessageImagePath(raw) {
+  raw = String(raw || "").trim();
+  if (!raw || /^(data|blob):/i.test(raw)) return "";
+  if (!/^https?:\/\//i.test(raw)) return raw.replace(/^\/+/, "");
+  try {
+    const parsed = new URL(raw, location.href);
+    const publicParts = parsed.pathname.split(`/storage/v1/object/public/${MESSAGE_BUCKET}/`);
+    if (publicParts[1]) return decodeURIComponent(publicParts[1]);
+    const signedParts = parsed.pathname.split(`/storage/v1/object/sign/${MESSAGE_BUCKET}/`);
+    if (signedParts[1]) return decodeURIComponent(signedParts[1]);
+  } catch(e) {}
+  return "";
+}
+
+async function resolveMessageImageUrl(raw) {
+  raw = String(raw || "").trim();
+  if (!raw || /^(data|blob):/i.test(raw)) return raw;
+  const path = getMessageImagePath(raw);
+  if (!path) return raw;
+  try {
+    const { data, error } = await sb.storage.from(MESSAGE_BUCKET).createSignedUrl(path, 60 * 30);
+    if (!error && data?.signedUrl) return data.signedUrl;
+  } catch(e) {}
+  return raw;
+}
 
 async function openChatThread(otherUserId) {
   if (!otherUserId) { showToast("Usuário não encontrado", "error"); return; }
   CHAT_ACTIVE_OTHER = otherUserId;
 
-  const { data: other, error: profileErr } = await sb.from("profiles").select("*").eq("id", otherUserId).single();
+  const { data: other, error: profileErr } = await sb.from("profiles")
+    .select("id, full_name, avatar_emoji, avatar_url, role, coach_id")
+    .eq("id", otherUserId).single();
   if (profileErr || !other) { showToast("Usuário não encontrado", "error"); return; }
+  if (!canOpenChatWith(other)) { showToast("Você não tem permissão para conversar com este usuário.", "error"); return; }
 
   // Fecha overlay anterior se aberto
   const existing = document.getElementById("chat-thread-overlay");
@@ -8874,13 +8913,17 @@ async function openChatThread(otherUserId) {
       if (list) list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3)">Não foi possível carregar as mensagens.<br><small>${escapeHtml(error.message||'')}</small></div>`;
       return;
     }
-    const data = [...(sent.data||[]), ...(recv.data||[])].sort((a,b) => a.created_at.localeCompare(b.created_at));
+    const rawData = [...(sent.data||[]), ...(recv.data||[])].sort((a,b) => a.created_at.localeCompare(b.created_at));
+    const data = await Promise.all(rawData.map(async (m) => ({
+      ...m,
+      _imageSrc: m.image_url ? await safeLoad("message image url", () => resolveMessageImageUrl(m.image_url), 5000) : ""
+    })));
     if (!list) return;
     list.innerHTML = (data||[]).map(m => {
       const mine = m.from_user === me;
       return `<div style="display:flex;flex-direction:column;align-items:${mine?'flex-end':'flex-start'}">
         <div class="ct-msg ${mine?'ct-mine':'ct-them'}">
-          ${m.image_url ? `<img src="${m.image_url}" style="max-width:100%;border-radius:8px;margin-bottom:4px">` : ''}
+          ${m._imageSrc ? `<img src="${escapeAttr(m._imageSrc)}" style="max-width:100%;border-radius:8px;margin-bottom:4px">` : ''}
           ${escapeHtml(m.content||'').replace(/\n/g,'<br>')}
         </div>
         <div class="ct-time">${timeAgo(m.created_at)}</div>
@@ -8906,12 +8949,11 @@ async function openChatThread(otherUserId) {
     try {
       const compressed = await compressImage(f, 1024, 0.85);
       const path = `${STATE.profile.id}/${Date.now()}.jpg`;
-      const { error: upErr } = await sb.storage.from("messages").upload(path, compressed);
+      const { error: upErr } = await sb.storage.from(MESSAGE_BUCKET).upload(path, compressed);
       if (upErr) throw upErr;
-      const { data: pub } = sb.storage.from("messages").getPublicUrl(path);
       const { error: insErr } = await sb.from("messages").insert({
         from_user: STATE.profile.id, to_user: otherUserId,
-        content: "[imagem]", image_url: pub.publicUrl
+        content: "[imagem]", image_url: path
       });
       if (insErr) throw insErr;
       await load();
@@ -8936,6 +8978,10 @@ async function sendChatMessage(otherUserId, reload) {
   const inp = document.getElementById("ct-input");
   const content = (inp.value||'').trim();
   if (!content) return;
+  const { data: target } = await sb.from("profiles")
+    .select("id, role, coach_id")
+    .eq("id", otherUserId).maybeSingle();
+  if (!canOpenChatWith(target)) { showToast("Você não tem permissão para enviar mensagem para este usuário.", "error"); return; }
   inp.value = '';
   const { error } = await sb.from("messages").insert({
     from_user: STATE.profile.id, to_user: otherUserId, content
