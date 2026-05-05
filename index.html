@@ -13,9 +13,11 @@
 <meta name="description" content="Treinova — seu app, seu treino, sua marca." />
 <title>Treinova</title>
 <link rel="manifest" href="manifest.webmanifest" />
-<link rel="icon" id="favicon" href="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" />
-<link rel="apple-touch-icon" href="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" />
-<link rel="apple-touch-icon" sizes="180x180" href="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" />
+<link rel="icon" id="favicon" type="image/png" href="assets/icons/favicon.png?v=20260505" />
+<link rel="apple-touch-icon" href="assets/icons/icon-180.png?v=20260505" />
+<link rel="apple-touch-icon" sizes="180x180" href="assets/icons/icon-180.png?v=20260505" />
+<link rel="apple-touch-icon" sizes="192x192" href="assets/icons/icon-192.png?v=20260505" />
+<link rel="apple-touch-icon" sizes="512x512" href="assets/icons/icon-512.png?v=20260505" />
 <style>
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 /* ---------- DARK THEME (default) ---------- */
@@ -1325,7 +1327,7 @@ function applyBranding(b) {
   if (STATE.branding.primary_color) {
     root.style.setProperty('--brand-on', luminance(STATE.branding.primary_color) > 0.55 ? '#001a2a' : '#ffffff');
   }
-  // Title + favicon (usa o branding atual — app ou coach)
+  // Title + favicon. O nome acompanha o branding; o ícone instalado fica estável.
   document.title = STATE.branding.app_name;
   updateFavicon();
   // Header do app (pós-login): sempre usa o branding corrente do usuário
@@ -1347,19 +1349,13 @@ function brandLogoHTML() {
 function updateFavicon() {
   const fav = document.getElementById('favicon');
   if (!fav) return;
-  const b = STATE.branding;
-  // Usa logo_url se disponível (mesmo logo da tela de login)
-  if (b.logo_url) {
-    fav.href = b.logo_url;
-    // Atualiza também apple-touch-icon
-    document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(el => { el.href = b.logo_url; });
-    return;
-  }
-  // Fallback: SVG com iniciais e cor da marca
-  const bg = STATE.theme === 'light' ? '%23f5f7fb' : '%230a0e1a';
-  const fg = (b.primary_color || '#00b4ff').replace('#','%23');
-  const txt = (b.logo_text || b.app_name.slice(0,2)).toUpperCase();
-  fav.href = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='${bg}'/%3E%3Ctext x='50%25' y='58%25' text-anchor='middle' font-family='Arial Black' font-size='28' fill='${fg}'%3E${encodeURIComponent(txt)}%3C/text%3E%3C/svg%3E`;
+  fav.href = "assets/icons/favicon.png?v=20260505";
+  document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(el => {
+    const size = el.getAttribute("sizes") || "180x180";
+    el.href = size.indexOf("512") === 0 ? "assets/icons/icon-512.png?v=20260505"
+      : size.indexOf("192") === 0 ? "assets/icons/icon-192.png?v=20260505"
+      : "assets/icons/icon-180.png?v=20260505";
+  });
 }
 
 function luminance(hex) {
