@@ -584,6 +584,11 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
 .period-toolbar { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0 12px; }
 .period-toolbar .mini-btn { min-height:40px; }
 .period-week-card { padding:12px; }
+.period-week-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.period-week-title { font-size:12px; font-weight:800; color:var(--text-2); text-transform:uppercase; letter-spacing:.7px; }
+.period-week-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.period-week-actions .mini-btn { min-height:30px; padding:5px 9px; font-size:10px; }
+.period-week-card.is-busy { opacity:.68; pointer-events:none; border-color:var(--brand); }
 .period-day-editor-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; position:sticky; top:-20px; z-index:2; background:var(--bg-2); padding:10px 0; }
 .preset-chip-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
 .sheet-action-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
@@ -614,6 +619,9 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
   .period-toolbar { grid-template-columns:1fr; }
   .preset-chip-grid { grid-template-columns:1fr 1fr; }
   .sheet-action-grid { grid-template-columns:1fr; }
+  .period-week-head { align-items:flex-start; flex-direction:column; }
+  .period-week-actions { width:100%; justify-content:flex-start; }
+  .period-week-actions .mini-btn { flex:1 1 auto; min-width:92px; }
   .ex-head { gap: 10px; padding: 12px; }
   .ex-thumb { width: 58px; height: 58px; flex-basis: 58px; }
   .ex-progress { min-width: 34px; }
@@ -6838,8 +6846,18 @@ window.openStudentPeriodSheet = async function(id) {
       <button class="mini-btn mini-btn-ghost" onclick="openPresetEditor()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Tipos</button>
     </div>
     ${grouped.length === 0 ? `<div class="empty"><p>Nenhuma semana ainda. Clique em "+ 1 Semana".</p></div>` : grouped.map((week, wi) => `
-      <div class="card mb-8 period-week-card">
-        <div class="text-xs muted" style="margin-bottom:6px">Semana ${wi+1}</div>
+      <div class="card mb-8 period-week-card" id="period-week-${wi}">
+        <div class="period-week-head">
+          <div>
+            <div class="period-week-title">Semana ${wi+1}</div>
+            <div class="text-xs muted">${fmtDateBR(week[0]?.date)}${week[6]?.date ? ` a ${fmtDateBR(week[6].date)}` : ""}</div>
+          </div>
+          <div class="period-week-actions">
+            <button class="mini-btn mini-btn-ghost" onclick="movePeriodWeek('${id}',${wi},-1)" ${wi === 0 ? 'disabled' : ''}>↑ Subir</button>
+            <button class="mini-btn mini-btn-ghost" onclick="movePeriodWeek('${id}',${wi},1)" ${wi === grouped.length - 1 ? 'disabled' : ''}>↓ Descer</button>
+            <button class="mini-btn mini-btn-primary" onclick="duplicatePeriodWeek('${id}',${wi})">Duplicar</button>
+          </div>
+        </div>
         <div class="week-grid">
           ${week.map(d => {
             const dt = new Date(d.date+"T00:00:00");
@@ -6878,6 +6896,63 @@ window.removePeriodWeek = async function(studentId) {
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Semana removida", "success");
   openStudentPeriodSheet(studentId);
+};
+
+function canManagePeriodWeeks() {
+  if (STATE.profile?.role !== "coach") {
+    showToast("Apenas professor pode organizar a periodização.", "error");
+    return false;
+  }
+  if (STATE._periodWeekAction) return false;
+  return true;
+}
+
+function setPeriodWeekBusy(weekIndex, busy) {
+  const el = document.getElementById(`period-week-${weekIndex}`);
+  if (el) el.classList.toggle("is-busy", !!busy);
+}
+
+window.duplicatePeriodWeek = async function(studentId, weekIndex) {
+  if (!canManagePeriodWeeks()) return;
+  STATE._periodWeekAction = true;
+  setPeriodWeekBusy(weekIndex, true);
+  showToast("Duplicando semana...");
+  try {
+    const { error } = await sb.rpc("duplicate_periodization_week", {
+      p_student_id: studentId,
+      p_week_index: weekIndex
+    });
+    if (error) throw error;
+    showToast("Semana duplicada", "success");
+    await openStudentPeriodSheet(studentId);
+  } catch (e) {
+    showToast("Erro ao duplicar: " + (e.message || "tente novamente"), "error");
+    setPeriodWeekBusy(weekIndex, false);
+  } finally {
+    STATE._periodWeekAction = false;
+  }
+};
+
+window.movePeriodWeek = async function(studentId, weekIndex, dir) {
+  if (!canManagePeriodWeeks()) return;
+  STATE._periodWeekAction = true;
+  setPeriodWeekBusy(weekIndex, true);
+  showToast("Reordenando semana...");
+  try {
+    const { error } = await sb.rpc("move_periodization_week", {
+      p_student_id: studentId,
+      p_week_index: weekIndex,
+      p_dir: dir
+    });
+    if (error) throw error;
+    showToast("Ordem salva", "success");
+    await openStudentPeriodSheet(studentId);
+  } catch (e) {
+    showToast("Erro ao mover: " + (e.message || "tente novamente"), "error");
+    setPeriodWeekBusy(weekIndex, false);
+  } finally {
+    STATE._periodWeekAction = false;
+  }
 };
 
 window.reseedPeriod = async function(id) {
