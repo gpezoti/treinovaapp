@@ -1,8 +1,9 @@
 # Realistic Exercise Visual Assets
 
-Generated WebP exercise visuals live in this folder using the exact filenames below.
+Generated WebP exercise visuals live in this folder.
 The app uses these assets when the teacher has not uploaded a custom image.
-If an asset is missing, the UI falls back to the local safe placeholder instead of showing a broken image.
+The current production mapping now prefers `exact/<exercise-name>.webp`, keyed by the exact exercise name, before any legacy category visual.
+If an exact asset is missing, the UI falls back to a neutral local placeholder instead of showing another movement incorrectly.
 
 Visual direction:
 - Ultra realistic or semi-realistic instructional fitness image.
@@ -14,8 +15,17 @@ Visual direction:
 
 Target format:
 - WebP
-- 640x440 or 1280x880 source, exported consistently
+- 640x640 for exact exercise thumbnails
+- 640x440 or 1280x880 for legacy category sources
 - Optimized for small mobile thumbnails
+
+Exact exercise assets:
+- `exact/*.webp` contains one file per registered exercise name.
+- `exact/source/workout_exact_sheet_*.png` keeps the AI-generated source sheets used to crop the main workout visuals.
+- `outputs/exercise-exact-image-prompts.md` contains the exact prompt for every registered exercise.
+
+Legacy category filenames:
+These are kept only as older broad visual references. Runtime selection should not use them for exact registered exercises.
 
 Generated filenames:
 - `realistic_barbell_squat.webp`
