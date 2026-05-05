@@ -15,5 +15,10 @@ assert.match(html, /Pendentes e vencimentos/, "pending payments section should e
 assert.match(html, /Histórico de pagamentos/, "payment history section should exist");
 assert.match(html, /openStudentPaymentDetails/, "students should be able to view payment details");
 assert.match(html, /Mensalidades e histórico/, "student dashboard should link to finance");
+assert.match(html, /function renderCoachOwnFinancePanel\(\)/, "coach finance should show own payments owed to admin");
+assert.match(html, /Minha mensalidade com o ADM/, "coach finance should label admin dues clearly");
+assert.match(html, /loadMyPayments\(\)/, "coach finance should load the professor's own payments");
+assert.match(html, /Total que devo/, "coach own finance should include amount owed summary");
+assert.match(html, /Quando o ADM criar uma mensalidade para você/, "coach own finance should explain empty state");
 
 console.log("Student finance static QA checks passed");
