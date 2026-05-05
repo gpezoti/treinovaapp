@@ -1,0 +1,176 @@
+--- outputs/index.html	2026-05-05 06:47:19
++++ index.html	2026-05-05 07:09:17
+@@ -2608,9 +2608,15 @@
+     if (fsTimer && fsTimer.classList.contains("active") && (!STATE.timer || !STATE.timer.running)) {
+       fsTimer.classList.remove("active");
+     }
++
++    document.querySelectorAll("#serie-done-modal,#wc-overlay,#onb-overlay,#coach-onb-overlay").forEach(el => {
++      if (el && el.style && el.style.opacity === "0") el.remove();
++    });
+ 
+     const serieModal = document.getElementById("serie-done-modal");
+-    if (serieModal && window._sdmModal) {
++    if (serieModal && (!window._sdmModal || serieModal.style.opacity === "0")) {
++      serieModal.remove();
++    } else if (serieModal && window._sdmModal) {
+       const confirmBtn = document.getElementById("sdm-confirm-btn");
+       if (confirmBtn) confirmBtn.disabled = false;
+       if (confirmBtn) confirmBtn.onclick = () => confirmSerieDone(false);
+@@ -2699,6 +2705,7 @@
+ 
+   try {
+     restoreTimerIfActive();
++    reconcileTimerAfterLifecycle(reason);
+     repairInteractionLayer(reason);
+ 
+     if (!sb || !STATE.profile) return;
+@@ -2771,6 +2778,7 @@
+ 
+   document.addEventListener("visibilitychange", () => {
+     if (document.visibilityState === "hidden") {
++      closeFsTimer();
+       markAppHiddenForResume();
+       return;
+     }
+@@ -2807,6 +2815,7 @@
+    ============================================================================= */
+ const RING_CIRC = 2 * Math.PI * 45;
+ let _wakeLock = null;
++let _TIMER_CLEANUP_HANDLE = null;
+ async function _acquireWakeLock() {
+   try {
+     if ('wakeLock' in navigator) {
+@@ -2817,11 +2826,81 @@
+ }
+ function _releaseWakeLock() {
+   try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
++}
++function clearPersistedTimer() {
++  try {
++    localStorage.removeItem("timer_start");
++    localStorage.removeItem("timer_duration");
++    localStorage.removeItem("timer_label");
++  } catch(e) {}
++}
++function scheduleTimerChromeCleanup(delay = 800) {
++  if (_TIMER_CLEANUP_HANDLE) clearTimeout(_TIMER_CLEANUP_HANDLE);
++  _TIMER_CLEANUP_HANDLE = setTimeout(() => {
++    document.getElementById("timer-bar")?.classList.remove("active","warning","done");
++    document.getElementById("timer-ring")?.classList.remove("warning","done");
++    closeFsTimer();
++    _TIMER_CLEANUP_HANDLE = null;
++  }, delay);
++}
++function reconcileTimerAfterLifecycle(reason = "resume") {
++  try {
++    const start = parseInt(localStorage.getItem("timer_start") || "0", 10);
++    const duration = parseInt(localStorage.getItem("timer_duration") || "0", 10);
++    if (!start || !duration) {
++      if (!STATE.timer.running) closeFsTimer();
++      return;
++    }
++    const elapsed = Math.floor((Date.now() - start) / 1000);
++    const remaining = duration - elapsed;
++    if (remaining <= 0) {
++      if (STATE.timer.raf) {
++        clearTimeout(STATE.timer.raf);
++        STATE.timer.raf = null;
++      }
++      const doneCallback = STATE.timer.onDone;
++      STATE.timer.secondsTotal = duration;
++      STATE.timer.secondsLeft = 0;
++      STATE.timer.running = false;
++      STATE.timer.paused = false;
++      _releaseWakeLock();
++      clearPersistedTimer();
++      document.getElementById("timer-bar")?.classList.add("active","done");
++      document.getElementById("timer-ring")?.classList.add("done");
++      const barTime = document.getElementById("timer-bar-time");
++      const fsTime = document.getElementById("timer-fs-time");
++      const fsLabel = document.getElementById("timer-fs-label");
++      if (barTime) barTime.textContent = "00:00";
++      if (fsTime) fsTime.textContent = "00:00";
++      if (fsLabel) fsLabel.textContent = "Vamos lá!";
++      closeFsTimer();
++      if (typeof doneCallback === "function") {
++        try { doneCallback(); } catch(e) { console.warn("[timer resume callback]", e); }
++      }
++      showToast("Descanso concluído ✓", "success");
++      scheduleTimerChromeCleanup(1400);
++      return;
++    }
++    if (STATE.timer.running) {
++      STATE.timer.secondsTotal = duration;
++      STATE.timer.secondsLeft = remaining;
++      STATE.timer.startedAt = start;
++      STATE.timer.paused = false;
++      tickTimer();
++    }
++    // Ao voltar do bloqueio, deixa só a barra compacta para não bloquear a tela.
++    closeFsTimer();
++  } catch(e) {
++    console.warn("[timer lifecycle]", reason, e);
++    closeFsTimer();
++  }
+ }
+ // Re-adquire wake lock ao voltar de background
+ document.addEventListener('visibilitychange', () => {
+   if (document.visibilityState === 'visible' && STATE.timer && STATE.timer.running) {
+     _acquireWakeLock();
++  } else if (document.visibilityState === 'hidden') {
++    closeFsTimer();
+   }
+ });
+ 
+@@ -2875,10 +2954,8 @@
+       tickTimer();
+       // Não abre o fullscreen automaticamente ao restaurar — apenas mantém a barra
+     } else {
+-      // Timer expirou enquanto estava fora
+-      localStorage.removeItem("timer_start");
+-      localStorage.removeItem("timer_duration");
+-      localStorage.removeItem("timer_label");
++      // Timer expirou enquanto estava fora. Fecha qualquer camada cheia para não bloquear toques.
++      reconcileTimerAfterLifecycle("restore-expired");
+     }
+   } catch(e) {}
+ }
+@@ -2919,11 +2996,7 @@
+   }
+   STATE.timer.running = false;
+   _releaseWakeLock();
+-  try {
+-    localStorage.removeItem("timer_start");
+-    localStorage.removeItem("timer_duration");
+-    localStorage.removeItem("timer_label");
+-  } catch(e) {}
++  clearPersistedTimer();
+   document.getElementById("timer-bar").classList.add("done");
+   document.getElementById("timer-ring").classList.add("done");
+   document.getElementById("timer-bar-time").textContent = "00:00";
+@@ -2933,10 +3006,7 @@
+   // Auto-fechar fullscreen e barra após 2.5s
+   setTimeout(() => {
+     closeFsTimer();
+-    setTimeout(() => {
+-      document.getElementById("timer-bar")?.classList.remove("active","warning","done");
+-      document.getElementById("timer-ring")?.classList.remove("warning","done");
+-    }, 800);
++    scheduleTimerChromeCleanup(800);
+   }, 2500);
+   try {
+     const ctx = new (window.AudioContext || window.webkitAudioContext)();
+@@ -2958,11 +3028,7 @@
+   STATE.timer.running = false; STATE.timer.paused = false;
+   _releaseWakeLock();
+   // [M-04] Limpar persistência ao cancelar
+-  try {
+-    localStorage.removeItem("timer_start");
+-    localStorage.removeItem("timer_duration");
+-    localStorage.removeItem("timer_label");
+-  } catch(e) {}
++  clearPersistedTimer();
+ }
+ function closeTimer() {
+   cancelTimer();
