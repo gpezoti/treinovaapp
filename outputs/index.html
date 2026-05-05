@@ -852,6 +852,160 @@ const EXERCISE_CAT_IMAGE_KIND = {
   mobility: "mobility", rotator: "mobility", hipflex: "lunge", adductor: "squat"
 };
 const _STANDARD_EXERCISE_IMAGE_CACHE = {};
+const _MISSING_EXERCISE_IMAGE_CACHE = {};
+const EXACT_EXERCISE_IMAGE_ASSETS = {
+  "ab wheel (roda abdominal)": "assets/exercises/exact/ab_wheel_roda_abdominal.webp",
+  "abdominal infra na barra": "assets/exercises/exact/abdominal_infra_na_barra.webp",
+  "abducao de quadril com elastico": "assets/exercises/exact/abducao_de_quadril_com_elastico.webp",
+  "abertura de quadril 90/90": "assets/exercises/exact/abertura_de_quadril_90_90.webp",
+  "afundo no smith": "assets/exercises/exact/afundo_no_smith.webp",
+  "agachamento bulgaro": "assets/exercises/exact/agachamento_bulgaro.webp",
+  "agachamento bulgaro descalco": "assets/exercises/exact/agachamento_bulgaro_descalco.webp",
+  "agachamento goblet": "assets/exercises/exact/agachamento_goblet.webp",
+  "agachamento hack linear": "assets/exercises/exact/agachamento_hack_linear.webp",
+  "agachamento livre com barra": "assets/exercises/exact/agachamento_livre_com_barra.webp",
+  "agachamento sumo": "assets/exercises/exact/agachamento_sumo.webp",
+  "agachamento sumo profundo": "assets/exercises/exact/agachamento_sumo_profundo.webp",
+  "alongamento de isquiotibiais": "assets/exercises/exact/alongamento_de_isquiotibiais.webp",
+  "alongamento de quadriceps": "assets/exercises/exact/alongamento_de_quadriceps.webp",
+  "avanco com barra": "assets/exercises/exact/avanco_com_barra.webp",
+  "avanco com halteres": "assets/exercises/exact/avanco_com_halteres.webp",
+  "barra fixa (pullup)": "assets/exercises/exact/barra_fixa_pullup.webp",
+  "barra fixa supinada + pulldown com corda": "assets/exercises/exact/barra_fixa_supinada_e_pulldown_com_corda.webp",
+  "bicicleta abdominal": "assets/exercises/exact/bicicleta_abdominal.webp",
+  "bike ergometrica": "assets/exercises/exact/bike_ergometrica.webp",
+  "bike zona 2/3": "assets/exercises/exact/bike_zona_2_3.webp",
+  "burpees": "assets/exercises/exact/burpees.webp",
+  "cadeira adutora + cadeira abdutora 90°": "assets/exercises/exact/cadeira_adutora_e_cadeira_abdutora_90_graus.webp",
+  "cadeira extensora": "assets/exercises/exact/cadeira_extensora.webp",
+  "cadeira flexora": "assets/exercises/exact/cadeira_flexora.webp",
+  "caminhada inclinada": "assets/exercises/exact/caminhada_inclinada.webp",
+  "cat-cow (mobilidade lombar)": "assets/exercises/exact/cat_cow_mobilidade_lombar.webp",
+  "corda (jump rope)": "assets/exercises/exact/corda_jump_rope.webp",
+  "corrida na esteira": "assets/exercises/exact/corrida_na_esteira.webp",
+  "crossover no cabo": "assets/exercises/exact/crossover_no_cabo.webp",
+  "crucifixo inclinado": "assets/exercises/exact/crucifixo_inclinado.webp",
+  "crucifixo no cross over polia baixa, banco inclinado 45°": "assets/exercises/exact/crucifixo_no_cross_over_polia_baixa_banco_inclinado_45_graus.webp",
+  "crucifixo reto": "assets/exercises/exact/crucifixo_reto.webp",
+  "crunch abdominal": "assets/exercises/exact/crunch_abdominal.webp",
+  "crunch obliquo": "assets/exercises/exact/crunch_obliquo.webp",
+  "dead bug": "assets/exercises/exact/dead_bug.webp",
+  "deep squat passivo": "assets/exercises/exact/deep_squat_passivo.webp",
+  "desenvolvimento arnold": "assets/exercises/exact/desenvolvimento_arnold.webp",
+  "desenvolvimento articulado + elevacao lateral c/ halteres": "assets/exercises/exact/desenvolvimento_articulado_e_elevacao_lateral_c_halteres.webp",
+  "desenvolvimento com barra": "assets/exercises/exact/desenvolvimento_com_barra.webp",
+  "desenvolvimento com halteres": "assets/exercises/exact/desenvolvimento_com_halteres.webp",
+  "dislocacao de ombros (bastao)": "assets/exercises/exact/dislocacao_de_ombros_bastao.webp",
+  "donkey kicks": "assets/exercises/exact/donkey_kicks.webp",
+  "elevacao de pernas deitado": "assets/exercises/exact/elevacao_de_pernas_deitado.webp",
+  "elevacao frontal com halter": "assets/exercises/exact/elevacao_frontal_com_halter.webp",
+  "elevacao lateral com halter": "assets/exercises/exact/elevacao_lateral_com_halter.webp",
+  "elevacao lateral no cabo": "assets/exercises/exact/elevacao_lateral_no_cabo.webp",
+  "elevacao pelvica no solo": "assets/exercises/exact/elevacao_pelvica_no_solo.webp",
+  "eliptico": "assets/exercises/exact/eliptico.webp",
+  "encolhimento com barra": "assets/exercises/exact/encolhimento_com_barra.webp",
+  "encolhimento com halteres": "assets/exercises/exact/encolhimento_com_halteres.webp",
+  "escada (step)": "assets/exercises/exact/escada_step.webp",
+  "extensao de quadril no banco romano": "assets/exercises/exact/extensao_de_quadril_no_banco_romano.webp",
+  "face pull (com duas cordas)": "assets/exercises/exact/face_pull_com_duas_cordas.webp",
+  "face pull no cabo": "assets/exercises/exact/face_pull_no_cabo.webp",
+  "flexao de bracos": "assets/exercises/exact/flexao_de_bracos.webp",
+  "flexao de quadril na paralela com joelho estendido": "assets/exercises/exact/flexao_de_quadril_na_paralela_com_joelho_estendido.webp",
+  "flexao inclinada (pes altos)": "assets/exercises/exact/flexao_inclinada_pes_altos.webp",
+  "flexao nordica (nordic curl)": "assets/exercises/exact/flexao_nordica_nordic_curl.webp",
+  "flexora unilateral em pe": "assets/exercises/exact/flexora_unilateral_em_pe.webp",
+  "frog stretch": "assets/exercises/exact/frog_stretch.webp",
+  "gluteo no cabo (kickback)": "assets/exercises/exact/gluteo_no_cabo_kickback.webp",
+  "good morning": "assets/exercises/exact/good_morning.webp",
+  "hack squat": "assets/exercises/exact/hack_squat.webp",
+  "hiit na esteira": "assets/exercises/exact/hiit_na_esteira.webp",
+  "hip circles": "assets/exercises/exact/hip_circles.webp",
+  "hip thrust": "assets/exercises/exact/hip_thrust.webp",
+  "hip thrust com barra": "assets/exercises/exact/hip_thrust_com_barra.webp",
+  "hiperextensao lombar": "assets/exercises/exact/hiperextensao_lombar.webp",
+  "leg press (foco panturrilha)": "assets/exercises/exact/leg_press_foco_panturrilha.webp",
+  "leg press 45°": "assets/exercises/exact/leg_press_45_graus.webp",
+  "levantamento terra": "assets/exercises/exact/levantamento_terra.webp",
+  "levantamento terra romeno": "assets/exercises/exact/levantamento_terra_romeno.webp",
+  "mergulho em paralelas (dips)": "assets/exercises/exact/mergulho_em_paralelas_dips.webp",
+  "mesa flexora": "assets/exercises/exact/mesa_flexora.webp",
+  "mesa hip thrust (maquina)": "assets/exercises/exact/mesa_hip_thrust_maquina.webp",
+  "mobilidade de adutores frog": "assets/exercises/exact/mobilidade_de_adutores_frog.webp",
+  "mobilidade de adutores frog no solo": "assets/exercises/exact/mobilidade_de_adutores_frog_no_solo.webp",
+  "mobilidade de posteriores (unilateral)": "assets/exercises/exact/mobilidade_de_posteriores_unilateral.webp",
+  "mobilidade de posteriores no solo (unilateral)": "assets/exercises/exact/mobilidade_de_posteriores_no_solo_unilateral.webp",
+  "mobilidade de tornozelo": "assets/exercises/exact/mobilidade_de_tornozelo.webp",
+  "mobilidade rotacional de ombros": "assets/exercises/exact/mobilidade_rotacional_de_ombros.webp",
+  "mobilidade rotacional de ombros com bastao ou corda": "assets/exercises/exact/mobilidade_rotacional_de_ombros_com_bastao_ou_corda.webp",
+  "mobilidade rotacional de tronco na parede": "assets/exercises/exact/mobilidade_rotacional_de_tronco_na_parede.webp",
+  "mountain climber": "assets/exercises/exact/mountain_climber.webp",
+  "panturrilha em pe na maquina": "assets/exercises/exact/panturrilha_em_pe_na_maquina.webp",
+  "panturrilha livre (bilateral)": "assets/exercises/exact/panturrilha_livre_bilateral.webp",
+  "panturrilha sentado": "assets/exercises/exact/panturrilha_sentado.webp",
+  "panturrilha unilateral": "assets/exercises/exact/panturrilha_unilateral.webp",
+  "panturrilhas no leg horizontal": "assets/exercises/exact/panturrilhas_no_leg_horizontal.webp",
+  "panturrilhas no smith": "assets/exercises/exact/panturrilhas_no_smith.webp",
+  "passada lateral": "assets/exercises/exact/passada_lateral.webp",
+  "peck deck (fly na maquina)": "assets/exercises/exact/peck_deck_fly_na_maquina.webp",
+  "pigeon pose": "assets/exercises/exact/pigeon_pose.webp",
+  "prancha (plank)": "assets/exercises/exact/prancha_plank.webp",
+  "prancha isometrica + abdominal supra 90°": "assets/exercises/exact/prancha_isometrica_e_abdominal_supra_90_graus.webp",
+  "prancha isometrica + super-man no solo": "assets/exercises/exact/prancha_isometrica_e_super_man_no_solo.webp",
+  "prancha lateral": "assets/exercises/exact/prancha_lateral.webp",
+  "pulley costas (triangulo)": "assets/exercises/exact/pulley_costas_triangulo.webp",
+  "pulley frente (pegada aberta)": "assets/exercises/exact/pulley_frente_pegada_aberta.webp",
+  "pullover com halter": "assets/exercises/exact/pullover_com_halter.webp",
+  "puxada com barra pronada": "assets/exercises/exact/puxada_com_barra_pronada.webp",
+  "puxada frontal com barra (pegada neutra)": "assets/exercises/exact/puxada_frontal_com_barra_pegada_neutra.webp",
+  "rdl (stiff) com barra descalco": "assets/exercises/exact/rdl_stiff_com_barra_descalco.webp",
+  "remada alta com barra": "assets/exercises/exact/remada_alta_com_barra.webp",
+  "remada alta no cabo": "assets/exercises/exact/remada_alta_no_cabo.webp",
+  "remada cavalinho": "assets/exercises/exact/remada_cavalinho.webp",
+  "remada cavalinho livre com triangulo": "assets/exercises/exact/remada_cavalinho_livre_com_triangulo.webp",
+  "remada curvada com barra": "assets/exercises/exact/remada_curvada_com_barra.webp",
+  "remada no cabo sentado": "assets/exercises/exact/remada_no_cabo_sentado.webp",
+  "remada unilateral com halter": "assets/exercises/exact/remada_unilateral_com_halter.webp",
+  "remo ergometrico": "assets/exercises/exact/remo_ergometrico.webp",
+  "rosca 21": "assets/exercises/exact/rosca_21.webp",
+  "rosca alternada com halter": "assets/exercises/exact/rosca_alternada_com_halter.webp",
+  "rosca concentrada": "assets/exercises/exact/rosca_concentrada.webp",
+  "rosca concentrada com halter": "assets/exercises/exact/rosca_concentrada_com_halter.webp",
+  "rosca direta com barra": "assets/exercises/exact/rosca_direta_com_barra.webp",
+  "rosca inclinada com halter": "assets/exercises/exact/rosca_inclinada_com_halter.webp",
+  "rosca inversa": "assets/exercises/exact/rosca_inversa.webp",
+  "rosca martelo": "assets/exercises/exact/rosca_martelo.webp",
+  "rosca no cabo com barra w": "assets/exercises/exact/rosca_no_cabo_com_barra_w.webp",
+  "rosca scott (preacher curl)": "assets/exercises/exact/rosca_scott_preacher_curl.webp",
+  "rosca scott na maquina": "assets/exercises/exact/rosca_scott_na_maquina.webp",
+  "rotacao cubana com halteres em pe": "assets/exercises/exact/rotacao_cubana_com_halteres_em_pe.webp",
+  "rotacao externa com elastico": "assets/exercises/exact/rotacao_externa_com_elastico.webp",
+  "rotacao toracica": "assets/exercises/exact/rotacao_toracica.webp",
+  "russian twist": "assets/exercises/exact/russian_twist.webp",
+  "scorpion stretch": "assets/exercises/exact/scorpion_stretch.webp",
+  "serrote com halter": "assets/exercises/exact/serrote_com_halter.webp",
+  "spinning": "assets/exercises/exact/spinning.webp",
+  "stiff (terra romeno)": "assets/exercises/exact/stiff_terra_romeno.webp",
+  "sumo deadlift descalco": "assets/exercises/exact/sumo_deadlift_descalco.webp",
+  "supino declinado com barra": "assets/exercises/exact/supino_declinado_com_barra.webp",
+  "supino fechado": "assets/exercises/exact/supino_fechado.webp",
+  "supino inclinado com barra": "assets/exercises/exact/supino_inclinado_com_barra.webp",
+  "supino inclinado com halteres": "assets/exercises/exact/supino_inclinado_com_halteres.webp",
+  "supino inclinado com halteres (banco 30°)": "assets/exercises/exact/supino_inclinado_com_halteres_banco_30_graus.webp",
+  "supino reto articulado": "assets/exercises/exact/supino_reto_articulado.webp",
+  "supino reto com barra": "assets/exercises/exact/supino_reto_com_barra.webp",
+  "supino reto com halteres": "assets/exercises/exact/supino_reto_com_halteres.webp",
+  "triceps coice com halter": "assets/exercises/exact/triceps_coice_com_halter.webp",
+  "triceps corda no cabo": "assets/exercises/exact/triceps_corda_no_cabo.webp",
+  "triceps frances com corda na polia media": "assets/exercises/exact/triceps_frances_com_corda_na_polia_media.webp",
+  "triceps frances com halter": "assets/exercises/exact/triceps_frances_com_halter.webp",
+  "triceps pulley com barra": "assets/exercises/exact/triceps_pulley_com_barra.webp",
+  "triceps pulley com barra w": "assets/exercises/exact/triceps_pulley_com_barra_w.webp",
+  "triceps testa (skullcrusher)": "assets/exercises/exact/triceps_testa_skullcrusher.webp",
+  "triceps testa no cabo": "assets/exercises/exact/triceps_testa_no_cabo.webp",
+  "vacuo abdominal": "assets/exercises/exact/vacuo_abdominal.webp",
+  "world greatest stretch": "assets/exercises/exact/world_greatest_stretch.webp"
+};
+
 
 function normalizeExerciseText(value) {
   return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -903,10 +1057,42 @@ function getStandardExerciseImageUrl(ex) {
   }
   return _STANDARD_EXERCISE_IMAGE_CACHE[kind];
 }
+function getExactExerciseAssetUrl(ex = {}) {
+  const name = normalizeExerciseText(ex.name || "");
+  return name ? (EXACT_EXERCISE_IMAGE_ASSETS[name] || null) : null;
+}
+function missingExerciseImageSvg(ex = {}) {
+  const label = ex && ex.name ? `Imagem específica pendente para ${ex.name}` : "Imagem específica pendente";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220" role="img" aria-label="${label}">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f5f7fb"/><stop offset="1" stop-color="#e7ecf3"/></linearGradient>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#0f172a" flood-opacity=".14"/></filter>
+    </defs>
+    <rect width="320" height="220" rx="24" fill="url(#bg)"/>
+    <ellipse cx="160" cy="176" rx="70" ry="12" fill="#0f172a" opacity=".10"/>
+    <g filter="url(#shadow)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="160" cy="74" r="22" fill="#cbd5e1" stroke="#94a3b8" stroke-width="6"/>
+      <path d="M160 98v42M132 116l28 22 28-22M142 140l-26 34M178 140l26 34" stroke="#64748b" stroke-width="14"/>
+      <path d="M94 178h132" stroke="#94a3b8" stroke-width="10" opacity=".7"/>
+    </g>
+  </svg>`;
+}
+function getMissingExerciseImageUrl(ex = {}) {
+  const key = normalizeExerciseText(ex.name || "__generic__");
+  if (!_MISSING_EXERCISE_IMAGE_CACHE[key]) {
+    _MISSING_EXERCISE_IMAGE_CACHE[key] = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(missingExerciseImageSvg(ex));
+  }
+  return _MISSING_EXERCISE_IMAGE_CACHE[key];
+}
+function getExerciseSpecificPrompt(ex = {}) {
+  const name = ex && ex.name ? ex.name : "exercício personalizado";
+  return `Ultra realistic fitness image of a person performing ${name}, correct form, equipment and variation exactly matching the exercise name, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo.`;
+}
 function getStandardExerciseAssetUrl(ex) {
-  const kind = inferExerciseImageKind(ex);
-  const item = STANDARD_EXERCISE_IMAGES[kind] || STANDARD_EXERCISE_IMAGES.generic;
-  return item.assetPath;
+  const exact = getExactExerciseAssetUrl(ex || {});
+  if (exact) return exact;
+  // Não usar foto genérica de outro movimento: exercícios sem asset específico ficam neutros.
+  return getMissingExerciseImageUrl(ex || {});
 }
 function isGenericExerciseImage(url) {
   return !url || url === DEFAULT_EXERCISE_IMAGE_URL || String(url).includes(encodeURIComponent("<circle cx=\"160\" cy=\"74\" r=\"24\""));
@@ -921,10 +1107,10 @@ function getExerciseImageUrl(ex) {
 }
 
 // Retorna HTML de imagem para um exercício.
-// Prioridade: imagem própria do professor → biblioteca com mesmo nome → asset realista WebP → fallback local.
+// Prioridade: imagem própria do professor → biblioteca com mesmo nome → asset específico por nome → placeholder neutro.
 function getExThumb(ex) {
   const url = getExerciseImageUrl(ex || {});
-  const fallback = getStandardExerciseImageUrl(ex || {});
+  const fallback = getMissingExerciseImageUrl(ex || {});
   const alt = ex && ex.name ? `Imagem de ${ex.name}` : "Imagem do exercício";
   return `<img src="${escape(url)}" data-fallback-src="${escape(fallback)}" alt="${escape(alt)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=this.dataset.fallbackSrc" />`;
 }
@@ -992,6 +1178,9 @@ let _APP_RESUME_BOUND = false;
 let _APP_HIDDEN_AT = 0;
 let _APP_RESUME_RUNNING = false;
 let _APP_RESUME_LAST_AT = 0;
+let _APP_RESUME_NEEDS_TOUCH_REPAIR = false;
+let _APP_LAST_INTERACTION_AT = 0;
+let _APP_INTERACTION_WATCHDOG_BOUND = false;
 
 /* =============================================================================
    HELPERS
@@ -2241,7 +2430,12 @@ function setupPullToRefresh() {
       } else if (STATE.view === "feed") { await loadFeed(); renderFeed(); }
       else if (STATE.view === "calendar") { await loadPeriodization(); renderCalendar(); }
       else if (STATE.view === "students") { await loadStudents(); renderStudents(); }
-      else if (STATE.view === "payments") { await loadCoachPayments(); renderPayments?.(); }
+      else if (STATE.view === "payments") {
+        if (STATE.profile?.role === "admin") await loadAdminPayments();
+        else if (STATE.profile?.role === "coach") await loadCoachPayments();
+        else await loadMyPayments();
+        renderPayments?.();
+      }
       else if (STATE.view === "chat")     { await renderChat(); }
       else renderCurrentView();
     } finally {
@@ -2280,6 +2474,16 @@ function setupPullToRefresh() {
     } else {
       getIndicator().style.transform = "translateX(-50%) translateY(-60px)";
       pulling = false;
+    }
+  }, { passive: true });
+  document.addEventListener("touchcancel", () => {
+    pulling = false;
+    if (indicator) indicator.style.transform = "translateX(-50%) translateY(-60px)";
+  }, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") {
+      pulling = false;
+      if (indicator) indicator.style.transform = "translateX(-50%) translateY(-60px)";
     }
   }, { passive: true });
 }
@@ -2370,26 +2574,48 @@ function repairInteractionLayer(reason = "resume") {
   try {
     document.documentElement.style.pointerEvents = "";
     document.body.style.pointerEvents = "";
+    document.documentElement.style.touchAction = "";
+    document.body.style.touchAction = "";
+    document.body.classList.remove("is-loading", "is-busy", "no-scroll", "modal-open");
+
+    const active = document.activeElement;
+    if (active && active !== document.body && typeof active.blur === "function" && document.visibilityState === "visible") {
+      try { active.blur(); } catch(e) {}
+    }
 
     const stuck = document.getElementById("stuck-overlay");
     if (stuck && _BOOT_DONE) stuck.remove();
 
+    const ptr = document.getElementById("ptr-indicator");
+    if (ptr) {
+      ptr.style.pointerEvents = "none";
+      ptr.style.transform = "translateX(-50%) translateY(-60px)";
+    }
+
     const sheet = document.getElementById("sheet");
     const sheetContent = document.getElementById("sheet-content");
-    if (sheet && sheet.classList.contains("active")) {
+    if (sheet) {
+      sheet.style.pointerEvents = sheet.classList.contains("active") ? "" : "none";
       const hasUsefulContent = (sheetContent?.textContent || "").trim().length > 0;
       const hasAction = !!sheet.querySelector("button,a,input,textarea,select,[onclick]");
-      if (!hasUsefulContent && !hasAction) {
+      if (sheet.classList.contains("active") && !hasUsefulContent && !hasAction) {
         sheet.classList.remove("active");
         _sheetInHistory = false;
       }
     }
 
+    const fsTimer = document.getElementById("timer-fs");
+    if (fsTimer && fsTimer.classList.contains("active") && (!STATE.timer || !STATE.timer.running)) {
+      fsTimer.classList.remove("active");
+    }
+
     const serieModal = document.getElementById("serie-done-modal");
     if (serieModal && window._sdmModal) {
       const confirmBtn = document.getElementById("sdm-confirm-btn");
+      if (confirmBtn) confirmBtn.disabled = false;
       if (confirmBtn) confirmBtn.onclick = () => confirmSerieDone(false);
       const skipBtn = serieModal.querySelector(".sdm-skip");
+      if (skipBtn) skipBtn.disabled = false;
       if (skipBtn) skipBtn.onclick = () => confirmSerieDone(true);
     }
 
@@ -2400,6 +2626,32 @@ function repairInteractionLayer(reason = "resume") {
   } catch(e) {
     console.warn("[interaction-repair]", reason, e);
   }
+}
+
+function markAppHiddenForResume() {
+  _APP_HIDDEN_AT = Date.now();
+  _APP_RESUME_NEEDS_TOUCH_REPAIR = true;
+}
+
+function bindInteractionWatchdog() {
+  if (_APP_INTERACTION_WATCHDOG_BOUND) return;
+  _APP_INTERACTION_WATCHDOG_BOUND = true;
+  const onAnyInteraction = (event) => {
+    _APP_LAST_INTERACTION_AT = Date.now();
+    if (!_APP_RESUME_NEEDS_TOUCH_REPAIR) return;
+    _APP_RESUME_NEEDS_TOUCH_REPAIR = false;
+    repairInteractionLayer("first-" + event.type);
+    requestAnimationFrame(() => repairInteractionLayer("first-" + event.type + ":raf"));
+  };
+  document.addEventListener("pointerdown", onAnyInteraction, true);
+  document.addEventListener("touchstart", onAnyInteraction, true);
+  document.addEventListener("click", onAnyInteraction, true);
+  document.addEventListener("touchcancel", () => {
+    repairInteractionLayer("touchcancel");
+  }, true);
+  document.addEventListener("pointercancel", () => {
+    repairInteractionLayer("pointercancel");
+  }, true);
 }
 
 async function refreshVisibleDataAfterResume() {
@@ -2515,17 +2767,39 @@ async function handleAppResume(reason = "resume") {
 function bindAppResumeHandlers() {
   if (_APP_RESUME_BOUND) return;
   _APP_RESUME_BOUND = true;
+  bindInteractionWatchdog();
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
-      _APP_HIDDEN_AT = Date.now();
+      markAppHiddenForResume();
       return;
     }
+    _APP_RESUME_NEEDS_TOUCH_REPAIR = true;
+    repairInteractionLayer("visibilitychange:pre");
+    requestAnimationFrame(() => repairInteractionLayer("visibilitychange:raf"));
+    setTimeout(() => repairInteractionLayer("visibilitychange:250ms"), 250);
     handleAppResume("visibilitychange");
   });
-  window.addEventListener("focus", () => handleAppResume("focus"));
-  window.addEventListener("pageshow", e => handleAppResume(e.persisted ? "pageshow-bfcache" : "pageshow"));
+  window.addEventListener("focus", () => {
+    _APP_RESUME_NEEDS_TOUCH_REPAIR = true;
+    repairInteractionLayer("focus:pre");
+    handleAppResume("focus");
+  });
+  window.addEventListener("blur", markAppHiddenForResume);
+  window.addEventListener("pagehide", markAppHiddenForResume);
+  window.addEventListener("pageshow", e => {
+    _APP_RESUME_NEEDS_TOUCH_REPAIR = true;
+    repairInteractionLayer("pageshow:pre");
+    requestAnimationFrame(() => repairInteractionLayer("pageshow:raf"));
+    handleAppResume(e.persisted ? "pageshow-bfcache" : "pageshow");
+  });
   window.addEventListener("online", () => handleAppResume("online"));
+  document.addEventListener("freeze", markAppHiddenForResume);
+  document.addEventListener("resume", () => {
+    _APP_RESUME_NEEDS_TOUCH_REPAIR = true;
+    repairInteractionLayer("page-lifecycle-resume");
+    handleAppResume("page-lifecycle-resume");
+  });
 }
 
 /* =============================================================================
@@ -2734,7 +3008,9 @@ let _editingStudentId = null;       // aluno sendo editado na periodização
 function openSheet(html) {
   const root = document.getElementById("sheet-content");
   root.innerHTML = '<div class="sheet-handle"></div>' + html;
-  document.getElementById("sheet").classList.add("active");
+  const sheet = document.getElementById("sheet");
+  sheet.style.pointerEvents = "";
+  sheet.classList.add("active");
   // Empurra estado para que o botão voltar (hardware/browser) feche a sheet
   if (!_sheetInHistory) {
     _sheetInHistory = true;
@@ -2746,6 +3022,7 @@ function closeSheet() {
   const sheet = document.getElementById("sheet");
   if (!sheet || !sheet.classList.contains("active")) return;
   sheet.classList.remove("active");
+  sheet.style.pointerEvents = "none";
   // Se o estado da sheet está no histórico, volta para limpá-lo
   if (_sheetInHistory) {
     _sheetInHistory = false;
