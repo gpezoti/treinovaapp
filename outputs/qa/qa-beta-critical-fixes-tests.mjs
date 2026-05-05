@@ -5,6 +5,8 @@ const html = fs.readFileSync("index.html", "utf8");
 const asaasEdge = fs.readFileSync("outputs/edge-functions/asaas-create-charge/index.ts", "utf8");
 const avatarSql = fs.readFileSync("sql/beta_avatar_storage_fix_2026_05_05.sql", "utf8");
 const workoutSql = fs.readFileSync("sql/beta_workout_types_2026_05_05.sql", "utf8");
+const messagesSql = fs.readFileSync("sql/beta_messages_delete_fix_2026_05_05.sql", "utf8");
+const adminPaymentsSql = fs.readFileSync("sql/beta_admin_professor_payments_2026_05_05.sql", "utf8");
 
 function has(needle, msg) {
   assert.ok(html.includes(needle), msg || `Missing: ${needle}`);
@@ -15,7 +17,9 @@ has("function validateImageFile(file)", "image validation must exist");
 has("async function uploadAvatarImage(file)", "avatar upload helper must exist");
 has(".from(\"avatars\")", "avatar uploads must use avatars bucket");
 has("profile-avatar-big", "avatar preview must be updated in the UI");
-has("update({ avatar_url: url })", "profile avatar_url must be persisted");
+has("avatar-${Date.now()}.jpg", "avatar upload must avoid stale cache/conflicting upsert path");
+has("update({ avatar_url: uploaded.url })", "profile avatar_url must be persisted");
+has('.select("avatar_url")', "profile update must verify that RLS actually updated the row");
 assert.match(avatarSql, /bucket_id = 'avatars'/, "avatar storage policies must target avatars bucket");
 assert.match(avatarSql, /storage\.foldername\(name\)\[1\] = auth\.uid\(\)::text/, "avatar storage must be scoped to user folder");
 
@@ -40,6 +44,16 @@ has('showToast("Atualizado", "success")', "pull refresh must give success feedba
 has("data-chat-other", "chat rows must have a stable delete target");
 has("STATE.chatThreads = (STATE.chatThreads || []).filter", "chat delete must update local state");
 has("row.dataset.chatOther === otherUserId", "chat delete must remove the visible row");
+has('.select("id,image_url")', "chat delete must verify rows were actually deleted");
+has("Não foi possível excluir. Verifique a policy de delete das mensagens.", "chat delete must not show false success");
+assert.match(messagesSql, /for delete using/, "messages delete migration must add delete RLS policy");
+
+// Admin finance: direct professor payments are visible and paid/pending amounts are included.
+has("async function loadAdminProfessorPayments(coachId)", "admin professor payment sheet loader must exist");
+has("STATE.profile?.role === \"admin\"", "admin payment sheet must use admin-safe loader");
+assert.match(adminPaymentsSql, /left join public\.payments pay on pay\.user_id = c\.id/, "admin finance must aggregate payments where professor is payer");
+assert.match(adminPaymentsSql, /paid_amount_month/, "admin finance must expose paid amount");
+assert.match(adminPaymentsSql, /pay\.status in \('pending','overdue'\)/, "admin finance must expose pending/open payments");
 
 // Workout types: professor/admin can create custom workout codes.
 has("openCreateWorkoutTypeSheet", "workout type creation sheet must exist");

@@ -1634,9 +1634,9 @@ function validateImageFile(file) {
 async function uploadAvatarImage(file) {
   validateImageFile(file);
   const blob = await compressImage(file, 512, 0.85);
-  const path = `${STATE.profile.id}/avatar.jpg`;
+  const path = `${STATE.profile.id}/avatar-${Date.now()}.jpg`;
   const { error } = await sb.storage.from("avatars").upload(path, blob, {
-    upsert: true,
+    upsert: false,
     contentType: "image/jpeg",
     cacheControl: "3600"
   });
@@ -1650,7 +1650,7 @@ async function uploadAvatarImage(file) {
     throw error;
   }
   const { data } = sb.storage.from("avatars").getPublicUrl(path);
-  return `${data.publicUrl}?t=${Date.now()}`;
+  return { url: `${data.publicUrl}?t=${Date.now()}`, path };
 }
 
 function pickVideoFile(onPicked) {
@@ -3607,7 +3607,11 @@ window.addEventListener('popstate', (e) => {
    PAYMENTS + NOTIFICATIONS
    ============================================================================= */
 async function loadAdminPayments() {
-  const { data } = await sb.from("v_admin_payments").select("*").order("full_name");
+  const { data, error } = await sb.from("v_admin_payments").select("*").order("full_name");
+  if (error) {
+    console.error("[payments] Falha ao carregar financeiro admin", error);
+    showToast("Erro ao carregar financeiro ADM: " + error.message, "error");
+  }
   STATE.adminPayments = data || [];
 }
 async function loadCoachPayments() {
@@ -3621,6 +3625,18 @@ async function loadPaymentsForUser(userId, opts = {}) {
   if (error) {
     console.error("[payments] Falha ao carregar pagamentos", error);
     if (opts.throwOnError) throw error;
+  }
+  return data || [];
+}
+async function loadAdminProfessorPayments(coachId) {
+  if (STATE.profile?.role !== "admin") return [];
+  const { data, error } = await sb.from("payments")
+    .select("*")
+    .eq("user_id", coachId)
+    .order("due_date", { ascending: false });
+  if (error) {
+    console.error("[payments] Falha ao carregar pagamentos do professor", error);
+    throw error;
   }
   return data || [];
 }
@@ -4593,7 +4609,7 @@ async function renderPayments() {
   const overdueAlunos = items.filter(x => x.is_overdue);
   const totalEmAberto = items.reduce((s,x) => s + Number(x.open_amount || 0), 0);
   const overdueTotal  = overdueAlunos.reduce((s,x) => s + Number(x.open_amount || 0), 0);
-  const totalReceita  = items.reduce((s,x) => s + Number(x.paid_amount_month || 0), 0);
+  const totalReceita  = items.reduce((s,x) => s + Number(x.paid_amount_month || x.paid_amount_total || 0), 0);
   const taxaPagamento = items.length > 0
     ? Math.round(((items.length - overdueCount) / items.length) * 100) : 100;
 
@@ -4638,7 +4654,7 @@ async function renderPayments() {
       <div class="card card-lg" style="border-color:var(--green);background:linear-gradient(135deg,var(--green-soft,#e8f8f0),var(--bg-card))">
         <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--green);font-weight:700;margin-bottom:6px"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Este mês</div>
         <div style="font-size:22px;font-weight:900;color:var(--text)">${fmtMoney(totalReceita)}</div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:3px">${items.filter(x=>!x.is_overdue&&x.paid_count>0).length} alunos em dia</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:3px">${items.filter(x=>!x.is_overdue&&x.paid_count>0).length} ${isAdmin ? 'professores' : 'alunos'} em dia</div>
       </div>
       <div class="card card-lg" style="border-color:${overdueCount>0?'var(--red)':'var(--line)'};background:${overdueCount>0?'linear-gradient(135deg,var(--red-soft,#fde8e8),var(--bg-card))':'var(--bg-card)'};cursor:${overdueCount>0?'pointer':'default'}"
            onclick="${overdueCount>0?"document.getElementById('overdue-section')&&document.getElementById('overdue-section').scrollIntoView({behavior:'smooth'})":''}" >
@@ -4649,7 +4665,7 @@ async function renderPayments() {
       <div class="card card-lg">
         <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:700;margin-bottom:6px"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Em aberto</div>
         <div style="font-size:22px;font-weight:900;color:var(--orange,#e67e22)">${fmtMoney(totalEmAberto)}</div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:3px">${items.filter(x=>x.open_count>0).length} alunos pendentes</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:3px">${items.filter(x=>x.open_count>0).length} ${isAdmin ? 'professores' : 'alunos'} pendentes</div>
       </div>
       <div class="card card-lg">
         <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:700;margin-bottom:6px"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Taxa pgto</div>
@@ -4879,7 +4895,15 @@ function paymentRow(p, idKey) {
 
 window.openPaymentSheet = async function(userId, name) {
   openSheet(`<h3>Carregando...</h3><div class="loading"><div class="spinner"></div></div>`);
-  const list = await loadPaymentsForUser(userId);
+  let list = [];
+  try {
+    list = STATE.profile?.role === "admin"
+      ? await loadAdminProfessorPayments(userId)
+      : await loadPaymentsForUser(userId, { throwOnError: true });
+  } catch (e) {
+    openSheet(`<h3>Pagamentos · ${escape(name || "")}</h3><div class="shortcut-error"><div class="title">Não foi possível carregar</div><div class="sub">${escape(e.message || "Verifique permissões e tente novamente.")}</div></div><button class="btn-ghost" onclick="closeSheet(); renderPayments();">Voltar</button>`);
+    return;
+  }
   window._paymentSheetData = { list, userId, name };
   renderPaymentSheetList("all");
 };
@@ -4913,6 +4937,7 @@ function renderPaymentSheetList(filter) {
   const html = `
     <h3>Pagamentos · ${escape(name)}</h3>
     <button class="btn-primary" onclick="openNewPaymentSheet('${safeId}','${safeName}')" style="margin-bottom:12px">+ Novo lançamento</button>
+    ${STATE.profile?.role === "admin" ? `<p style="font-size:12px;color:var(--text-3);margin-top:-6px">Lançamentos do professor selecionado. Alunos continuam isolados por professor.</p>` : ""}
     ${tabsHTML}
     <div id="payment-sheet-list">
       ${filtered.length === 0
@@ -6273,15 +6298,23 @@ window.onAvatarUpload = function() {
       return;
     }
     showToast("Enviando foto...");
+    const oldAvatarUrl = STATE.profile.avatar_url || "";
+    let uploaded = null;
     try {
-      const url = await uploadAvatarImage(file);
-      const { error } = await sb.from("profiles").update({ avatar_url: url }).eq("id", STATE.profile.id);
-      if (error) throw error;
-      STATE.profile.avatar_url = url;
+      uploaded = await uploadAvatarImage(file);
+      const { data, error } = await sb.from("profiles")
+        .update({ avatar_url: uploaded.url })
+        .eq("id", STATE.profile.id)
+        .select("avatar_url")
+        .single();
+      if (error || !data) throw error || new Error("Perfil não foi atualizado. Verifique a policy de profiles.");
+      STATE.profile.avatar_url = data.avatar_url || uploaded.url;
+      cleanupOldAvatarFile(oldAvatarUrl).catch(() => {});
       showToast("Foto atualizada", "success");
       renderProfile();
     } catch (e) {
       console.error(e);
+      if (uploaded?.path) sb.storage.from("avatars").remove([uploaded.path]).catch(() => {});
       showToast("Erro: " + (e.message || "upload falhou"), "error");
       renderProfile();
     } finally {
@@ -6290,20 +6323,31 @@ window.onAvatarUpload = function() {
     }
   });
 };
-window.clearAvatar = async function() {
-  let oldPath = "";
+function getAvatarStoragePath(rawUrl) {
   try {
-    const raw = String(STATE.profile.avatar_url || "");
+    const raw = String(rawUrl || "");
+    if (!raw) return "";
     const parsed = new URL(raw, location.href);
     const publicParts = parsed.pathname.split("/storage/v1/object/public/avatars/");
     const signedParts = parsed.pathname.split("/storage/v1/object/sign/avatars/");
-    oldPath = decodeURIComponent((publicParts[1] || signedParts[1] || "").split("?")[0]);
-  } catch(e) {}
-  const { error } = await sb.from("profiles").update({ avatar_url: null }).eq("id", STATE.profile.id);
-  if (error) { showToast("Erro: " + error.message, "error"); return; }
-  if (oldPath && oldPath.startsWith(STATE.profile.id + "/")) {
-    sb.storage.from("avatars").remove([oldPath]).catch(()=>null);
+    return decodeURIComponent((publicParts[1] || signedParts[1] || "").split("?")[0]);
+  } catch(e) {
+    return "";
   }
+}
+async function cleanupOldAvatarFile(rawUrl) {
+  const oldPath = getAvatarStoragePath(rawUrl);
+  if (oldPath && oldPath.startsWith(STATE.profile.id + "/")) await sb.storage.from("avatars").remove([oldPath]);
+}
+window.clearAvatar = async function() {
+  const oldPath = getAvatarStoragePath(STATE.profile.avatar_url);
+  const { data, error } = await sb.from("profiles")
+    .update({ avatar_url: null })
+    .eq("id", STATE.profile.id)
+    .select("id")
+    .single();
+  if (error || !data) { showToast("Erro: " + ((error && error.message) || "perfil não atualizado"), "error"); return; }
+  if (oldPath && oldPath.startsWith(STATE.profile.id + "/")) sb.storage.from("avatars").remove([oldPath]).catch(()=>null);
   STATE.profile.avatar_url = null;
   showToast("Foto removida", "success");
   renderProfile();
@@ -9628,10 +9672,21 @@ window.deleteConversation = async function(otherUserId) {
   if (!await showConfirm({ title: "Excluir conversa?", msg: "Toda a conversa será apagada. Esta ação não pode ser desfeita.", confirm: "Excluir", danger: true })) return;
   const me = STATE.profile.id;
   // Deleta as mensagens onde o usuário é o remetente OU destinatário desta conversa
-  const { error } = await sb.from("messages")
+  const { data: deletedRows, error } = await sb.from("messages")
     .delete()
-    .or(`and(from_user.eq.${me},to_user.eq.${otherUserId}),and(from_user.eq.${otherUserId},to_user.eq.${me})`);
+    .or(`and(from_user.eq.${me},to_user.eq.${otherUserId}),and(from_user.eq.${otherUserId},to_user.eq.${me})`)
+    .select("id,image_url");
   if (error) { showToast("Erro ao excluir conversa", "error"); return; }
+  await loadChatThreads();
+  const stillExists = (STATE.chatThreads || []).some(t => {
+    const other = t.other?.id || (t.a === me ? t.b : t.a);
+    return other === otherUserId;
+  });
+  if (!(deletedRows || []).length && stillExists) {
+    showToast("Não foi possível excluir. Verifique a policy de delete das mensagens.", "error");
+    if (STATE.view === "chat") renderChat().catch(() => {});
+    return;
+  }
   STATE.chatThreads = (STATE.chatThreads || []).filter(t => {
     const other = t.other?.id || (t.a === me ? t.b : t.a);
     return other !== otherUserId;
@@ -9641,7 +9696,6 @@ window.deleteConversation = async function(otherUserId) {
   });
   showToast("Conversa excluída", "success");
   closeChatThread();
-  await loadChatThreads();
   if (STATE.view === "chat") renderChat().catch(() => {});
 };
 
