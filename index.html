@@ -3001,6 +3001,9 @@ function persistTimerState(extra = {}) {
       status: STATE.timer.paused ? "paused" : "running",
       pausedAt: STATE.timer.pausedAt || null,
       pausedRemaining: STATE.timer.paused ? STATE.timer.secondsLeft : null,
+      selectedDate: STATE.selectedDate || todayISO(),
+      selectedWorkout: STATE.selectedWorkout || null,
+      selectedIntensity: STATE.selectedIntensity || null,
       notified: false,
       ...extra
     };
@@ -3036,6 +3039,9 @@ function hydrateTimerFromPersisted(state, onDone) {
   STATE.timer.label = state.label || "Próxima série";
   STATE.timer.exerciseName = state.exerciseName || STATE.timer.label;
   STATE.timer.onDone = onDone || STATE.timer.onDone || null;
+  if (state.selectedDate) STATE.selectedDate = state.selectedDate;
+  if (state.selectedWorkout) STATE.selectedWorkout = state.selectedWorkout;
+  if (state.selectedIntensity) STATE.selectedIntensity = state.selectedIntensity;
   return true;
 }
 function markPersistedTimerNotified(state) {
@@ -3068,7 +3074,7 @@ async function notifyRestFinished(exerciseName) {
     vibrate: [160, 80, 160],
     icon: "/assets/icon-192.png",
     badge: "/assets/favicon-32x32.png",
-    data: { url: location.pathname || "/" }
+    data: { url: `${location.pathname || "/"}?view=workout&restTimer=1` }
   };
   try {
     if ("serviceWorker" in navigator) {
@@ -3105,7 +3111,8 @@ function scheduleBackgroundRestNotification() {
   postRestTimerToServiceWorker("SCHEDULE_REST_TIMER", {
     id: saved.id,
     fireAt: Date.now() + remaining * 1000,
-    exerciseName: saved.exerciseName || saved.label || "Próxima série"
+    exerciseName: saved.exerciseName || saved.label || "Próxima série",
+    url: `${location.pathname || "/"}?view=workout&restTimer=1`
   });
 }
 function cancelBackgroundRestNotification() {
@@ -3119,7 +3126,8 @@ async function scheduleServerRestPush(seconds, exerciseName) {
         action: "schedule",
         timer_id: STATE.timer.id,
         fire_at: new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString(),
-        exercise_name: exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série"
+        exercise_name: exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
+        url: `${location.pathname || "/"}?view=workout&restTimer=1`
       }
     });
   } catch(e) {
@@ -3867,6 +3875,28 @@ function navTo(view) {
   window.scrollTo({ top: 0, behavior: "instant" });
 }
 window.navTo = navTo;
+
+function prepareWorkoutDeepLinkFromRestTimer() {
+  try {
+    const saved = typeof readPersistedTimer === "function" ? readPersistedTimer() : null;
+    if (saved) {
+      hydrateTimerFromPersisted(saved);
+      if (saved.selectedDate) STATE.selectedDate = saved.selectedDate;
+      if (saved.selectedWorkout) STATE.selectedWorkout = saved.selectedWorkout;
+      if (saved.selectedIntensity) STATE.selectedIntensity = saved.selectedIntensity;
+      return true;
+    }
+    if (STATE.currentSession && STATE.currentSession.workout_code) {
+      STATE.selectedDate = STATE.currentSession.date || STATE.selectedDate || todayISO();
+      STATE.selectedWorkout = STATE.currentSession.workout_code;
+      STATE.selectedIntensity = STATE.currentSession.intensity || STATE.selectedIntensity || "yellow";
+      return true;
+    }
+  } catch(e) {
+    console.warn("[rest timer deeplink]", e);
+  }
+  return false;
+}
 
 function updateFeedBadge() {
   const badge = document.getElementById("feed-nav-badge");
@@ -8039,6 +8069,7 @@ async function postSignIn() {
         }
       }, 250);
     } else if (view) {
+      if (view === "workout") prepareWorkoutDeepLinkFromRestTimer();
       navTo(view);
       try { history.replaceState({}, "", location.pathname); } catch(e){}
     }
