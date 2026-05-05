@@ -547,6 +547,45 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Beta UX polish: mobile touch comfort + clearer hierarchy */
+button, .btn-primary, .btn-ghost, .mini-btn, .icon-btn, .action-card, .insight-card, .list-row, .day-pill, .set-check {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.btn-primary, .btn-ghost { min-height: 46px; }
+.mini-btn { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.icon-btn, .shortcut-back { min-width: 44px; min-height: 44px; }
+button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-allowed !important; transform: none !important; }
+.input, select.input, textarea.input { min-height: 46px; font-size: 16px; }
+.view-subtitle { line-height: 1.42; max-width: 44ch; }
+.list-row { min-height: 68px; }
+.list-row .lr-name { line-height: 1.25; }
+.list-row .lr-sub { line-height: 1.35; }
+.list-row .lr-actions { align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.action-card, .insight-card { transition: transform .12s ease, border-color .12s ease, background .12s ease; }
+.action-card:hover, .insight-card:hover { border-color: var(--line-2); }
+.action-card:active, .insight-card:active { transform: scale(.985); }
+.teacher-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin: 8px 0 12px; }
+.teacher-toolbar .mini-btn { min-height: 38px; padding-inline: 12px; }
+.ux-helper { margin: -2px 0 12px; color: var(--text-3); font-size: 12px; line-height: 1.4; }
+.exercise-card { scroll-margin-top: 92px; }
+.exercise-card.expanded { border-color: color-mix(in srgb, var(--brand) 52%, var(--line)); box-shadow: 0 10px 28px rgba(0,0,0,.18); }
+.ex-head { min-height: 84px; }
+.set-row { min-height: 54px; }
+.set-check { width: 42px; height: 42px; border-radius: 12px; }
+.toast { min-height: 36px; display:flex; align-items:center; justify-content:center; line-height:1.25; }
+@media (max-width: 430px) {
+  .view { padding-inline: 14px; }
+  .view-title { font-size: 21px; }
+  .today-title, .wh-title { font-size: 24px; }
+  .list-row { align-items: flex-start; padding: 13px; }
+  .list-row .lr-actions { width: 100%; margin-top: 8px; justify-content: flex-start; }
+  .list-row .lr-info { min-width: calc(100% - 58px); }
+  .ex-head { gap: 10px; padding: 12px; }
+  .ex-thumb { width: 58px; height: 58px; flex-basis: 58px; }
+  .set-row { grid-template-columns: 30px 1fr 88px 42px; gap: 7px; padding: 8px; }
+}
+
 /* History */
 .hist-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; }
@@ -4980,6 +5019,8 @@ async function renderWorkout() {
 
     ${completed ? `<div class="complete-banner show"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Treino concluído! Bom trabalho.</div>` : ""}
 
+    <div class="section-title">Exercícios do treino</div>
+    <div class="ux-helper">Toque em um exercício para abrir séries, carga, descanso e instruções.</div>
     <div id="exercise-list"></div>
 
     ${!completed ? `<div style="height:96px"></div>` : `
@@ -5010,7 +5051,9 @@ async function renderWorkout() {
         #workout-fixed-bar .wfb-track{height:6px;background:var(--bg-card);border-radius:3px;overflow:hidden;border:1px solid var(--line)}
         #workout-fixed-bar .wfb-fill{height:100%;border-radius:3px;transition:width .4s ease;
           background:${allDone ? 'var(--green)' : 'linear-gradient(90deg,var(--brand),var(--brand-2,#818cf8))'}}
-        #workout-fixed-bar .wfb-pct{font-size:10px;color:${allDone ? 'var(--green)' : 'var(--brand)'};font-weight:800;margin-top:3px}
+        #workout-fixed-bar .wfb-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px}
+        #workout-fixed-bar .wfb-pct{font-size:10px;color:${allDone ? 'var(--green)' : 'var(--brand)'};font-weight:800}
+        #workout-fixed-bar .wfb-hint{font-size:10px;color:var(--text-3);white-space:nowrap}
         #workout-fixed-bar #btn-complete-session{
           flex:0 0 auto;padding:13px 18px;border-radius:14px;font-size:14px;font-weight:800;
           border:0;cursor:pointer;white-space:nowrap;transition:all .2s;
@@ -5023,7 +5066,10 @@ async function renderWorkout() {
         <div class="wfb-stats">
           <div class="wfb-label">${doneCount} de ${totalTarget} séries</div>
           <div class="wfb-track"><div class="wfb-fill" style="width:${pct}%"></div></div>
-          <div class="wfb-pct">${pct}% concluído</div>
+          <div class="wfb-foot">
+            <div class="wfb-pct">${pct}% concluído</div>
+            <div class="wfb-hint">${doneCount === 0 ? "Marque a 1ª série" : allDone ? "Pronto para finalizar" : "Progresso salvo"}</div>
+          </div>
         </div>
         <button id="btn-complete-session" ${doneCount === 0 ? 'disabled' : ''}>
           ${allDone ? 'Concluir ✓' : 'Concluir'}
@@ -5906,9 +5952,15 @@ function renderStudents() {
       <h1 class="view-title" style="margin:0">Alunos</h1>
       <div style="display:flex;gap:6px">
         <button class="mini-btn" onclick="toggleStudentSelectAll()" title="Selecionar todos"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
-        ${canManageStudents ? `<button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">+ Novo</button>` : ""}
+        ${canManageStudents ? `<button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">Novo aluno</button>` : ""}
       </div>
     </div>
+    <p class="view-subtitle" style="margin-bottom:10px">${canManageStudents ? "Gerencie alunos, treinos, pagamentos e acompanhamento em um só lugar." : "Visão geral dos alunos cadastrados na plataforma."}</p>
+    ${canManageStudents ? `<div class="teacher-toolbar">
+      <button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">Adicionar aluno</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openShareLinkSheet()">Compartilhar link</button>
+      <button class="mini-btn mini-btn-ghost" onclick="setStudentTab('overdue')">Ver inadimplentes</button>
+    </div>` : ""}
     <div class="insight-strip">
       <button class="insight-card" onclick="setStudentTab('active')">
         <div class="insight-value">${approved.length}</div><div class="insight-label">ativos</div>
@@ -5934,7 +5986,7 @@ function renderStudents() {
     ` : ""}
     ${_studentTab !== "overdue" && _studentTab !== "inactive" ? `
       <div class="section-title">${_studentTab === "all" ? `Ativos (${filteredApproved.length})` : `Resultados (${filteredApproved.length})`}</div>
-      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>${_studentSearch ? "Nenhum aluno encontrado." : canManageStudents ? "Nenhum aluno ativo ainda. Use '+ Novo' para incluir." : "Nenhum aluno ativo encontrado."}</p>${!_studentSearch && canManageStudents ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewStudentSheet()">Adicionar aluno</button><button class="btn-ghost" style="width:auto" onclick="openShareLinkSheet()">Compartilhar link</button></div>` : ""}</div>`}
+      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>${_studentSearch ? "Nenhum aluno encontrado." : canManageStudents ? "Nenhum aluno ativo ainda. Adicione um aluno ou compartilhe o link de cadastro." : "Nenhum aluno ativo encontrado."}</p>${!_studentSearch && canManageStudents ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewStudentSheet()">Adicionar aluno</button><button class="btn-ghost" style="width:auto" onclick="openShareLinkSheet()">Compartilhar link</button></div>` : ""}</div>`}
     ` : `
       <div class="section-title">Resultados (${filteredApproved.length})</div>
       ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>Nenhum aluno nessa categoria.</p><div class="empty-actions"><button class="btn-ghost" style="width:auto" onclick="setStudentTab('all')">Ver todos</button></div></div>`}
@@ -6089,11 +6141,12 @@ window.openNewStudentSheet = function() {
   }
   openSheet(`
     <h3>Novo aluno</h3>
-    <p>Cria a conta com role <b>aluno</b> já aprovada e vinculada a você. O aluno entra com este email + senha.</p>
+    <p>Cria uma conta de aluno já vinculada a você. Depois, ele entra com o email e a senha temporária.</p>
     <div class="form-group"><label class="form-label">Nome completo</label><input class="input" id="ns-name" placeholder="Nome" /></div>
     <div class="form-group"><label class="form-label">Email</label><input class="input" id="ns-email" type="email" placeholder="email@exemplo.com" /></div>
     <div class="form-group"><label class="form-label">Telefone</label><input class="input" id="ns-phone" type="tel" placeholder="(11) 99999-0000" /></div>
     <div class="form-group"><label class="form-label">Senha temporária</label><input class="input" id="ns-pass" type="text" placeholder="Mínimo 6 caracteres" /></div>
+    <div class="ux-helper">Dica: o aluno será orientado a trocar a senha no primeiro acesso.</div>
     <label class="row-flex" style="margin-bottom:10px">
       <input type="checkbox" id="ns-seed" checked /> <span class="text-sm">Criar periodização padrão de 12 semanas</span>
     </label>
@@ -6978,7 +7031,7 @@ window.openWorkoutEditor = async function(code, workoutId) {
   const html = `
     <h3>Editar ${escape(w.name)}</h3>
     <p>${escape(w.focus || "")}</p>
-    ${(w.exercises || []).length === 0 ? `<div class="empty" style="padding:20px 0"><p>Nenhum exercício ainda.</p></div>` : ""}
+    ${(w.exercises || []).length === 0 ? `<div class="empty" style="padding:20px 0"><h3>Treino vazio</h3><p>Adicione o primeiro exercício para montar a sequência do aluno.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openExercisePicker('${code}', null, '${workoutId||w.id||''}')">Adicionar exercício</button></div></div>` : ""}
     ${(w.exercises || []).map((ex, i) => `
       <div class="card mb-8">
         <div class="row-flex" style="margin-bottom:8px;">
