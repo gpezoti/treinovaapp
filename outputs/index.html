@@ -1095,7 +1095,12 @@ function getStandardExerciseAssetUrl(ex) {
   return getMissingExerciseImageUrl(ex || {});
 }
 function isGenericExerciseImage(url) {
-  return !url || url === DEFAULT_EXERCISE_IMAGE_URL || String(url).includes(encodeURIComponent("<circle cx=\"160\" cy=\"74\" r=\"24\""));
+  const value = String(url || "");
+  return !url
+    || url === DEFAULT_EXERCISE_IMAGE_URL
+    || value.includes(encodeURIComponent("<circle cx=\"160\" cy=\"74\" r=\"24\""))
+    // Defaults locais antigos não podem bloquear o mapa novo por nome exato.
+    || /(^|\/)assets\/exercises\/(?:realistic_|exact\/)/.test(value);
 }
 function hasCustomExerciseImage(ex) {
   return !!(ex && ex.image_url && !isGenericExerciseImage(ex.image_url));
