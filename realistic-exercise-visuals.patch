@@ -1,0 +1,246 @@
+--- outputs/index.html	2026-05-04 21:21:46
++++ index.html	2026-05-04 21:24:48
+@@ -806,26 +806,27 @@
+ const DEFAULT_EXERCISE_IMAGE_URL = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(DEFAULT_EXERCISE_IMAGE_SVG);
+ 
+ const STANDARD_EXERCISE_IMAGES = {
+-  squat:      { label: "Agachamento", asset: "illustration_squat", color: "#ffd60a", art: `<path d="M92 148h136M122 92l30 36 44 4M152 128l-20 44M196 132l30 38M100 88h124" /><circle cx="122" cy="70" r="17" />` },
+-  legpress:   { label: "Leg press", asset: "illustration_leg_press", color: "#ffb020", art: `<path d="M94 154h132M116 128l34 24h54M134 102l44 26M184 72l32 58M198 66h34" /><circle cx="102" cy="112" r="15" />` },
+-  lunge:      { label: "Passada", asset: "illustration_lunge", color: "#ff9500", art: `<path d="M88 154h144M124 90l36 34 42 6M160 124l-34 46M202 130l26 38" /><circle cx="118" cy="68" r="16" />` },
+-  hipthrust:  { label: "Elevação pélvica", asset: "illustration_hip_thrust", color: "#2ecc71", art: `<path d="M74 146h68l38-34 64 2M86 118h46M174 112l-14 44M230 114l18 42" /><circle cx="72" cy="102" r="15" />` },
+-  deadlift:   { label: "Levantamento terra", asset: "illustration_deadlift", color: "#ff3b3b", art: `<path d="M74 166h172M92 166v-18M228 166v-18M112 148h96M138 78l28 58 36 12M166 136l-22 34M202 148l30 22" /><circle cx="130" cy="58" r="16" />` },
+-  bench:      { label: "Supino", asset: "illustration_bench_press", color: "#00b4ff", art: `<path d="M70 146h180M94 120h92M110 108h96M72 92h176M92 92v24M226 92v24M128 118l54 26M150 118l-28 28" /><circle cx="108" cy="126" r="13" />` },
+-  fly:        { label: "Crucifixo", asset: "illustration_chest_fly", color: "#38bdf8", art: `<path d="M72 142h176M104 120h84M124 104l-42-30M184 104l44-30M124 104l58 38" /><circle cx="106" cy="126" r="13" />` },
+-  row:        { label: "Remada", asset: "illustration_row", color: "#7dd3fc", art: `<path d="M82 146h148M116 122l54 26 42-42M144 92l26 56M210 106h34M214 96v20" /><circle cx="112" cy="102" r="16" />` },
+-  pulldown:   { label: "Puxada", asset: "illustration_lat_pulldown", color: "#60a5fa", art: `<path d="M82 56h156M102 56v24M218 56v24M118 88l42 38 42-38M160 126v48M132 174h56" /><circle cx="160" cy="106" r="15" />` },
+-  shoulder:   { label: "Desenvolvimento", asset: "illustration_shoulder_press", color: "#a78bfa", art: `<path d="M96 90h128M112 90v-24M208 90v-24M122 110l38 28 38-28M160 138v42M132 180h56" /><circle cx="160" cy="88" r="16" />` },
+-  lateral:    { label: "Elevação lateral", asset: "illustration_lateral_raise", color: "#c084fc", art: `<path d="M78 112l58 18M242 112l-58 18M136 130l24 28 24-28M160 158v26" /><circle cx="160" cy="106" r="16" />` },
+-  curl:       { label: "Rosca bíceps", asset: "illustration_biceps_curl", color: "#f472b6", art: `<path d="M110 106l30 46M210 106l-30 46M112 142h28M180 142h28M140 152h40M160 86v92" /><circle cx="160" cy="70" r="16" />` },
+-  triceps:    { label: "Tríceps", asset: "illustration_triceps", color: "#fb7185", art: `<path d="M112 70h96M132 70v34M188 70v34M138 118l22 34 22-34M160 152v34M138 186h44" /><circle cx="160" cy="98" r="15" />` },
+-  plank:      { label: "Prancha", asset: "illustration_plank", color: "#34d399", art: `<path d="M76 156h172M94 130h104M104 130l-24 26M198 130l34 26M128 118l46 12" /><circle cx="86" cy="118" r="14" />` },
+-  crunch:     { label: "Abdominal", asset: "illustration_crunch", color: "#22c55e", art: `<path d="M84 154h148M112 134h74M118 112l42 28M160 140l34 30M112 134l-22 30" /><circle cx="108" cy="102" r="15" />` },
+-  calf:       { label: "Panturrilha", asset: "illustration_calf_raise", color: "#facc15", art: `<path d="M104 166h118M142 72l28 42-8 48M170 114l36 52M128 166h68M208 166l18-10" /><circle cx="134" cy="54" r="15" />` },
+-  mobility:   { label: "Mobilidade", asset: "illustration_mobility", color: "#14b8a6", art: `<path d="M96 142c26-56 102-56 128 0M116 96c24 24 64 24 88 0M132 154h56M160 64v116" /><circle cx="160" cy="50" r="15" />` },
+-  generic:    { label: "Exercício funcional", asset: "illustration_generic_exercise", color: "#00b4ff", art: `<path d="M82 146h44M194 146h44M104 126h112M126 106h68M116 146v28M204 146v28" /><circle cx="160" cy="78" r="18" />` }
++  squat:      { label: "barbell squat", title: "Agachamento", asset: "realistic_barbell_squat", assetPath: "assets/exercises/realistic_barbell_squat.webp", color: "#ffd60a", posture: "bar on upper back, hips pushed back, knees tracking over toes, neutral spine, feet shoulder-width", angle: "3/4 front-side view", art: `<path d="M92 148h136M122 92l30 36 44 4M152 128l-20 44M196 132l30 38M100 88h124" /><circle cx="122" cy="70" r="17" />` },
++  legpress:   { label: "45-degree leg press", title: "Leg press", asset: "realistic_leg_press", assetPath: "assets/exercises/realistic_leg_press.webp", color: "#ffb020", posture: "seated on leg press machine, feet on platform, knees bent, back supported, controlled range of motion", angle: "3/4 side view", art: `<path d="M94 154h132M116 128l34 24h54M134 102l44 26M184 72l32 58M198 66h34" /><circle cx="102" cy="112" r="15" />` },
++  lunge:      { label: "walking lunge", title: "Passada", asset: "realistic_walking_lunge", assetPath: "assets/exercises/realistic_walking_lunge.webp", color: "#ff9500", posture: "front knee bent at ninety degrees, rear knee close to floor, upright torso, dumbbells optional", angle: "3/4 side view", art: `<path d="M88 154h144M124 90l36 34 42 6M160 124l-34 46M202 130l26 38" /><circle cx="118" cy="68" r="16" />` },
++  hipthrust:  { label: "barbell hip thrust", title: "Elevação pélvica", asset: "realistic_hip_thrust", assetPath: "assets/exercises/realistic_hip_thrust.webp", color: "#2ecc71", posture: "upper back on bench, barbell across hips, knees bent, hips fully extended, chin tucked", angle: "side view", art: `<path d="M74 146h68l38-34 64 2M86 118h46M174 112l-14 44M230 114l18 42" /><circle cx="72" cy="102" r="15" />` },
++  deadlift:   { label: "Romanian deadlift", title: "Levantamento terra", asset: "realistic_deadlift", assetPath: "assets/exercises/realistic_deadlift.webp", color: "#ff3b3b", posture: "barbell close to legs, hips hinged back, slight knee bend, flat back, shoulders packed", angle: "3/4 side view", art: `<path d="M74 166h172M92 166v-18M228 166v-18M112 148h96M138 78l28 58 36 12M166 136l-22 34M202 148l30 22" /><circle cx="130" cy="58" r="16" />` },
++  bench:      { label: "barbell bench press", title: "Supino", asset: "realistic_bench_press", assetPath: "assets/exercises/realistic_bench_press.webp", color: "#00b4ff", posture: "lying on bench, barbell at chest level, elbows slightly tucked, stable shoulder blades, feet planted", angle: "side view", art: `<path d="M70 146h180M94 120h92M110 108h96M72 92h176M92 92v24M226 92v24M128 118l54 26M150 118l-28 28" /><circle cx="108" cy="126" r="13" />` },
++  fly:        { label: "dumbbell chest fly", title: "Crucifixo", asset: "realistic_chest_fly", assetPath: "assets/exercises/realistic_chest_fly.webp", color: "#38bdf8", posture: "lying on bench, dumbbells wide at chest height, elbows softly bent, chest open, controlled arc", angle: "3/4 top-side view", art: `<path d="M72 142h176M104 120h84M124 104l-42-30M184 104l44-30M124 104l58 38" /><circle cx="106" cy="126" r="13" />` },
++  row:        { label: "one-arm dumbbell row", title: "Remada", asset: "realistic_dumbbell_row", assetPath: "assets/exercises/realistic_dumbbell_row.webp", color: "#7dd3fc", posture: "one knee and hand supported on bench, dumbbell pulled toward hip, back neutral, shoulder blade retracted", angle: "3/4 side view", art: `<path d="M82 146h148M116 122l54 26 42-42M144 92l26 56M210 106h34M214 96v20" /><circle cx="112" cy="102" r="16" />` },
++  pulldown:   { label: "lat pulldown", title: "Puxada", asset: "realistic_lat_pulldown", assetPath: "assets/exercises/realistic_lat_pulldown.webp", color: "#60a5fa", posture: "seated at cable machine, wide grip bar pulled toward upper chest, elbows down, torso slightly leaned back", angle: "front 3/4 view", art: `<path d="M82 56h156M102 56v24M218 56v24M118 88l42 38 42-38M160 126v48M132 174h56" /><circle cx="160" cy="106" r="15" />` },
++  shoulder:   { label: "seated dumbbell shoulder press", title: "Desenvolvimento", asset: "realistic_shoulder_press", assetPath: "assets/exercises/realistic_shoulder_press.webp", color: "#a78bfa", posture: "seated upright, dumbbells overhead, elbows under wrists, core braced, neutral neck", angle: "front 3/4 view", art: `<path d="M96 90h128M112 90v-24M208 90v-24M122 110l38 28 38-28M160 138v42M132 180h56" /><circle cx="160" cy="88" r="16" />` },
++  lateral:    { label: "dumbbell lateral raise", title: "Elevação lateral", asset: "realistic_lateral_raise", assetPath: "assets/exercises/realistic_lateral_raise.webp", color: "#c084fc", posture: "standing tall, dumbbells raised to shoulder height, slight elbow bend, wrists neutral, shoulders down", angle: "front 3/4 view", art: `<path d="M78 112l58 18M242 112l-58 18M136 130l24 28 24-28M160 158v26" /><circle cx="160" cy="106" r="16" />` },
++  curl:       { label: "standing dumbbell biceps curl", title: "Rosca bíceps", asset: "realistic_biceps_curl", assetPath: "assets/exercises/realistic_biceps_curl.webp", color: "#f472b6", posture: "standing tall, elbows close to torso, dumbbells curled upward, wrists neutral, no torso swing", angle: "front 3/4 view", art: `<path d="M110 106l30 46M210 106l-30 46M112 142h28M180 142h28M140 152h40M160 86v92" /><circle cx="160" cy="70" r="16" />` },
++  triceps:    { label: "cable triceps pushdown", title: "Tríceps", asset: "realistic_triceps_pushdown", assetPath: "assets/exercises/realistic_triceps_pushdown.webp", color: "#fb7185", posture: "standing at cable station, elbows fixed beside ribs, rope pushed down, shoulders stable, wrists neutral", angle: "3/4 side view", art: `<path d="M112 70h96M132 70v34M188 70v34M138 118l22 34 22-34M160 152v34M138 186h44" /><circle cx="160" cy="98" r="15" />` },
++  plank:      { label: "forearm plank", title: "Prancha", asset: "realistic_forearm_plank", assetPath: "assets/exercises/realistic_forearm_plank.webp", color: "#34d399", posture: "forearms on floor, body in straight line from head to heels, core braced, hips level", angle: "side view", art: `<path d="M76 156h172M94 130h104M104 130l-24 26M198 130l34 26M128 118l46 12" /><circle cx="86" cy="118" r="14" />` },
++  crunch:     { label: "abdominal crunch", title: "Abdominal", asset: "realistic_abdominal_crunch", assetPath: "assets/exercises/realistic_abdominal_crunch.webp", color: "#22c55e", posture: "lying on mat, knees bent, upper back lifted, chin neutral, hands lightly behind head", angle: "3/4 side view", art: `<path d="M84 154h148M112 134h74M118 112l42 28M160 140l34 30M112 134l-22 30" /><circle cx="108" cy="102" r="15" />` },
++  calf:       { label: "standing calf raise", title: "Panturrilha", asset: "realistic_calf_raise", assetPath: "assets/exercises/realistic_calf_raise.webp", color: "#facc15", posture: "standing tall on toes, heels lifted, ankles extended, body aligned, support machine optional", angle: "side 3/4 view", art: `<path d="M104 166h118M142 72l28 42-8 48M170 114l36 52M128 166h68M208 166l18-10" /><circle cx="134" cy="54" r="15" />` },
++  mobility:   { label: "dynamic mobility stretch", title: "Mobilidade", asset: "realistic_mobility_stretch", assetPath: "assets/exercises/realistic_mobility_stretch.webp", color: "#14b8a6", posture: "controlled athletic mobility position, long spine, visible joint alignment, mat optional", angle: "3/4 side view", art: `<path d="M96 142c26-56 102-56 128 0M116 96c24 24 64 24 88 0M132 154h56M160 64v116" /><circle cx="160" cy="50" r="15" />` },
++  generic:    { label: "functional strength exercise", title: "Exercício funcional", asset: "realistic_functional_strength", assetPath: "assets/exercises/realistic_functional_strength.webp", color: "#00b4ff", posture: "athletic person demonstrating a clear strength training movement, neutral spine, controlled posture", angle: "3/4 view", art: `<path d="M82 146h44M194 146h44M104 126h112M126 106h68M116 146v28M204 146v28" /><circle cx="160" cy="78" r="18" />` }
+ };
+-const AI_EXERCISE_PROMPT_STYLE = "clean modern fitness app illustration, premium soft 3D minimalist style, single athletic human figure, neutral dark background or transparent background, soft shadows, subtle depth, high contrast, centered composition, no text, no logo, no visual noise, product UI palette with cyan accents";
++const REALISTIC_EXERCISE_VISUAL_DIRECTION = "ultra realistic fitness training image, realistic human proportions and anatomy, instructional-grade exercise form, minimal gym environment only when equipment is needed, clean white or soft gray background, centered composition, consistent professional softbox lighting, soft shadows, high detail, no text, no watermark, no logo, not stock-photo generic";
++const AI_EXERCISE_PROMPT_STYLE = REALISTIC_EXERCISE_VISUAL_DIRECTION;
+ const EXERCISE_IMAGE_RULES = [
+   ["legpress", /leg\s*press|hack|horizontal/],
+   ["hipthrust", /hip\s*thrust|elevacao pelvica|ponte|coice|gluteo/],
+@@ -860,12 +861,16 @@
+   const found = EXERCISE_IMAGE_RULES.find(([, pattern]) => pattern.test(text));
+   return found ? found[0] : (EXERCISE_CAT_IMAGE_KIND[ex.cat] || "generic");
+ }
+-function getExerciseIllustrationPrompt(kind) {
++function getExerciseRealisticPrompt(kind) {
+   const item = STANDARD_EXERCISE_IMAGES[kind] || STANDARD_EXERCISE_IMAGES.generic;
+-  return `A ${AI_EXERCISE_PROMPT_STYLE}, person performing ${item.label}, clear body posture and movement recognition, square composition, optimized for small thumbnails.`;
++  return `Ultra realistic fitness training image of a person performing ${item.label}, correct form, ${item.posture}, ${item.angle}, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.`;
+ }
++function getExerciseIllustrationPrompt(kind) { return getExerciseRealisticPrompt(kind); }
++const EXERCISE_REALISTIC_IMAGE_PROMPTS = Object.fromEntries(
++  Object.keys(STANDARD_EXERCISE_IMAGES).map(kind => [STANDARD_EXERCISE_IMAGES[kind].asset, getExerciseRealisticPrompt(kind)])
++);
+ const EXERCISE_ILLUSTRATION_PROMPTS = Object.fromEntries(
+-  Object.keys(STANDARD_EXERCISE_IMAGES).map(kind => [STANDARD_EXERCISE_IMAGES[kind].asset, getExerciseIllustrationPrompt(kind)])
++  Object.keys(STANDARD_EXERCISE_IMAGES).map(kind => [STANDARD_EXERCISE_IMAGES[kind].asset, getExerciseRealisticPrompt(kind)])
+ );
+ function standardExerciseImageSvg(kind) {
+   const item = STANDARD_EXERCISE_IMAGES[kind] || STANDARD_EXERCISE_IMAGES.generic;
+@@ -897,6 +902,11 @@
+     _STANDARD_EXERCISE_IMAGE_CACHE[kind] = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(standardExerciseImageSvg(kind));
+   }
+   return _STANDARD_EXERCISE_IMAGE_CACHE[kind];
++}
++function getStandardExerciseAssetUrl(ex) {
++  const kind = inferExerciseImageKind(ex);
++  const item = STANDARD_EXERCISE_IMAGES[kind] || STANDARD_EXERCISE_IMAGES.generic;
++  return item.assetPath;
+ }
+ function isGenericExerciseImage(url) {
+   return !url || url === DEFAULT_EXERCISE_IMAGE_URL || String(url).includes(encodeURIComponent("<circle cx=\"160\" cy=\"74\" r=\"24\""));
+@@ -907,15 +917,16 @@
+ function getExerciseImageUrl(ex) {
+   const custom = hasCustomExerciseImage(ex) ? ex.image_url : null;
+   const lib = ((STATE.library || []).find(l => l.name === ex.name && hasCustomExerciseImage(l)) || {}).image_url;
+-  return custom || lib || getStandardExerciseImageUrl(ex);
++  return custom || lib || getStandardExerciseAssetUrl(ex);
+ }
+ 
+ // Retorna HTML de imagem para um exercício.
+-// Prioridade: imagem própria do professor → biblioteca com mesmo nome → imagem padrão contextual.
++// Prioridade: imagem própria do professor → biblioteca com mesmo nome → asset realista WebP → fallback local.
+ function getExThumb(ex) {
+   const url = getExerciseImageUrl(ex || {});
++  const fallback = getStandardExerciseImageUrl(ex || {});
+   const alt = ex && ex.name ? `Imagem de ${ex.name}` : "Imagem do exercício";
+-  return `<img src="${escape(url)}" alt="${escape(alt)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" decoding="async" />`;
++  return `<img src="${escape(url)}" data-fallback-src="${escape(fallback)}" alt="${escape(alt)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=this.dataset.fallbackSrc" />`;
+ }
+ 
+ const REP_SCHEMES = {
+--- /dev/null	2026-05-04 21:26:16
++++ assets/exercises/README.md	2026-05-04 21:25:09
+@@ -0,0 +1,38 @@
++# Realistic Exercise Visual Assets
++
++Place generated WebP exercise visuals in this folder using the exact filenames below.
++The app will use these assets when the teacher has not uploaded a custom image.
++If an asset is missing, the UI falls back to the local safe placeholder instead of showing a broken image.
++
++Visual direction:
++- Ultra realistic or semi-realistic instructional fitness image.
++- Same model/body type, lighting, crop, and camera language across all assets.
++- Clean white or soft gray background.
++- Minimal equipment/context only when needed.
++- Clear form, posture, and movement direction.
++- No text, watermark, logo, or decorative visual noise.
++
++Target format:
++- WebP
++- 640x440 or 1280x880 source, exported consistently
++- Optimized for small mobile thumbnails
++
++Expected filenames:
++- `realistic_barbell_squat.webp`
++- `realistic_leg_press.webp`
++- `realistic_walking_lunge.webp`
++- `realistic_hip_thrust.webp`
++- `realistic_deadlift.webp`
++- `realistic_bench_press.webp`
++- `realistic_chest_fly.webp`
++- `realistic_dumbbell_row.webp`
++- `realistic_lat_pulldown.webp`
++- `realistic_shoulder_press.webp`
++- `realistic_lateral_raise.webp`
++- `realistic_biceps_curl.webp`
++- `realistic_triceps_pushdown.webp`
++- `realistic_forearm_plank.webp`
++- `realistic_abdominal_crunch.webp`
++- `realistic_calf_raise.webp`
++- `realistic_mobility_stretch.webp`
++- `realistic_functional_strength.webp`
+--- /dev/null	2026-05-04 21:26:16
++++ outputs/exercise-realistic-image-prompts.md	2026-05-04 21:25:47
+@@ -0,0 +1,57 @@
++# Treinova Exercise Visual Prompt Pack
++
++Use the same model/body type, white or soft gray background, consistent 3/4 or side camera angle, softbox lighting, and 640x440 WebP export for every image.
++
++## realistic_barbell_squat.webp
++Ultra realistic fitness training image of a person performing barbell squat, correct form, bar on upper back, hips pushed back, knees tracking over toes, neutral spine, feet shoulder-width, 3/4 front-side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_leg_press.webp
++Ultra realistic fitness training image of a person performing 45-degree leg press, correct form, seated on leg press machine, feet on platform, knees bent, back supported, controlled range of motion, 3/4 side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_walking_lunge.webp
++Ultra realistic fitness training image of a person performing walking lunge, correct form, front knee bent at ninety degrees, rear knee close to floor, upright torso, dumbbells optional, 3/4 side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_hip_thrust.webp
++Ultra realistic fitness training image of a person performing barbell hip thrust, correct form, upper back on bench, barbell across hips, knees bent, hips fully extended, chin tucked, side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_deadlift.webp
++Ultra realistic fitness training image of a person performing Romanian deadlift, correct form, barbell close to legs, hips hinged back, slight knee bend, flat back, shoulders packed, 3/4 side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_bench_press.webp
++Ultra realistic fitness training image of a person performing barbell bench press, correct form, lying on bench, barbell at chest level, elbows slightly tucked, stable shoulder blades, feet planted, side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_chest_fly.webp
++Ultra realistic fitness training image of a person performing dumbbell chest fly, correct form, lying on bench, dumbbells wide at chest height, elbows softly bent, chest open, controlled arc, 3/4 top-side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_dumbbell_row.webp
++Ultra realistic fitness training image of a person performing one-arm dumbbell row, correct form, one knee and hand supported on bench, dumbbell pulled toward hip, back neutral, shoulder blade retracted, 3/4 side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_lat_pulldown.webp
++Ultra realistic fitness training image of a person performing lat pulldown, correct form, seated at cable machine, wide grip bar pulled toward upper chest, elbows down, torso slightly leaned back, front 3/4 view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_shoulder_press.webp
++Ultra realistic fitness training image of a person performing seated dumbbell shoulder press, correct form, seated upright, dumbbells overhead, elbows under wrists, core braced, neutral neck, front 3/4 view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_lateral_raise.webp
++Ultra realistic fitness training image of a person performing dumbbell lateral raise, correct form, standing tall, dumbbells raised to shoulder height, slight elbow bend, wrists neutral, shoulders down, front 3/4 view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_biceps_curl.webp
++Ultra realistic fitness training image of a person performing standing dumbbell biceps curl, correct form, standing tall, elbows close to torso, dumbbells curled upward, wrists neutral, no torso swing, front 3/4 view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_triceps_pushdown.webp
++Ultra realistic fitness training image of a person performing cable triceps pushdown, correct form, standing at cable station, elbows fixed beside ribs, rope pushed down, shoulders stable, wrists neutral, 3/4 side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_forearm_plank.webp
++Ultra realistic fitness training image of a person performing forearm plank, correct form, forearms on floor, body in straight line from head to heels, core braced, hips level, side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_abdominal_crunch.webp
++Ultra realistic fitness training image of a person performing abdominal crunch, correct form, lying on mat, knees bent, upper back lifted, chin neutral, hands lightly behind head, 3/4 side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_calf_raise.webp
++Ultra realistic fitness training image of a person performing standing calf raise, correct form, standing tall on toes, heels lifted, ankles extended, body aligned, support machine optional, side 3/4 view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_mobility_stretch.webp
++Ultra realistic fitness training image of a person performing dynamic mobility stretch, correct form, controlled athletic mobility position, long spine, visible joint alignment, mat optional, 3/4 side view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
++
++## realistic_functional_strength.webp
++Ultra realistic fitness training image of a person performing functional strength exercise, correct form, athletic person demonstrating a clear strength training movement, neutral spine, controlled posture, 3/4 view, optional subtle movement arrows showing start and end position, main working muscles may be subtly highlighted, gym environment minimal, clean white or soft gray background, soft shadows, professional lighting, highly detailed, instructional style, consistent framing, no text, no watermark, no logo.
+--- /dev/null	2026-05-04 21:26:16
++++ outputs/qa-realistic-exercise-visuals-tests.mjs	2026-05-04 21:26:00
+@@ -0,0 +1,41 @@
++import { readFileSync } from "node:fs";
++import assert from "node:assert/strict";
++
++const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
++const promptPack = readFileSync(new URL("./exercise-realistic-image-prompts.md", import.meta.url), "utf8");
++
++assert.match(html, /REALISTIC_EXERCISE_VISUAL_DIRECTION/, "realistic visual direction should be defined");
++assert.match(html, /EXERCISE_REALISTIC_IMAGE_PROMPTS/, "realistic prompt mapping should exist");
++assert.match(html, /assets\/exercises\/realistic_barbell_squat\.webp/, "squat should map to a realistic WebP asset path");
++assert.match(html, /getStandardExerciseAssetUrl/, "standard exercise assets should resolve to WebP paths");
++assert.match(html, /data-fallback-src=/, "missing WebP assets should have a safe fallback");
++assert.match(html, /teacher.*custom|imagem própria do professor/i, "teacher custom images should remain the priority");
++assert.doesNotMatch(html, /premium soft 3D minimalist style/, "old soft-3D prompt style should not remain active");
++
++const expectedAssets = [
++  "realistic_barbell_squat.webp",
++  "realistic_leg_press.webp",
++  "realistic_walking_lunge.webp",
++  "realistic_hip_thrust.webp",
++  "realistic_deadlift.webp",
++  "realistic_bench_press.webp",
++  "realistic_chest_fly.webp",
++  "realistic_dumbbell_row.webp",
++  "realistic_lat_pulldown.webp",
++  "realistic_shoulder_press.webp",
++  "realistic_lateral_raise.webp",
++  "realistic_biceps_curl.webp",
++  "realistic_triceps_pushdown.webp",
++  "realistic_forearm_plank.webp",
++  "realistic_abdominal_crunch.webp",
++  "realistic_calf_raise.webp",
++  "realistic_mobility_stretch.webp",
++  "realistic_functional_strength.webp"
++];
++
++for (const asset of expectedAssets) {
++  assert.match(html, new RegExp(asset.replace(".", "\\.")), `${asset} should be mapped in the app`);
++  assert.match(promptPack, new RegExp(asset.replace(".", "\\.")), `${asset} should have a generation prompt`);
++}
++
++console.log("Realistic exercise visual static QA checks passed");

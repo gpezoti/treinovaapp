@@ -1,0 +1,592 @@
+From 117a75f7f3cc89ac106b1c18fbc8035f55b394e0 Mon Sep 17 00:00:00 2001
+From: Guilherme Pezoti <gpezoti@hotmail.com>
+Date: Mon, 4 May 2026 15:02:51 -0300
+Subject: [PATCH] fix: stabilize workout checks and student payments
+
+---
+ beta_rls_hardening.sql | 243 +++++++++++++++++++++++++++++++++++++++++
+ index.html             | 170 +++++++++++++++++++++-------
+ 2 files changed, 371 insertions(+), 42 deletions(-)
+ create mode 100644 beta_rls_hardening.sql
+
+diff --git a/beta_rls_hardening.sql b/beta_rls_hardening.sql
+new file mode 100644
+index 0000000..4a5f009
+--- /dev/null
++++ b/beta_rls_hardening.sql
+@@ -0,0 +1,243 @@
++-- beta_rls_hardening.sql
++-- Correcoes de isolamento para beta: professores so acessam dados dos proprios alunos.
++-- Idempotente. Rodar no Supabase SQL Editor antes do deploy do frontend.
++
++-- Perfis: restringe leitura ampla de professores e impede update em alunos de outro professor.
++drop policy if exists "profiles coach reads all" on public.profiles;
++create policy "profiles coach reads own students" on public.profiles
++  for select using (
++    public.is_coach(auth.uid())
++    and (
++      id = auth.uid()
++      or role = 'admin'
++      or coach_id = auth.uid()
++    )
++  );
++
++drop policy if exists "profiles approved students read each other" on public.profiles;
++create policy "profiles students read same coach" on public.profiles
++  for select using (
++    status = 'approved'
++    and public.is_approved_student(auth.uid())
++    and (
++      id = auth.uid()
++      or (
++        coach_id is not null
++        and coach_id = (select me.coach_id from public.profiles me where me.id = auth.uid())
++      )
++    )
++  );
++
++drop policy if exists "profiles coach updates students" on public.profiles;
++create policy "profiles coach updates own students" on public.profiles
++  for update
++  using (
++    public.is_coach(auth.uid())
++    and role = 'student'
++    and (coach_id = auth.uid() or coach_id is null)
++  )
++  with check (
++    public.is_coach(auth.uid())
++    and role = 'student'
++    and coach_id = auth.uid()
++  );
++
++-- Workouts: professor ve/gerencia globais proprios e personalizados dos proprios alunos.
++drop policy if exists "workouts auth read" on public.workouts;
++create policy "workouts auth read" on public.workouts
++  for select using (
++    (is_global = true and student_id is null)
++    or public.is_admin(auth.uid())
++    or student_id = auth.uid()
++    or (
++      public.is_coach(auth.uid())
++      and (
++        coach_id = auth.uid()
++        or exists (
++          select 1 from public.profiles s
++          where s.id = workouts.student_id and s.coach_id = auth.uid()
++        )
++      )
++    )
++  );
++
++drop policy if exists "workouts coach insert" on public.workouts;
++create policy "workouts coach insert" on public.workouts
++  for insert with check (
++    public.is_coach(auth.uid())
++    and (
++      (student_id is null and (coach_id = auth.uid() or is_global = true))
++      or exists (
++        select 1 from public.profiles s
++        where s.id = student_id and s.coach_id = auth.uid()
++      )
++    )
++  );
++
++drop policy if exists "workouts coach update" on public.workouts;
++create policy "workouts coach update" on public.workouts
++  for update
++  using (
++    public.is_coach(auth.uid())
++    and (
++      coach_id = auth.uid()
++      or exists (
++        select 1 from public.profiles s
++        where s.id = workouts.student_id and s.coach_id = auth.uid()
++      )
++    )
++  )
++  with check (
++    public.is_coach(auth.uid())
++    and (
++      coach_id = auth.uid()
++      or exists (
++        select 1 from public.profiles s
++        where s.id = workouts.student_id and s.coach_id = auth.uid()
++      )
++    )
++  );
++
++drop policy if exists "workouts coach delete" on public.workouts;
++create policy "workouts coach delete" on public.workouts
++  for delete using (
++    public.is_coach(auth.uid())
++    and (
++      coach_id = auth.uid()
++      or exists (
++        select 1 from public.profiles s
++        where s.id = workouts.student_id and s.coach_id = auth.uid()
++      )
++    )
++  );
++
++-- Exercises: leitura e gestao seguem o escopo do workout vinculado ou biblioteca.
++drop policy if exists "exercises auth read" on public.exercises;
++create policy "exercises scoped read" on public.exercises
++  for select using (
++    is_library = true
++    or public.is_admin(auth.uid())
++    or exists (
++      select 1 from public.workouts w
++      where w.id = exercises.workout_id
++        and (
++          (w.is_global = true and w.student_id is null)
++          or w.student_id = auth.uid()
++          or (
++            public.is_coach(auth.uid())
++            and (
++              w.coach_id = auth.uid()
++              or exists (
++                select 1 from public.profiles s
++                where s.id = w.student_id and s.coach_id = auth.uid()
++              )
++            )
++          )
++        )
++    )
++  );
++
++drop policy if exists "exercises coach manage" on public.exercises;
++create policy "exercises coach manage own workouts" on public.exercises
++  for all
++  using (
++    public.is_coach(auth.uid())
++    and (
++      is_library = true
++      or exists (
++        select 1 from public.workouts w
++        where w.id = exercises.workout_id
++          and (
++            w.coach_id = auth.uid()
++            or exists (
++              select 1 from public.profiles s
++              where s.id = w.student_id and s.coach_id = auth.uid()
++            )
++          )
++      )
++    )
++  )
++  with check (
++    public.is_coach(auth.uid())
++    and (
++      is_library = true
++      or exists (
++        select 1 from public.workouts w
++        where w.id = exercises.workout_id
++          and (
++            w.coach_id = auth.uid()
++            or exists (
++              select 1 from public.profiles s
++              where s.id = w.student_id and s.coach_id = auth.uid()
++            )
++          )
++      )
++    )
++  );
++
++-- Historico de treino: professor le apenas sessoes e series dos seus alunos.
++drop policy if exists "sessions coach read" on public.sessions;
++create policy "sessions coach read own students" on public.sessions
++  for select using (
++    public.is_coach(auth.uid())
++    and exists (
++      select 1 from public.profiles s
++      where s.id = sessions.student_id and s.coach_id = auth.uid()
++    )
++  );
++
++drop policy if exists "setlogs coach read" on public.set_logs;
++create policy "setlogs coach read own students" on public.set_logs
++  for select using (
++    public.is_coach(auth.uid())
++    and exists (
++      select 1 from public.profiles s
++      where s.id = set_logs.student_id and s.coach_id = auth.uid()
++    )
++  );
++
++-- RPC de clone: novo workout personalizado deve ficar vinculado ao professor do aluno.
++create or replace function public.clone_workout_for_student(p_workout uuid, p_student uuid)
++returns uuid
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  new_id uuid;
++  student_coach uuid;
++begin
++  select coach_id into student_coach from public.profiles where id = p_student and role = 'student';
++
++  if not (public.is_admin(auth.uid()) or student_coach = auth.uid()) then
++    raise exception 'forbidden';
++  end if;
++
++  insert into public.workouts (coach_id, code, name, focus, color, is_global, student_id)
++    select coalesce(student_coach, auth.uid()), code, name, focus, color, false, p_student
++    from public.workouts w
++    where w.id = p_workout
++      and (
++        public.is_admin(auth.uid())
++        or w.is_global = true
++        or w.coach_id = auth.uid()
++        or exists (
++          select 1 from public.profiles s
++          where s.id = w.student_id and s.coach_id = auth.uid()
++        )
++      )
++    returning id into new_id;
++
++  if new_id is null then
++    raise exception 'workout not found or forbidden';
++  end if;
++
++  insert into public.exercises (workout_id, position, name, cat, sets_count, reps, pause, cadence, method, observations, image_url, video_url, muscle_group, is_library)
++    select new_id, position, name, cat, sets_count, reps, pause, cadence, method, observations, image_url, video_url, muscle_group, false
++    from public.exercises where workout_id = p_workout;
++
++  return new_id;
++end;
++$$;
++
++grant execute on function public.clone_workout_for_student(uuid, uuid) to authenticated;
+diff --git a/index.html b/index.html
+index ef7ced4..34fb1d1 100644
+--- a/index.html
++++ b/index.html
+@@ -711,15 +711,15 @@ const ICONS = {
+   calf: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="10" r="4"/><path d="M32 14v8M28 22h8l-1 14h-6zM28 36c-2 4-3 8-2 12l4 4M36 36c2 4 3 8 2 12l-4 4M22 50h20"/></svg>`
+ };
+ const iconFor = c => ICONS[c] || ICONS.mobility;
++const DEFAULT_EXERCISE_IMAGE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#172033"/><stop offset="1" stop-color="#0b1220"/></linearGradient></defs><rect width="320" height="220" rx="24" fill="url(#g)"/><circle cx="160" cy="74" r="24" fill="#00b4ff" opacity=".9"/><path d="M104 154c13-35 31-53 56-53s43 18 56 53" fill="none" stroke="#00b4ff" stroke-width="14" stroke-linecap="round"/><path d="M80 138h42M198 138h42M64 120v36M256 120v36" stroke="#e5eefc" stroke-width="12" stroke-linecap="round"/><path d="M122 138h76" stroke="#e5eefc" stroke-width="14" stroke-linecap="round"/></svg>`;
++const DEFAULT_EXERCISE_IMAGE_URL = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(DEFAULT_EXERCISE_IMAGE_SVG);
+ 
+ // Retorna HTML de imagem para um exercício.
+ // Prioridade: image_url própria → biblioteca com mesmo nome → ícone SVG por categoria
+ function getExThumb(ex) {
+   const url = ex.image_url
+     || ((STATE.library || []).find(l => l.name === ex.name && l.image_url) || {}).image_url;
+-  return url
+-    ? `<img src="${escape(url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" />`
+-    : iconFor(ex.cat);
++  return `<img src="${escape(url || DEFAULT_EXERCISE_IMAGE_URL)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" />`;
+ }
+ 
+ const REP_SCHEMES = {
+@@ -1362,7 +1362,7 @@ async function signOut() {
+   if (!await showConfirm({ title: "Sair da conta?", confirm: "Sair", cancel: "Cancelar" })) return;
+   cleanupRealtime();
+   // M-01 FIX: limpar dados do timer para não vazar entre usuários do mesmo dispositivo
+-  try { localStorage.removeItem("timer_start"); localStorage.removeItem("timer_total"); localStorage.removeItem("timer_label"); } catch(e) {}
++  try { localStorage.removeItem("timer_start"); localStorage.removeItem("timer_duration"); localStorage.removeItem("timer_total"); localStorage.removeItem("timer_label"); } catch(e) {}
+   await sb.auth.signOut();
+   location.reload();
+ }
+@@ -1371,18 +1371,27 @@ async function signOut() {
+    DATA LOADING
+    ============================================================================= */
+ async function loadWorkouts() {
+-  const { data: workouts, error } = await sb.from("workouts").select("*").order("code");
++  let q = sb.from("workouts").select("*").order("code");
++  const role = STATE.profile && STATE.profile.role;
++  const myId = STATE.profile && STATE.profile.id;
++  if (role === "student") {
++    q = q.or(`is_global.eq.true,student_id.eq.${myId}`);
++  } else if (role === "coach") {
++    q = q.or(`is_global.eq.true,coach_id.eq.${myId}`);
++  }
++  const { data: workouts, error } = await q;
+   if (error) { console.error(error); return; }
+   // Só exercises de workout (não biblioteca)
+-  const { data: exercises, error: e2 } = await sb.from("exercises")
+-    .select("*").not("workout_id","is",null).order("position");
++  const workoutIds = (workouts || []).map(w => w.id).filter(Boolean);
++  let exQ = sb.from("exercises").select("*").not("workout_id","is",null).order("position");
++  if (workoutIds.length) exQ = exQ.in("workout_id", workoutIds);
++  const { data: exercises, error: e2 } = workoutIds.length ? await exQ : { data: [], error: null };
+   if (e2) { console.error(e2); return; }
+   const map = {};
+   // Para alunos: prioriza workout personalizado (student_id = me) sobre global por code
+   const isStudent = STATE.profile && STATE.profile.role === "student";
+-  const myId = STATE.profile && STATE.profile.id;
+   const grouped = {};
+-  workouts.forEach(w => {
++  (workouts || []).forEach(w => {
+     if (!grouped[w.code]) grouped[w.code] = [];
+     grouped[w.code].push(w);
+   });
+@@ -2385,6 +2394,12 @@ async function loadPaymentsForUser(userId) {
+     .select("*").eq("user_id", userId).order("due_date", { ascending: false });
+   return data || [];
+ }
++async function loadMyPayments() {
++  if (!STATE.profile) return [];
++  const data = await loadPaymentsForUser(STATE.profile.id);
++  STATE.myPayments = data || [];
++  return STATE.myPayments;
++}
+ async function checkMyPaymentStatus() {
+   if (!STATE.profile) return;
+   // Busca atrasados
+@@ -2606,8 +2621,7 @@ window.onNotifClick = async function(id, kind, relatedId) {
+     if (STATE.profile.role === 'coach' || STATE.profile.role === 'admin') {
+       navTo('payments');
+     } else {
+-      // student: mostra alerta
+-      showToast("Pagamento em atraso — fale com seu professor", "error");
++      navTo('payments');
+     }
+   } else if ((kind === 'period_reminder_7d' || kind === 'period_due_today') && relatedId) {
+     openStudentPeriodSheet(relatedId);
+@@ -3269,6 +3283,33 @@ async function renderPayments() {
+   const el = document.getElementById("view-payments");
+   const isAdmin = STATE.profile.role === "admin";
+   const isCoach = STATE.profile.role === "coach";
++  const isStudent = STATE.profile.role === "student";
++  if (isStudent) {
++    const list = await loadMyPayments();
++    const open = list.filter(p => p.status !== 'paid' && p.status !== 'cancelled');
++    const paid = list.filter(p => p.status === 'paid');
++    const overdue = list.filter(p => p.status === 'overdue' || (p.status === 'pending' && new Date(p.due_date) < new Date()));
++    const openAmount = open.reduce((s,p) => s + Number(p.amount || 0), 0);
++    el.innerHTML = `
++      <h1 class="view-title">Financeiro</h1>
++      <p class="view-subtitle">${open.length} em aberto · ${paid.length} pago(s)</p>
++      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
++        <div class="card card-lg">
++          <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:700;margin-bottom:6px">Em aberto</div>
++          <div style="font-size:22px;font-weight:900;color:${overdue.length ? 'var(--red)' : 'var(--orange,#e67e22)'}">${fmtMoney(openAmount)}</div>
++          <div style="font-size:11px;color:var(--text-3);margin-top:3px">${overdue.length} atrasado(s)</div>
++        </div>
++        <div class="card card-lg">
++          <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:700;margin-bottom:6px">Histórico</div>
++          <div style="font-size:22px;font-weight:900;color:var(--green)">${paid.length}</div>
++          <div style="font-size:11px;color:var(--text-3);margin-top:3px">pagamento(s) confirmado(s)</div>
++        </div>
++      </div>
++      <div class="section-title">Mensalidades</div>
++      ${list.length === 0 ? `<div class="empty"><p>Nenhum lançamento encontrado.</p></div>` : list.map(studentPaymentItem).join("")}
++    `;
++    return;
++  }
+   if (!isAdmin && !isCoach) {
+     el.innerHTML = `<div class="empty"><h3>Sem acesso</h3></div>`; return;
+   }
+@@ -3354,6 +3395,44 @@ async function renderPayments() {
+   `;
+ }
+ 
++function paymentAccessHTML(p) {
++  const invoice = p.invoice_url || p.boleto_url || null;
++  const pix = p.pix_copy_paste || null;
++  return `
++    ${invoice ? `<a href="${escape(invoice)}" target="_blank" class="mini-btn mini-btn-primary" style="text-decoration:none;margin-top:4px">Abrir cobrança</a>` : ""}
++    ${pix ? `<button class="mini-btn mini-btn-ghost" data-pix="${escape(pix)}" onclick="copyPaymentPix(this.dataset.pix)" style="margin-top:4px">Copiar PIX</button>` : ""}
++  `;
++}
++
++window.copyPaymentPix = async function(code) {
++  try {
++    await navigator.clipboard.writeText(code || "");
++    showToast("Código PIX copiado", "success");
++  } catch(e) {
++    showToast("Não foi possível copiar o PIX", "error");
++  }
++};
++
++function studentPaymentItem(p) {
++  const overdue = p.status === 'overdue' || (p.status === 'pending' && new Date(p.due_date) < new Date());
++  const statusBadge = p.status === 'paid' ? `<span class="today-pill pill-approved">Pago</span>` :
++    overdue ? `<span class="today-pill pill-red">Atrasado</span>` :
++    `<span class="today-pill pill-pending">Pendente</span>`;
++  return `<div class="card mb-8">
++    <div class="row-flex" style="align-items:flex-start;">
++      <div style="flex:1; min-width:0;">
++        <div class="fw-700 text-sm">${fmtMoney(p.amount)} · venc. ${fmtDateBR(p.due_date)}</div>
++        ${p.reference ? `<div class="text-xs muted" style="margin-top:2px;">${escape(p.reference)}</div>` : ''}
++        ${p.paid_at ? `<div class="text-xs" style="color:var(--green); margin-top:2px;">Pago em ${fmtDateBR(p.paid_at.slice(0,10))}</div>` : ''}
++      </div>
++      <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
++        ${statusBadge}
++        ${p.status !== 'paid' ? paymentAccessHTML(p) : ''}
++      </div>
++    </div>
++  </div>`;
++}
++
+ function paymentRow(p, idKey) {
+   const id = p[idKey];
+   const overdueLabel = p.is_overdue ? `<span class="today-pill pill-red">${p.overdue_count} atrasado${p.overdue_count>1?'s':''}</span>` :
+@@ -3451,23 +3530,13 @@ function paymentItem(p, userId, name) {
+ }
+ 
+ window.openMyPaymentsSheet = async function() {
+-  const list = await loadPaymentsForUser(STATE.profile.id);
++  const list = await loadMyPayments();
+   const open = list.filter(p => p.status !== 'paid' && p.status !== 'cancelled');
+   const html = `
+     <h3>Minhas mensalidades</h3>
+-    <p>Quite os lançamentos abaixo e fale com seu administrador para confirmar o pagamento.</p>
++    <p>Quite os lançamentos abaixo e fale com seu professor para confirmar o pagamento.</p>
+     <div class="section-title">Em aberto (${open.length})</div>
+-    ${open.length === 0 ? `<div class="empty"><p>Nenhuma pendência</p></div>` : open.map(p => `
+-      <div class="card mb-8">
+-        <div class="row-flex">
+-          <div style="flex:1; min-width:0;">
+-            <div class="fw-700 text-sm">${fmtMoney(p.amount)} · venc. ${fmtDateBR(p.due_date)}</div>
+-            ${p.reference ? `<div class="text-xs muted" style="margin-top:2px;">${escape(p.reference)}</div>` : ''}
+-          </div>
+-          <span class="today-pill ${p.status === 'overdue' ? 'pill-red' : 'pill-pending'}">${p.status === 'overdue' ? 'Atrasado' : 'Pendente'}</span>
+-        </div>
+-      </div>
+-    `).join("")}
++    ${open.length === 0 ? `<div class="empty"><p>Nenhuma pendência</p></div>` : open.map(studentPaymentItem).join("")}
+     <div style="margin-top:14px"><button class="btn-ghost" onclick="closeSheet()">Fechar</button></div>
+   `;
+   openSheet(html);
+@@ -4064,7 +4133,19 @@ function renderExerciseList(W, intensity, completed) {
+       </div>
+     </div>`;
+   }).join("");
++  bindWorkoutSetChecks();
++}
++
++function bindWorkoutSetChecks() {
++  document.querySelectorAll("#exercise-list .set-check:not([disabled])").forEach(btn => {
++    btn.onclick = () => {
++      const pos = parseInt(btn.dataset.pos || btn.closest("[data-pos]")?.dataset.pos || "", 10);
++      const idx = parseInt(btn.dataset.idx || "", 10);
++      if (!isNaN(pos) && !isNaN(idx)) window.onToggleSet(pos, idx);
++    };
++  });
+ }
++
+ function renderMobBtn(ex, allDone, completed) {
+   if (completed) return `<div class="muted text-sm" style="text-align:center; padding:10px;">Treino concluído</div>`;
+   return `<button class="btn-primary" onclick="markMobility(${ex.position})" style="${allDone ? 'background:linear-gradient(135deg,#2ecc71,#1aa75a); color:#022;' : ''}">
+@@ -4088,7 +4169,7 @@ function renderSetsTable(ex, logs, scheme, completed) {
+                onchange="onLoadChange(${ex.position}, ${i}, this.value)" />
+         <span class="unit">kg</span>
+       </div>
+-      <button class="set-check" data-idx="${i}" ${completed ? "disabled" : ""} onclick="onToggleSet(${ex.position}, ${i})">
++      <button class="set-check" type="button" data-pos="${ex.position}" data-idx="${i}" ${completed ? "disabled" : ""}>
+         ${isDone
+           ? `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+           : `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>`
+@@ -4096,10 +4177,11 @@ function renderSetsTable(ex, logs, scheme, completed) {
+       </button>
+     </div>`;
+   }
+-  return `<div class="sets-list">${rows}</div>
++  const html = `<div class="sets-list">${rows}</div>
+     <div class="text-xs muted" style="margin-top:-4px; margin-bottom:10px;">
+       ${lastLoad ? `Última carga: <b style="color:var(--text-2)">${lastLoad} kg</b> (auto-preenchida)` : "Toque no ✓ para concluir a série e iniciar o descanso."}
+     </div>`;
++  return html;
+ }
+ 
+ window.openExerciseVideo = function(url, name) {
+@@ -4434,6 +4516,11 @@ async function renderProfile() {
+     </div>
+ 
+     ${!isStaff ? `
++      <div class="section-title">Financeiro</div>
++      <div class="card">
++        <button class="btn-ghost" style="width:100%" onclick="navTo('payments')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Ver minhas mensalidades</button>
++      </div>
++
+       <div class="section-title">Conta</div>
+       <div class="card" style="border:1px solid rgba(239,68,68,.25)">
+         <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.5">Solicitar exclusão apaga seu perfil, posts, fotos e dados pessoais. Seu histórico de treinos é mantido de forma anônima.</p>
+@@ -5784,13 +5871,15 @@ window.createWorkoutForStudent = async function(studentId) {
+     code,
+     name,
+     focus: focus || null,
+-    student_id: studentId
++    student_id: studentId,
++    coach_id: STATE.profile.role === "coach" ? STATE.profile.id : null,
++    is_global: false
+   }).select().single();
+   if (error) { showToast("Erro: " + error.message, "error"); return; }
+   showToast("Treino criado! Agora adicione exercícios.", "success");
+   await loadWorkouts();
+   // Abre o editor do novo treino direto
+-  openWorkoutEditor(code);
++  openWorkoutEditor(code, data.id);
+ };
+ 
+ window.cloneForStudent = async function(workoutId, studentId) {
+@@ -6055,12 +6144,16 @@ window.submitNewExercise = async function() {
+     pause: get("ne-pause").value.trim(),
+     cadence: get("ne-cadence").value.trim(),
+     method: get("ne-method").value.trim(),
+-    observations: get("ne-obs").value.trim()
++    observations: get("ne-obs").value.trim(),
++    image_url: DEFAULT_EXERCISE_IMAGE_URL
+   };
+   // Insere no workout
+-  const nextPos = (w.exercises.length > 0 ? Math.max(...w.exercises.map(x => x.position)) : 0) + 1;
++  const wId = ctx.workoutId || (w && w.id);
++  if (!wId) { showToast("Erro: workout não identificado", "error"); return; }
++  const { data: existingEx } = await sb.from("exercises").select("position").eq("workout_id", wId).order("position", { ascending: false }).limit(1);
++  const nextPos = (existingEx && existingEx.length > 0 ? existingEx[0].position : 0) + 1;
+   const { error: e1 } = await sb.from("exercises").insert({
+-    ...data, workout_id: w.id, student_id: ctx.studentId || null,
++    ...data, workout_id: wId, student_id: ctx.studentId || null,
+     position: nextPos, is_library: false
+   });
+   if (e1) { showToast("Erro: "+e1.message, "error"); return; }
+@@ -6073,7 +6166,7 @@ window.submitNewExercise = async function() {
+   }
+   showToast("Exercício adicionado", "success");
+   await loadWorkouts();
+-  window.openWorkoutEditor(ctx.workoutCode);
++  window.openWorkoutEditor(ctx.workoutCode, ctx.workoutId || "");
+ };
+ 
+ window.editExercise = async function(exId) {
+@@ -6093,7 +6186,7 @@ window.editExercise = async function(exId) {
+         <label class="form-label">Imagem demonstrativa</label>
+         <div class="row-flex" style="gap:8px; margin-bottom:6px;">
+           <div id="ex-img-prev" style="width:64px; height:64px; border-radius:10px; background:linear-gradient(135deg,var(--bg-3),var(--bg-2)); border:1px solid var(--line); overflow:hidden; flex:0 0 64px; display:grid; place-items:center;">
+-            ${ex.image_url ? `<img src="${escape(ex.image_url)}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="color:var(--text-3); font-size:11px">Sem imagem</span>`}
++            ${getExThumb(ex)}
+           </div>
+           <button class="btn-ghost" style="flex:1; width:auto;" onclick="onExerciseImageUpload('${exId}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Subir imagem</button>
+           ${ex.image_url ? `<button class="mini-btn mini-btn-danger" onclick="clearExerciseMedia('${exId}','image')">×</button>` : ''}
+@@ -6587,13 +6680,7 @@ async function postLoginInit() {
+         if (code && (!STATE.workouts || !STATE.workouts[code])) {
+           await loadWorkouts();
+         }
+-        document.querySelectorAll(".set-check:not([disabled])").forEach(btn => {
+-          const pos = parseInt(btn.closest("[data-pos]")?.dataset.pos);
+-          const idx = parseInt(btn.dataset.idx || btn.getAttribute("data-idx") || "0");
+-          if (!isNaN(pos) && !isNaN(idx)) {
+-            btn.onclick = () => window.onToggleSet(pos, idx);
+-          }
+-        });
++        bindWorkoutSetChecks();
+       } catch(e) { console.warn("[bg-recovery] workout re-init:", e); }
+     }
+   });
+@@ -7538,8 +7625,7 @@ async function createAsaasCharge({ paymentId, billingType="PIX" }) {
+ }
+ 
+ async function openAsaasSheet(paymentId) {
+-  // C-02 FIX: FK constraint correta é payments_payer_id_fkey
+-  const { data: p } = await sb.from("payments").select("*, user:profiles!payments_payer_id_fkey(full_name,email,phone)").eq("id", paymentId).single();
++  const { data: p } = await sb.from("payments").select("*, user:profiles!payments_user_id_fkey(full_name,email,phone)").eq("id", paymentId).single();
+   if (!p) { showToast("Pagamento não encontrado", "error"); return; }
+   const sheet = document.createElement("div");
+   sheet.id = "asaas-overlay";
+-- 
+2.50.1 (Apple Git-155)
+
