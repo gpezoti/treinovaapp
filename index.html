@@ -13,11 +13,11 @@
 <meta name="description" content="Treinova — seu app, seu treino, sua marca." />
 <title>Treinova</title>
 <link rel="manifest" href="manifest.webmanifest" />
-<link rel="icon" id="favicon" type="image/png" href="assets/icons/favicon.png?v=20260505" />
-<link rel="apple-touch-icon" href="assets/icons/icon-180.png?v=20260505" />
-<link rel="apple-touch-icon" sizes="180x180" href="assets/icons/icon-180.png?v=20260505" />
-<link rel="apple-touch-icon" sizes="192x192" href="assets/icons/icon-192.png?v=20260505" />
-<link rel="apple-touch-icon" sizes="512x512" href="assets/icons/icon-512.png?v=20260505" />
+<link rel="icon" id="favicon" href="/assets/favicon.ico?v=20260505" />
+<link rel="shortcut icon" href="/assets/favicon.ico?v=20260505" />
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png?v=20260505" />
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png?v=20260505" />
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=20260505" />
 <style>
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 /* ---------- DARK THEME (default) ---------- */
@@ -1349,12 +1349,9 @@ function brandLogoHTML() {
 function updateFavicon() {
   const fav = document.getElementById('favicon');
   if (!fav) return;
-  fav.href = "assets/icons/favicon.png?v=20260505";
+  fav.href = "/assets/favicon.ico?v=20260505";
   document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(el => {
-    const size = el.getAttribute("sizes") || "180x180";
-    el.href = size.indexOf("512") === 0 ? "assets/icons/icon-512.png?v=20260505"
-      : size.indexOf("192") === 0 ? "assets/icons/icon-192.png?v=20260505"
-      : "assets/icons/icon-180.png?v=20260505";
+    el.href = "/assets/apple-touch-icon.png?v=20260505";
   });
 }
 
@@ -2311,13 +2308,24 @@ async function completeSession() {
 }
 
 async function approveStudent(id, status) {
+  if (STATE.profile?.role !== "coach") {
+    showToast("Apenas professores podem aprovar, recusar ou reativar alunos.", "error");
+    return false;
+  }
   const patch = { status };
-  // Coach aprova → vincula a si mesmo. Admin aprova → mantém coach_id existente (ou null)
-  if (status === "approved" && STATE.profile.role === "coach") patch.coach_id = STATE.profile.id;
+  if (status === "approved") patch.coach_id = STATE.profile.id;
   const { error } = await sb.from("profiles").update(patch).eq("id", id);
-  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  if (error) { showToast("Erro: " + error.message, "error"); return false; }
   showToast(status === "approved" ? "Aluno aprovado" : status === "blocked" ? "Aluno bloqueado" : "Atualizado", "success");
   await loadStudents(); renderStudents();
+  return true;
+}
+
+function removeUsersFromLocalLists(ids) {
+  const set = new Set(Array.isArray(ids) ? ids : [ids]);
+  STATE.students = (STATE.students || []).filter(s => !set.has(s.student_id || s.id));
+  STATE.trainers = (STATE.trainers || []).filter(t => !set.has(t.id));
+  set.forEach(id => { _studentSelected.delete(id); _trainerSelected.delete(id); });
 }
 
 async function setStudentCoach(studentId, coachId) {
@@ -3904,8 +3912,7 @@ function renderAdminHome(el) {
 
 function renderTrainers() {
   const el = document.getElementById("view-trainers");
-  const pending = STATE.trainers.filter(t => t.status === "pending");
-  const approved = STATE.trainers.filter(t => t.status === "approved");
+  const approved = STATE.trainers.filter(t => t.status !== "blocked");
   const blocked = STATE.trainers.filter(t => t.status === "blocked");
   const selMode = _trainerSelected.size > 0;
 
@@ -3925,9 +3932,8 @@ function renderTrainers() {
         <button class="mini-btn mini-btn-primary" onclick="openNewTrainerSheet()">+ Novo</button>
       </div>
     </div>
-    <p class="view-subtitle">${approved.length} ativos · ${pending.length} pendentes · ${blocked.length} bloqueados</p>
+    <p class="view-subtitle">${approved.length} ativos · ${blocked.length} bloqueados</p>
     ${bulkBar}
-    ${pending.length ? `<div class="section-title">Pendentes (${pending.length})</div>${pending.map(t => trainerRow(t, selMode)).join("")}` : ""}
     <div class="section-title">Ativos (${approved.length})</div>
     ${approved.length ? approved.map(t => trainerRow(t, selMode)).join("") : `<div class="empty"><p>Nenhum treinador ativo</p></div>`}
     ${blocked.length ? `<div class="section-title">Bloqueados (${blocked.length})</div>${blocked.map(t => trainerRow(t, selMode)).join("")}` : ""}
@@ -3954,7 +3960,7 @@ function trainerRow(t, selMode) {
       <div class="lr-sub">${escape(t.email || "")} ${studs ? "· " + studs : ""} · <span style="color:var(--brand)">tocar para editar</span></div>
     </div>
     <div class="lr-actions" onclick="event.stopPropagation()">
-      <span class="today-pill pill-${t.status === 'approved' ? 'approved' : t.status === 'pending' ? 'pending' : 'blocked'}">${t.status}</span>
+      <span class="today-pill pill-${t.status === 'blocked' ? 'blocked' : 'approved'}">${t.status === 'blocked' ? 'Bloqueado' : 'Ativo'}</span>
     </div>
   </div>`;
 }
@@ -3987,7 +3993,8 @@ window.bulkDeleteTrainers = async function() {
   const { error } = await sb.from("profiles").delete().in("id", ids);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
   showToast(`${ids.length} treinador(es) excluído(s)`, "success");
-  _trainerSelected.clear();
+  removeUsersFromLocalLists(ids);
+  renderTrainers();
   await loadTrainers(); renderTrainers();
 };
 
@@ -4003,6 +4010,8 @@ window.removeTrainer = async function(id, email) {
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Treinador removido", "success");
   closeSheet();
+  removeUsersFromLocalLists(id);
+  if (STATE.view === "trainers") renderTrainers();
   await loadTrainers();
   if (STATE.view === "trainers") renderTrainers();
 };
@@ -5828,12 +5837,13 @@ function renderStudents() {
   const approved = allStudents.filter(s => s.status === "approved");
   const blocked = allStudents.filter(s => s.status === "blocked");
   const selMode = _studentSelected.size > 0;
+  const canManageStudents = STATE.profile.role === "coach";
 
   const bulkBar = selMode ? `
     <div style="display:flex;align-items:center;gap:8px;padding:10px 0;flex-wrap:wrap">
       <span class="text-xs muted">${_studentSelected.size} selecionado(s)</span>
-      <button class="mini-btn" style="background:var(--brand-soft);color:var(--brand);border:1px solid var(--brand-soft)" onclick="bulkMessageStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Mensagem</button>
-      <button class="mini-btn mini-btn-danger" onclick="bulkBlockStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Bloquear</button>
+      ${canManageStudents ? `<button class="mini-btn" style="background:var(--brand-soft);color:var(--brand);border:1px solid var(--brand-soft)" onclick="bulkMessageStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Mensagem</button>
+      <button class="mini-btn mini-btn-danger" onclick="bulkBlockStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Bloquear</button>` : ""}
       <button class="mini-btn" style="background:var(--red-soft);color:var(--red);border:1px solid var(--red-soft)" onclick="bulkDeleteStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Excluir</button>
       <button class="mini-btn" onclick="clearStudentSelection()">Cancelar</button>
     </div>` : "";
@@ -5871,7 +5881,7 @@ function renderStudents() {
       <h1 class="view-title" style="margin:0">Alunos</h1>
       <div style="display:flex;gap:6px">
         <button class="mini-btn" onclick="toggleStudentSelectAll()" title="Selecionar todos"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
-        <button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">+ Novo</button>
+        ${canManageStudents ? `<button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">+ Novo</button>` : ""}
       </div>
     </div>
     <div class="insight-strip">
@@ -5899,7 +5909,7 @@ function renderStudents() {
     ` : ""}
     ${_studentTab !== "overdue" && _studentTab !== "inactive" ? `
       <div class="section-title">${_studentTab === "all" ? `Ativos (${filteredApproved.length})` : `Resultados (${filteredApproved.length})`}</div>
-      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>${_studentSearch ? "Nenhum aluno encontrado." : "Nenhum aluno ativo ainda. Use '+ Novo' para incluir."}</p>${!_studentSearch ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewStudentSheet()">Adicionar aluno</button><button class="btn-ghost" style="width:auto" onclick="openShareLinkSheet()">Compartilhar link</button></div>` : ""}</div>`}
+      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>${_studentSearch ? "Nenhum aluno encontrado." : canManageStudents ? "Nenhum aluno ativo ainda. Use '+ Novo' para incluir." : "Nenhum aluno ativo encontrado."}</p>${!_studentSearch && canManageStudents ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewStudentSheet()">Adicionar aluno</button><button class="btn-ghost" style="width:auto" onclick="openShareLinkSheet()">Compartilhar link</button></div>` : ""}</div>`}
     ` : `
       <div class="section-title">Resultados (${filteredApproved.length})</div>
       ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>Nenhum aluno nessa categoria.</p><div class="empty-actions"><button class="btn-ghost" style="width:auto" onclick="setStudentTab('all')">Ver todos</button></div></div>`}
@@ -5938,13 +5948,18 @@ function studentRow(s, selMode) {
     </div>`;
   }
   let actions = "";
+  const canManageStatus = STATE.profile?.role === "coach";
   if (s.status === "pending") {
-    actions = `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Aprovar</button>
-               <button class="mini-btn mini-btn-danger" onclick="onBlock('${id}')">Recusar</button>`;
+    actions = canManageStatus
+      ? `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Aprovar</button>
+         <button class="mini-btn mini-btn-danger" onclick="onBlock('${id}')">Recusar</button>`
+      : `<button class="mini-btn mini-btn-primary" onclick="onStudentDetail('${id}')">Abrir</button>`;
   } else if (s.status === "approved") {
     actions = `<button class="mini-btn mini-btn-primary" onclick="onStudentDetail('${id}')">Abrir</button>`;
   } else {
-    actions = `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Reativar</button>`;
+    actions = canManageStatus
+      ? `<button class="mini-btn mini-btn-success" onclick="onApprove('${id}')">Reativar</button>`
+      : `<button class="mini-btn mini-btn-primary" onclick="onStudentDetail('${id}')">Abrir</button>`;
   }
   return `<div class="list-row" onclick="onStudentDetail('${id}')" style="cursor:pointer">
     <div class="lr-avatar" style="font-size:14px;font-weight:700;background:var(--brand-soft);color:var(--brand);overflow:hidden">${s.avatar_url ? `<img src="${escape(s.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">` : (s.avatar_emoji || (s.full_name||'A').slice(0,1).toUpperCase())}</div>
@@ -5968,6 +5983,10 @@ window.toggleStudentSelectAll = function() {
 window.clearStudentSelection = function() { _studentSelected.clear(); renderStudents(); };
 
 window.bulkBlockStudents = async function() {
+  if (STATE.profile?.role !== "coach") {
+    showToast("Apenas professores podem bloquear alunos.", "error");
+    return;
+  }
   if (!_studentSelected.size) return;
   if (!await showConfirm({ title: "Bloquear alunos?", msg: `${_studentSelected.size} aluno(s) serão bloqueados.`, confirm: "Bloquear", danger: true })) return;
   const ids = [..._studentSelected];
@@ -5984,7 +6003,8 @@ window.bulkDeleteStudents = async function() {
   const { error } = await sb.from("profiles").delete().in("id", ids);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
   showToast(`${ids.length} aluno(s) excluído(s)`, "success");
-  _studentSelected.clear();
+  removeUsersFromLocalLists(ids);
+  renderStudents();
   await loadStudents(); renderStudents();
 };
 
@@ -6038,6 +6058,10 @@ window.sendBulkMessage = async function(ids) {
 };
 
 window.openNewStudentSheet = function() {
+  if (STATE.profile?.role !== "coach") {
+    showToast("Apenas professores podem criar alunos.", "error");
+    return;
+  }
   openSheet(`
     <h3>Novo aluno</h3>
     <p>Cria a conta com role <b>aluno</b> já aprovada e vinculada a você. O aluno entra com este email + senha.</p>
@@ -6072,6 +6096,10 @@ function createTempClient() {
 }
 
 window.submitNewStudent = async function() {
+  if (STATE.profile?.role !== "coach") {
+    showToast("Apenas professores podem criar alunos.", "error");
+    return;
+  }
   const btn = document.querySelector('#sheet-content .btn-primary');
   const setBusy = (b) => { if (btn) { btn.disabled = b; btn.textContent = b ? 'Criando...' : 'Criar aluno'; } };
   const name = document.getElementById("ns-name").value.trim();
@@ -6174,6 +6202,8 @@ window.deleteStudent = async function(id, email) {
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Aluno removido", "success");
   closeSheet();
+  removeUsersFromLocalLists(id);
+  renderStudents();
   await loadStudents(); renderStudents();
 };
 
@@ -6627,7 +6657,8 @@ window.savePresetDuration = async function(code) {
 };
 
 window.onApprove = async (id) => {
-  await approveStudent(id, "approved");
+  const ok = await approveStudent(id, "approved");
+  if (!ok) return;
   // pergunta se quer criar a periodização padrão
   if (await showConfirm({ title: "Criar periodização?", msg: "Criar periodização padrão de 12 semanas (Ciclo 5) para este aluno?", confirm: "Criar", cancel: "Agora não" })) {
     await seedPeriodizationFor(id);
@@ -6720,7 +6751,7 @@ window.onStudentDetail = async function(id) {
       <button class="btn-ghost" onclick="openStudentWorkoutsSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11M6.5 17.5h11"/><path d="M3 8.5V15.5a1 1 0 0 0 1 1h1V7.5H4a1 1 0 0 0-1 1z"/><path d="M21 8.5a1 1 0 0 0-1-1h-1v9h1a1 1 0 0 0 1-1v-7z"/><path d="M6.5 7.5v9a1 1 0 0 0 1 1h1v-11h-1a1 1 0 0 0-1 1z"/><path d="M17.5 7.5a1 1 0 0 0-1-1h-1v11h1a1 1 0 0 0 1-1v-9z"/></svg> Treinos personalizados</button>
       <button class="btn-ghost" onclick="exportStudentPDF('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Relatório (PDF)</button>
       <button class="btn-ghost" onclick="openChatThread('${id}')">\n              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Conversar</button>
-      ${prof.status === 'approved' ? `<button class="btn-ghost" onclick="onBlock('${id}')" style="color:var(--orange); border-color:var(--orange-soft);">🚫 Bloquear</button>` : ''}
+      ${!isAdmin && prof.status === 'approved' ? `<button class="btn-ghost" onclick="onBlock('${id}')" style="color:var(--orange); border-color:var(--orange-soft);">🚫 Bloquear</button>` : ''}
     </div>
     <div style="margin-top:8px;">
       <button class="btn-ghost" onclick="deleteStudent('${id}','${escape(prof.email||'')}')" style="color:var(--red); border-color:var(--red-soft);"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Excluir aluno</button>
