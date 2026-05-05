@@ -7,6 +7,7 @@ const avatarSql = fs.readFileSync("sql/beta_avatar_storage_fix_2026_05_05.sql", 
 const workoutSql = fs.readFileSync("sql/beta_workout_types_2026_05_05.sql", "utf8");
 const messagesSql = fs.readFileSync("sql/beta_messages_delete_fix_2026_05_05.sql", "utf8");
 const adminPaymentsSql = fs.readFileSync("sql/beta_admin_professor_payments_2026_05_05.sql", "utf8");
+const profileRpcSql = fs.readFileSync("sql/beta_profile_update_rpc_2026_05_05.sql", "utf8");
 
 function has(needle, msg) {
   assert.ok(html.includes(needle), msg || `Missing: ${needle}`);
@@ -18,10 +19,16 @@ has("async function uploadAvatarImage(file)", "avatar upload helper must exist")
 has(".from(\"avatars\")", "avatar uploads must use avatars bucket");
 has("profile-avatar-big", "avatar preview must be updated in the UI");
 has("avatar-${Date.now()}.jpg", "avatar upload must avoid stale cache/conflicting upsert path");
-has("update({ avatar_url: uploaded.url })", "profile avatar_url must be persisted");
-has('.select("avatar_url")', "profile update must verify that RLS actually updated the row");
+has("profileUpdateErrorMessage", "profile update must surface RLS/RPC setup errors clearly");
+has('sb.rpc("update_my_avatar_url"', "profile avatar_url must be persisted through safe RPC");
+has('sb.rpc("clear_my_avatar_url"', "profile avatar removal must use safe RPC");
+has('sb.rpc("update_my_profile_basic"', "profile basic save must use safe RPC");
 assert.match(avatarSql, /bucket_id = 'avatars'/, "avatar storage policies must target avatars bucket");
 assert.match(avatarSql, /storage\.foldername\(name\)\[1\] = auth\.uid\(\)::text/, "avatar storage must be scoped to user folder");
+assert.match(profileRpcSql, /update_my_avatar_url/, "profile RPC migration must update avatar_url");
+assert.match(profileRpcSql, /clear_my_avatar_url/, "profile RPC migration must clear avatar_url");
+assert.match(profileRpcSql, /update_my_profile_basic/, "profile RPC migration must update basic profile fields");
+assert.match(profileRpcSql, /security definer/gi, "profile RPCs must bypass recursive profiles RLS safely");
 
 // Asaas: no fragile FK select; timeout and config errors are surfaced.
 has('withTimeout(sb.functions.invoke("asaas-create-charge"', "Asaas function call must have a timeout");

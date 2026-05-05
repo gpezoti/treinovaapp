@@ -6278,14 +6278,31 @@ window.saveBrandingForm = async function() {
   }
 };
 
+function profileUpdateErrorMessage(error) {
+  const msg = error?.message || String(error || "Erro desconhecido");
+  if (/infinite recursion|policy for relation "profiles"|relation "profiles"/i.test(msg)) {
+    return "Policy de profiles com recursão. Aplique a migration beta_profile_update_rpc_2026_05_05.sql no Supabase.";
+  }
+  if (/function .*update_my_|Could not find the function|schema cache|PGRST202/i.test(msg)) {
+    return "Função segura de perfil ainda não publicada. Aplique a migration beta_profile_update_rpc_2026_05_05.sql no Supabase.";
+  }
+  return msg;
+}
+
 window.saveProfile = async function() {
   const name = document.getElementById("prof-name").value.trim();
   const emoji = document.getElementById("prof-emoji").value.trim() || "💪";
-  const { error } = await sb.from("profiles").update({
-    full_name: name, avatar_emoji: emoji
-  }).eq("id", STATE.profile.id);
-  if (error) { showToast("Erro: " + error.message, "error"); return; }
-  STATE.profile.full_name = name; STATE.profile.avatar_emoji = emoji;
+  const btn = document.querySelector('button[onclick="saveProfile()"]');
+  if (btn) { btn.disabled = true; btn.dataset.oldText = btn.textContent; btn.textContent = "Salvando..."; }
+  const { data, error } = await sb.rpc("update_my_profile_basic", {
+    p_full_name: name,
+    p_avatar_emoji: emoji
+  });
+  if (btn) { btn.disabled = false; btn.textContent = btn.dataset.oldText || "Salvar perfil"; }
+  if (error) { showToast("Erro: " + profileUpdateErrorMessage(error), "error"); return; }
+  const saved = Array.isArray(data) ? data[0] : data;
+  STATE.profile.full_name = saved?.full_name || name;
+  STATE.profile.avatar_emoji = saved?.avatar_emoji || emoji;
   showToast("Perfil salvo", "success");
   renderProfile();
 };
@@ -6310,13 +6327,11 @@ window.onAvatarUpload = function() {
     let uploaded = null;
     try {
       uploaded = await uploadAvatarImage(file);
-      const { data, error } = await sb.from("profiles")
-        .update({ avatar_url: uploaded.url })
-        .eq("id", STATE.profile.id)
-        .select("avatar_url")
-        .single();
-      if (error || !data) throw error || new Error("Perfil não foi atualizado. Verifique a policy de profiles.");
-      STATE.profile.avatar_url = data.avatar_url || uploaded.url;
+      const { data, error } = await sb.rpc("update_my_avatar_url", {
+        p_avatar_url: uploaded.url
+      });
+      if (error) throw new Error(profileUpdateErrorMessage(error));
+      STATE.profile.avatar_url = (typeof data === "string" && data) ? data : uploaded.url;
       cleanupOldAvatarFile(oldAvatarUrl).catch(() => {});
       showToast("Foto atualizada", "success");
       renderProfile();
@@ -6349,12 +6364,8 @@ async function cleanupOldAvatarFile(rawUrl) {
 }
 window.clearAvatar = async function() {
   const oldPath = getAvatarStoragePath(STATE.profile.avatar_url);
-  const { data, error } = await sb.from("profiles")
-    .update({ avatar_url: null })
-    .eq("id", STATE.profile.id)
-    .select("id")
-    .single();
-  if (error || !data) { showToast("Erro: " + ((error && error.message) || "perfil não atualizado"), "error"); return; }
+  const { error } = await sb.rpc("clear_my_avatar_url");
+  if (error) { showToast("Erro: " + profileUpdateErrorMessage(error), "error"); return; }
   if (oldPath && oldPath.startsWith(STATE.profile.id + "/")) sb.storage.from("avatars").remove([oldPath]).catch(()=>null);
   STATE.profile.avatar_url = null;
   showToast("Foto removida", "success");
