@@ -44,6 +44,9 @@ has("payment-actions-stack", "payment rows must stack actions on mobile");
 // Pull to refresh: duplicate refreshes and overlays must be guarded.
 has("refreshing = false", "pull refresh must avoid duplicate refreshes");
 has("refreshing = true", "pull refresh must mark active state");
+has("function isPullRefreshBlocked()", "pull refresh must only block when overlays are active");
+has('sheet.classList.contains("active")', "closed sheet element must not disable pull refresh");
+has("function getPullScrollTop(target)", "pull refresh must handle nested scroll containers");
 has('document.getElementById("asaas-overlay")', "pull refresh must ignore payment overlay");
 has('showToast("Atualizado", "success")', "pull refresh must give success feedback");
 
