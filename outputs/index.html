@@ -55,7 +55,7 @@
 }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overscroll-behavior-y: none; }
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overscroll-behavior-y: none; overflow-x: hidden; }
 body { min-height: 100vh; background: radial-gradient(1200px 600px at 20% -10%, var(--brand-soft), transparent 60%),
   radial-gradient(900px 500px at 100% 0%, var(--brand-soft), transparent 60%), var(--bg); }
 button { font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer; padding: 0; }
@@ -66,7 +66,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 #app { max-width: 520px; margin: 0 auto; min-height: 100vh; padding-top: var(--safe-top);
-  padding-bottom: calc(96px + var(--safe-bottom)); position: relative; }
+  padding-bottom: calc(96px + var(--safe-bottom)); position: relative; overflow-x: hidden; }
 .app-header { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 12px;
   padding: 12px 16px; padding-top: calc(12px + var(--safe-top));
   background: color-mix(in srgb, var(--bg) 92%, transparent);
@@ -89,7 +89,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .icon-btn:hover { color: var(--brand); border-color: var(--brand-2); }
 .icon-btn.danger:hover { color: var(--red); border-color: rgba(255,59,59,0.5); }
 
-.view { display: none; padding: 16px; animation: fadein 0.2s ease; }
+.view { display: none; padding: 16px; animation: fadein 0.2s ease; min-width: 0; max-width: 100%; overflow-x: hidden; }
 .view.active { display: block; }
 @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
@@ -98,7 +98,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 /* Cards / pills */
 .card { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px;
-  box-shadow: 0 1px 0 rgba(255,255,255,0.02); }
+  box-shadow: 0 1px 0 rgba(255,255,255,0.02); min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .card-lg { border-radius: var(--radius-lg); padding: 18px; }
 .greeting-card { background: linear-gradient(135deg, var(--brand-soft), transparent 60%), var(--bg-card);
   border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 14px;
@@ -200,14 +200,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .finance-item.overdue { border-color: rgba(255,59,59,0.44); }
 .finance-item.paid { border-color: rgba(46,204,113,0.32); }
 .finance-item.cancelled { opacity: 0.74; }
-.finance-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.finance-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-width: 0; }
 .finance-item-title { font-weight: 800; font-size: 14px; line-height: 1.25; color: var(--text); }
 .finance-item-meta { margin-top: 4px; font-size: 12px; color: var(--text-2); line-height: 1.35; }
 .finance-item-amount { margin-top: 10px; font-size: 20px; font-weight: 900; color: var(--brand); }
 .finance-item.overdue .finance-item-amount { color: var(--red); }
 .finance-item.paid .finance-item-amount { color: var(--green); }
 .finance-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.finance-actions .mini-btn { min-height: 30px; }
+.finance-actions .mini-btn { min-height: 34px; flex: 1 1 auto; min-width: 112px; }
 
 .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
 .stat-card { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius);
@@ -291,7 +291,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .intensity-banner b { color: inherit; }
 
 .exercise-card { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius);
-  margin-bottom: 10px; overflow: hidden; transition: border-color 0.2s ease, transform 0.16s ease, box-shadow 0.16s ease; }
+  margin-bottom: 10px; overflow: hidden; transition: border-color 0.2s ease, transform 0.16s ease, box-shadow 0.16s ease;
+  min-width: 0; max-width: 100%; }
 .exercise-card:hover { border-color: var(--line-2); box-shadow: 0 8px 24px rgba(0,0,0,0.14); }
 .exercise-card.done { border-color: var(--green); background: linear-gradient(180deg, rgba(46,204,113,0.06), var(--bg-card)); }
 .exercise-card.is-mobility { border-style: dashed; border-color: var(--line-2); }
@@ -307,7 +308,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .ex-quick { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--text-3); }
 .ex-quick span { display: inline-flex; align-items: center; gap: 4px; }
 .ex-quick b { color: var(--text-2); font-weight: 600; }
-.ex-progress { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.ex-progress { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 42px; }
 .ex-progress-num { font-size: 13px; font-weight: 800; color: var(--text-2); }
 .ex-progress-num.complete { color: var(--green); }
 .chev { color: var(--text-3); transition: transform 0.2s ease; }
@@ -417,6 +418,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .bn-item svg { width: 22px; height: 22px; }
 .bn-item.active { background: var(--brand-soft); color: var(--brand); }
 .bn-item:active { transform: scale(0.95); }
+.segmented-scroll { display:flex; gap:8px; overflow-x:auto; padding:2px 2px 8px; margin:0 -2px 10px; scrollbar-width:none; scroll-snap-type:x proximity; }
+.segmented-scroll::-webkit-scrollbar { display:none; }
+.segmented-scroll button { flex:0 0 auto; scroll-snap-align:start; min-height:42px; }
 
 /* Empty / generic */
 .empty { text-align: center; padding: 40px 16px; color: var(--text-2); }
@@ -424,6 +428,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .empty h3 { margin: 0 0 6px; font-size: 16px; color: var(--text); }
 .empty p { margin: 0; font-size: 13px; }
 .empty .empty-actions { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:16px; }
+.empty .empty-actions .btn-primary, .empty .empty-actions .btn-ghost { flex:1 1 160px; max-width:240px; }
 .action-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
 .action-card { background:var(--bg-card); border:1px solid var(--line); border-radius:14px; padding:14px;
   display:flex; flex-direction:column; align-items:flex-start; gap:6px; color:var(--text); text-align:left; min-height:110px; }
@@ -513,16 +518,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 /* Lists (students, workouts admin) */
 .list-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px;
   background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px;
-  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease; }
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  width: 100%; max-width: 100%; min-width: 0; overflow: hidden; }
 .list-row:hover { border-color: var(--line-2); background: color-mix(in srgb, var(--bg-card) 92%, var(--brand-soft)); }
 .list-row:active { transform: scale(0.99); }
 .list-row .lr-avatar { width: 40px; height: 40px; border-radius: 50%;
   background: linear-gradient(135deg, var(--bg-3), var(--bg-2)); border: 1px solid var(--line);
   display: grid; place-items: center; font-size: 18px; flex: 0 0 auto; }
-.list-row .lr-info { flex: 1; min-width: 0; }
-.list-row .lr-name { font-weight: 700; font-size: 14px; }
-.list-row .lr-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
-.list-row .lr-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.list-row .lr-info { flex: 1 1 0; min-width: 0; max-width: 100%; }
+.list-row .lr-name { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+.list-row .lr-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.list-row .lr-actions { display: flex; gap: 6px; flex: 0 1 auto; min-width: 0; max-width: 100%; }
 .mini-btn { padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 800;
   text-transform: uppercase; letter-spacing: 0.4px; transition: transform 0.12s ease, filter 0.12s ease, border-color 0.12s ease; }
 .mini-btn:hover { filter: brightness(1.06); }
@@ -574,31 +580,44 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
 .ux-helper { margin: -2px 0 12px; color: var(--text-3); font-size: 12px; line-height: 1.4; }
 .beta-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .mobile-action-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.student-card-actions, .payment-actions-stack { display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
+.student-card-actions, .payment-actions-stack { display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap; min-width:0; }
 .period-toolbar { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0 12px; }
 .period-toolbar .mini-btn { min-height:40px; }
 .period-week-card { padding:12px; }
 .period-day-editor-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; position:sticky; top:-20px; z-index:2; background:var(--bg-2); padding:10px 0; }
 .preset-chip-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+.sheet-action-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .exercise-card { scroll-margin-top: 92px; }
 .exercise-card.expanded { border-color: color-mix(in srgb, var(--brand) 52%, var(--line)); box-shadow: 0 10px 28px rgba(0,0,0,.18); }
 .ex-head { min-height: 84px; }
 .set-row { min-height: 54px; }
 .set-check { width: 42px; height: 42px; border-radius: 12px; }
 .toast { min-height: 36px; display:flex; align-items:center; justify-content:center; line-height:1.25; }
-@media (max-width: 430px) {
+@media (max-width: 560px) {
   .view { padding-inline: 14px; }
   .view-title { font-size: 21px; }
   .today-title, .wh-title { font-size: 24px; }
-  .list-row { align-items: flex-start; padding: 13px; }
+  .row-flex { flex-wrap: wrap; align-items: flex-start; }
+  .list-row { align-items: flex-start; padding: 13px; gap: 10px; flex-wrap: wrap; }
   .list-row .lr-actions { width: 100%; margin-top: 8px; justify-content: flex-start; }
-  .list-row .lr-info { min-width: calc(100% - 58px); }
+  .list-row .lr-info { min-width: 0; flex: 1 1 calc(100% - 58px); }
+  .list-row .lr-sub { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .list-row .mini-btn { flex: 1 1 auto; min-width: 96px; }
   .student-card-actions, .payment-actions-stack { width:100%; justify-content:flex-start; }
+  .teacher-toolbar .mini-btn { flex:1 1 140px; }
   .beta-grid-2 { grid-template-columns:1fr; }
+  .finance-summary-grid { grid-template-columns:1fr; }
+  .finance-item-head { flex-wrap: wrap; }
+  .finance-item-head .today-pill { margin-left:0; }
+  .finance-actions { width:100%; }
+  .finance-actions .mini-btn { min-width:0; }
   .period-toolbar { grid-template-columns:1fr; }
   .preset-chip-grid { grid-template-columns:1fr 1fr; }
+  .sheet-action-grid { grid-template-columns:1fr; }
   .ex-head { gap: 10px; padding: 12px; }
   .ex-thumb { width: 58px; height: 58px; flex-basis: 58px; }
+  .ex-progress { min-width: 34px; }
+  .chev { width: 18px; }
   .set-row { grid-template-columns: 30px 1fr 88px 42px; gap: 7px; padding: 8px; }
 }
 
@@ -6369,7 +6388,7 @@ function renderStudents() {
     { id: "overdue",  label: "Inadimplentes",count: countOverdue  },
   ];
   const tabsHTML = `
-    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px;scrollbar-width:none">
+    <div class="segmented-scroll">
       ${tabs.map(t => `
         <button onclick="setStudentTab('${t.id}')" style="flex-shrink:0;padding:7px 13px;border-radius:999px;border:1px solid ${_studentTab===t.id?'var(--brand)':'var(--line)'};background:${_studentTab===t.id?'var(--brand)':'transparent'};color:${_studentTab===t.id?'var(--brand-on)':'var(--text-2)'};font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
           ${t.label}${t.count > 0 ? ` <span style="opacity:.7">${t.count}</span>` : ""}
@@ -7256,7 +7275,7 @@ window.onStudentDetail = async function(id) {
     ` : ''}
 
     <div class="section-title">Ações</div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+    <div class="sheet-action-grid">
       <button class="btn-ghost" onclick="openEditStudentSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar dados</button>
       <button class="btn-ghost" onclick="openStudentPeriodSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Periodização</button>
       <button class="btn-ghost" onclick="openStudentWorkoutsSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11M6.5 17.5h11"/><path d="M3 8.5V15.5a1 1 0 0 0 1 1h1V7.5H4a1 1 0 0 0-1 1z"/><path d="M21 8.5a1 1 0 0 0-1-1h-1v9h1a1 1 0 0 0 1-1v-7z"/><path d="M6.5 7.5v9a1 1 0 0 0 1 1h1v-11h-1a1 1 0 0 0-1 1z"/><path d="M17.5 7.5a1 1 0 0 0-1-1h-1v11h1a1 1 0 0 0 1-1v-9z"/></svg> Treinos personalizados</button>
