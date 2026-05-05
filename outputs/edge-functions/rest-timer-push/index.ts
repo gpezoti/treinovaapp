@@ -159,7 +159,7 @@ async function processDueJobs(req: Request) {
     const payload = JSON.stringify({
       title: "Descanso finalizado",
       body: `Próximo exercício: ${job.exercise_name || "Próxima série"}`,
-      url: "/",
+      url: "/?view=workout&restTimer=1",
       tag: "treinova-rest-timer",
     });
 

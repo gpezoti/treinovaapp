@@ -45,7 +45,16 @@ const checks = [
     pass: html.includes("scheduleServerRestPush") &&
       html.includes('sb.functions.invoke("rest-timer-push"') &&
       html.includes('action: "schedule"') &&
-      html.includes('action: "cancel"'),
+      html.includes('action: "cancel"') &&
+      html.includes("?view=workout&restTimer=1"),
+  },
+  {
+    name: "clique na notificacao volta para treino ativo",
+    pass: html.includes("prepareWorkoutDeepLinkFromRestTimer") &&
+      html.includes("hydrateTimerFromPersisted(saved)") &&
+      html.includes('if (view === "workout") prepareWorkoutDeepLinkFromRestTimer()') &&
+      sw.includes('new URL(rawUrl, self.location.origin).href') &&
+      sw.includes('/?view=workout&restTimer=1'),
   },
   {
     name: "UI exibe contexto e CTA de proximo exercicio",
@@ -56,7 +65,7 @@ const checks = [
   },
   {
     name: "service worker aceita notificacao local",
-    pass: sw.includes('VERSION = "v7"') &&
+    pass: sw.includes('VERSION = "v8"') &&
       sw.includes('type === "SHOW_NOTIFICATION"') &&
       sw.includes('type === "SCHEDULE_REST_TIMER"') &&
       sw.includes('type === "CANCEL_REST_TIMER"') &&
@@ -74,7 +83,8 @@ checks.push(
       edge.includes("processDueJobs") &&
       edge.includes("rest_timer_push_jobs") &&
       edge.includes("push_subscriptions") &&
-      edge.includes("Descanso finalizado"),
+      edge.includes("Descanso finalizado") &&
+      edge.includes("/?view=workout&restTimer=1"),
   },
   {
     name: "migration cria tabela e indices do timer push",
