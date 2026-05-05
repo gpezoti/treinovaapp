@@ -17,6 +17,13 @@ has(html, "STATE._periodWeekAction", "week actions must guard rapid repeated tap
 has(html, "Apenas professor pode organizar a periodização.", "frontend must block non-coach period management");
 has(html, 'sb.rpc("duplicate_periodization_week"', "duplicate action must call atomic RPC");
 has(html, 'sb.rpc("move_periodization_week"', "move action must call atomic RPC");
+has(html, "duplicatePeriodWeekClientFallback", "duplicate action must have client fallback if RPC is missing");
+has(html, "movePeriodWeekClientFallback", "move action must have client fallback if RPC is missing");
+has(html, "loadPeriodDaysOrdered", "fallback must load ordered periodization days");
+has(html, "updatePeriodDayDate", "fallback must persist reordered dates");
+has(html, "periodization_blocks\").insert(blockRows)", "fallback duplicate must clone periodization blocks");
+has(html, "console.warn(\"duplicate_periodization_week RPC falhou; usando fallback client-side\"", "duplicate must visibly fall back after RPC error");
+has(html, "console.warn(\"move_periodization_week RPC falhou; usando fallback client-side\"", "move must visibly fall back after RPC error");
 
 has(sql, "create or replace function public.duplicate_periodization_week", "duplicate RPC must exist");
 has(sql, "create or replace function public.move_periodization_week", "move RPC must exist");

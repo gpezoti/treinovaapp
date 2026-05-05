@@ -44,9 +44,11 @@ has('showToast("Atualizado", "success")', "pull refresh must give success feedba
 has("data-chat-other", "chat rows must have a stable delete target");
 has("STATE.chatThreads = (STATE.chatThreads || []).filter", "chat delete must update local state");
 has("row.dataset.chatOther === otherUserId", "chat delete must remove the visible row");
+has('sb.rpc("delete_conversation_with_user"', "chat delete must use safe RPC path");
 has('.select("id,image_url")', "chat delete must verify rows were actually deleted");
-has("Não foi possível excluir. Verifique a policy de delete das mensagens.", "chat delete must not show false success");
+has("Não foi possível excluir. Rode a migration beta_messages_delete_fix_2026_05_05.sql.", "chat delete must not show false success");
 assert.match(messagesSql, /for delete using/, "messages delete migration must add delete RLS policy");
+assert.match(messagesSql, /delete_conversation_with_user/, "messages delete migration must add RPC fallback");
 
 // Admin finance: direct professor payments are visible and paid/pending amounts are included.
 has("async function loadAdminProfessorPayments(coachId)", "admin professor payment sheet loader must exist");
