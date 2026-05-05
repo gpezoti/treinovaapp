@@ -572,6 +572,14 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
 .teacher-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin: 8px 0 12px; }
 .teacher-toolbar .mini-btn { min-height: 38px; padding-inline: 12px; }
 .ux-helper { margin: -2px 0 12px; color: var(--text-3); font-size: 12px; line-height: 1.4; }
+.beta-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.mobile-action-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.student-card-actions, .payment-actions-stack { display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
+.period-toolbar { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0 12px; }
+.period-toolbar .mini-btn { min-height:40px; }
+.period-week-card { padding:12px; }
+.period-day-editor-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; position:sticky; top:-20px; z-index:2; background:var(--bg-2); padding:10px 0; }
+.preset-chip-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
 .exercise-card { scroll-margin-top: 92px; }
 .exercise-card.expanded { border-color: color-mix(in srgb, var(--brand) 52%, var(--line)); box-shadow: 0 10px 28px rgba(0,0,0,.18); }
 .ex-head { min-height: 84px; }
@@ -585,6 +593,10 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
   .list-row { align-items: flex-start; padding: 13px; }
   .list-row .lr-actions { width: 100%; margin-top: 8px; justify-content: flex-start; }
   .list-row .lr-info { min-width: calc(100% - 58px); }
+  .student-card-actions, .payment-actions-stack { width:100%; justify-content:flex-start; }
+  .beta-grid-2 { grid-template-columns:1fr; }
+  .period-toolbar { grid-template-columns:1fr; }
+  .preset-chip-grid { grid-template-columns:1fr 1fr; }
   .ex-head { gap: 10px; padding: 12px; }
   .ex-thumb { width: 58px; height: 58px; flex-basis: 58px; }
   .set-row { grid-template-columns: 30px 1fr 88px 42px; gap: 7px; padding: 8px; }
@@ -1135,11 +1147,16 @@ function getExerciseSpecificPrompt(ex = {}) {
   const name = ex && ex.name ? ex.name : "exercício personalizado";
   return `Ultra realistic fitness image of a person performing ${name}, correct form, equipment and variation exactly matching the exercise name, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo.`;
 }
+function getCategoryExerciseAssetUrl(ex) {
+  const kind = inferExerciseImageKind(ex || {});
+  return (STANDARD_EXERCISE_IMAGES[kind] || STANDARD_EXERCISE_IMAGES.generic).assetPath || null;
+}
 function getStandardExerciseAssetUrl(ex) {
   const exact = getExactExerciseAssetUrl(ex || {});
   if (exact) return exact;
-  // Não usar foto genérica de outro movimento: exercícios sem asset específico ficam neutros.
-  return getMissingExerciseImageUrl(ex || {});
+  // Sem asset exato, usa foto realista por categoria/movimento inferido.
+  // Último fallback continua neutro se o asset local não carregar.
+  return getCategoryExerciseAssetUrl(ex || {}) || getMissingExerciseImageUrl(ex || {});
 }
 function isGenericExerciseImage(url) {
   const value = String(url || "");
@@ -1589,6 +1606,34 @@ function pickImageFile(onPicked) {
   input.click();
 }
 
+function validateImageFile(file) {
+  if (!file) throw new Error("Nenhuma imagem selecionada.");
+  if (!/^image\//i.test(file.type || "")) throw new Error("Selecione um arquivo de imagem.");
+  if (file.size > 12 * 1024 * 1024) throw new Error("Imagem muito grande. Use até 12 MB.");
+}
+
+async function uploadAvatarImage(file) {
+  validateImageFile(file);
+  const blob = await compressImage(file, 512, 0.85);
+  const path = `${STATE.profile.id}/avatar.jpg`;
+  const { error } = await sb.storage.from("avatars").upload(path, blob, {
+    upsert: true,
+    contentType: "image/jpeg",
+    cacheControl: "3600"
+  });
+  if (error) {
+    if (/bucket|not found|404/i.test(error.message || "")) {
+      throw new Error("Bucket de avatares não configurado. Rode a migration de Storage.");
+    }
+    if (/permission|policy|row-level|rls|unauthorized/i.test(error.message || "")) {
+      throw new Error("Permissão de upload de avatar bloqueada. Verifique as policies do bucket avatars.");
+    }
+    throw error;
+  }
+  const { data } = sb.storage.from("avatars").getPublicUrl(path);
+  return `${data.publicUrl}?t=${Date.now()}`;
+}
+
 function pickVideoFile(onPicked) {
   const input = document.createElement("input");
   input.type = "file";
@@ -1850,7 +1895,10 @@ async function loadWorkouts() {
   const role = STATE.profile && STATE.profile.role;
   const myId = STATE.profile && STATE.profile.id;
   if (role === "student") {
-    q = q.or(`is_global.eq.true,student_id.eq.${myId}`);
+    const coachId = STATE.profile && STATE.profile.coach_id;
+    q = coachId
+      ? q.or(`is_global.eq.true,student_id.eq.${myId},coach_id.eq.${coachId}`)
+      : q.or(`is_global.eq.true,student_id.eq.${myId}`);
   } else if (role === "coach") {
     q = q.or(`is_global.eq.true,coach_id.eq.${myId}`);
   }
@@ -2481,7 +2529,7 @@ function setupPullToRefresh() {
   _PULL_TO_REFRESH_BOUND = true;
 
   const THRESHOLD = 72;
-  let startY = 0, pulling = false, indicator = null;
+  let startY = 0, pulling = false, indicator = null, refreshing = false;
 
   function getIndicator() {
     if (!indicator) {
@@ -2502,6 +2550,8 @@ function setupPullToRefresh() {
   }
 
   async function doRefresh() {
+    if (refreshing) return;
+    refreshing = true;
     const sp = document.getElementById("ptr-spinner");
     if (sp) sp.style.animation = "spin 0.7s linear infinite";
     try {
@@ -2519,18 +2569,24 @@ function setupPullToRefresh() {
       }
       else if (STATE.view === "chat")     { await renderChat(); }
       else renderCurrentView();
+      showToast("Atualizado", "success");
+    } catch(e) {
+      console.warn("[pull refresh]", e);
+      showToast("Não foi possível atualizar", "error");
     } finally {
       if (sp) sp.style.animation = "";
       const ind = getIndicator();
       ind.style.transform = "translateX(-50%) translateY(-60px)";
       pulling = false;
+      refreshing = false;
     }
   }
 
   document.addEventListener("touchstart", e => {
-    const main = document.querySelector(".view.active") || document.getElementById("app");
-    const scrollEl = (main && main.scrollTop !== undefined) ? main : window;
-    const scrollY  = (scrollEl === window) ? window.scrollY : scrollEl.scrollTop;
+    if (refreshing || document.getElementById("sheet") || document.getElementById("chat-thread-overlay") || document.getElementById("asaas-overlay")) return;
+    const tag = (e.target && e.target.tagName || "").toLowerCase();
+    if (["input","textarea","select","button"].includes(tag)) return;
+    const scrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
     if (scrollY <= 0 && e.touches.length === 1) {
       startY  = e.touches[0].clientY;
       pulling = true;
@@ -2541,6 +2597,7 @@ function setupPullToRefresh() {
     if (!pulling) return;
     const dy = e.touches[0].clientY - startY;
     if (dy <= 0) { pulling = false; return; }
+    if ((window.scrollY || document.documentElement.scrollTop || 0) > 0) { pulling = false; return; }
     const progress = Math.min(dy / THRESHOLD, 1);
     const translateY = -60 + progress * 80;
     getIndicator().style.transform = `translateX(-50%) translateY(${translateY}px)`;
@@ -4339,9 +4396,9 @@ function renderTrainers() {
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Treinadores</h1>
-      <div style="display:flex;gap:6px">
+      <div class="mobile-action-row">
         <button class="mini-btn" onclick="toggleTrainerSelectAll()" title="Selecionar todos"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
-        <button class="mini-btn mini-btn-primary" onclick="openNewTrainerSheet()">+ Novo</button>
+        <button class="mini-btn mini-btn-primary" onclick="openNewTrainerSheet()">Novo treinador</button>
       </div>
     </div>
     <p class="view-subtitle">${approved.length} ativos · ${blocked.length} bloqueados</p>
@@ -4371,7 +4428,7 @@ function trainerRow(t, selMode) {
       <div class="lr-name">${escape(t.full_name || t.email || "Treinador")}</div>
       <div class="lr-sub">${escape(t.email || "")} ${studs ? "· " + studs : ""} · <span style="color:var(--brand)">tocar para editar</span></div>
     </div>
-    <div class="lr-actions" onclick="event.stopPropagation()">
+    <div class="lr-actions student-card-actions" onclick="event.stopPropagation()">
       <span class="today-pill pill-${t.status === 'blocked' ? 'blocked' : 'approved'}">${t.status === 'blocked' ? 'Bloqueado' : 'Ativo'}</span>
     </div>
   </div>`;
@@ -4544,7 +4601,7 @@ async function renderPayments() {
               <div style="font-weight:700;font-size:13px">${nome}</div>
               <div style="font-size:11px;color:var(--text-3)">${fmtMoney(p.open_amount)} · ${p.overdue_count||0} cobrança(s)</div>
             </div>
-            <div style="display:flex;gap:6px">
+            <div class="mobile-action-row">
               <a href="${whatsUrl}" target="_blank" class="mini-btn mini-btn-success" style="text-decoration:none;font-size:11px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Cobrar</a>
               <button class="mini-btn mini-btn-primary" style="font-size:11px" onclick="openPaymentSheet('${pid}','${nome}')">Ver</button>
             </div>
@@ -4558,7 +4615,7 @@ async function renderPayments() {
     <p class="view-subtitle">${items.length} ${isAdmin ? 'professor(es)' : 'aluno(s)'} · ${overdueCount} em atraso</p>
 
     <!-- Dashboard 4 cards -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+    <div class="beta-grid-2" style="margin-bottom:16px">
       <div class="card card-lg" style="border-color:var(--green);background:linear-gradient(135deg,var(--green-soft,#e8f8f0),var(--bg-card))">
         <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--green);font-weight:700;margin-bottom:6px"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Este mês</div>
         <div style="font-size:22px;font-weight:900;color:var(--text)">${fmtMoney(totalReceita)}</div>
@@ -4797,7 +4854,7 @@ function paymentRow(p, idKey) {
       </div>
       ${p.open_amount > 0 ? `<div class="text-xs muted" style="margin-top:2px;">${fmtMoney(p.open_amount)} em aberto</div>` : ''}
     </div>
-    <div class="lr-actions" onclick="event.stopPropagation()">${overdueLabel}</div>
+    <div class="lr-actions payment-actions-stack" onclick="event.stopPropagation()">${overdueLabel}</div>
   </div>`;
 }
 
@@ -4843,7 +4900,7 @@ function renderPaymentSheetList(filter) {
         ? `<div class="empty"><p>Nenhum lançamento nessa categoria.</p></div>`
         : filtered.map(p => paymentItem(p, safeId, name)).join("")}
     </div>
-    <div style="margin-top:14px"><button class="btn-ghost" onclick="navTo('payments')">Voltar</button></div>
+    <div style="margin-top:14px"><button class="btn-ghost" onclick="closeSheet(); renderPayments();">Voltar</button></div>
   `;
   openSheet(html);
 }
@@ -6183,9 +6240,22 @@ window.saveProfile = async function() {
 
 window.onAvatarUpload = function() {
   pickImageFile(async (file) => {
+    const btn = document.querySelector('button[onclick="onAvatarUpload()"]');
+    const avatarEl = document.getElementById("profile-avatar-big");
+    let previewUrl = "";
+    if (btn) { btn.disabled = true; btn.dataset.oldText = btn.textContent; btn.textContent = "Enviando..."; }
+    try {
+      validateImageFile(file);
+      previewUrl = URL.createObjectURL(file);
+      if (avatarEl) avatarEl.innerHTML = `<img src="${previewUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;opacity:.72" />`;
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = btn.dataset.oldText || "Subir da galeria"; }
+      showToast("Erro: " + e.message, "error");
+      return;
+    }
     showToast("Enviando foto...");
     try {
-      const url = await uploadImage("avatars", STATE.profile.id, file, 512);
+      const url = await uploadAvatarImage(file);
       const { error } = await sb.from("profiles").update({ avatar_url: url }).eq("id", STATE.profile.id);
       if (error) throw error;
       STATE.profile.avatar_url = url;
@@ -6194,12 +6264,27 @@ window.onAvatarUpload = function() {
     } catch (e) {
       console.error(e);
       showToast("Erro: " + (e.message || "upload falhou"), "error");
+      renderProfile();
+    } finally {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (btn) { btn.disabled = false; btn.textContent = btn.dataset.oldText || "Subir da galeria"; }
     }
   });
 };
 window.clearAvatar = async function() {
+  let oldPath = "";
+  try {
+    const raw = String(STATE.profile.avatar_url || "");
+    const parsed = new URL(raw, location.href);
+    const publicParts = parsed.pathname.split("/storage/v1/object/public/avatars/");
+    const signedParts = parsed.pathname.split("/storage/v1/object/sign/avatars/");
+    oldPath = decodeURIComponent((publicParts[1] || signedParts[1] || "").split("?")[0]);
+  } catch(e) {}
   const { error } = await sb.from("profiles").update({ avatar_url: null }).eq("id", STATE.profile.id);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
+  if (oldPath && oldPath.startsWith(STATE.profile.id + "/")) {
+    sb.storage.from("avatars").remove([oldPath]).catch(()=>null);
+  }
   STATE.profile.avatar_url = null;
   showToast("Foto removida", "success");
   renderProfile();
@@ -6298,7 +6383,7 @@ function renderStudents() {
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Alunos</h1>
-      <div style="display:flex;gap:6px">
+      <div class="mobile-action-row">
         <button class="mini-btn" onclick="toggleStudentSelectAll()" title="Selecionar todos"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
         ${canManageStudents ? `<button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">Novo aluno</button>` : ""}
       </div>
@@ -6392,7 +6477,7 @@ function studentRow(s, selMode) {
       <div class="lr-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${escape(s.full_name || s.email || "Aluno")} ${badges}</div>
       <div class="lr-sub">${escape(s.email || "")} · ${lastTxt} · ${s.sessions_done || 0} treinos</div>
     </div>
-    <div class="lr-actions" onclick="event.stopPropagation()">${actions}</div>
+    <div class="lr-actions student-card-actions" onclick="event.stopPropagation()">${actions}</div>
   </div>`;
 }
 
@@ -6683,14 +6768,14 @@ window.openStudentPeriodSheet = async function(id) {
   const html = `
     <h3>Periodização do aluno</h3>
     <p style="font-size:13px;color:var(--text-2);margin:0 0 10px">Toque em um dia para editar os blocos. Você pode ter <b>vários blocos por dia</b> (ex: aeróbio + hipertrofia).</p>
-    <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap">
+    <div class="period-toolbar">
       <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ Semana</button>
       <button class="mini-btn" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line)" onclick="removePeriodWeek('${id}')">− Semana</button>
       <button class="mini-btn mini-btn-ghost" onclick="openPeriodConfig('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Configurar período</button>
       <button class="mini-btn mini-btn-ghost" onclick="openPresetEditor()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Tipos</button>
     </div>
     ${grouped.length === 0 ? `<div class="empty"><p>Nenhuma semana ainda. Clique em "+ 1 Semana".</p></div>` : grouped.map((week, wi) => `
-      <div class="card mb-8">
+      <div class="card mb-8 period-week-card">
         <div class="text-xs muted" style="margin-bottom:6px">Semana ${wi+1}</div>
         <div class="week-grid">
           ${week.map(d => {
@@ -6815,7 +6900,7 @@ window.editPeriodDay = async function(dayId, studentId) {
   const sheetContent = document.getElementById("sheet-content");
 
   const html = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <div class="period-day-editor-head">
       <button class="mini-btn" onclick="backToPeriodSheet('${studentId}')" style="padding:6px 12px">← Voltar</button>
       <div>
         <div style="font-weight:700;font-size:15px">${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}/${MONTH_SHORT[dt.getMonth()]}</div>
@@ -6826,7 +6911,7 @@ window.editPeriodDay = async function(dayId, studentId) {
       ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId, (blocks||[]).length)).join("") || '<div style="padding:14px;text-align:center;color:var(--text-3);font-size:13px">Nenhum bloco. Adicione abaixo.</div>'}
     </div>
     <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">+ Adicionar bloco</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">
+    <div class="preset-chip-grid">
       ${_PRESETS.map(p => `
         <button class="mini-btn" style="background:${p.color}22;color:${p.color};border:1px solid ${p.color}55;font-size:11px" onclick="addBlockToDay('${dayId}','${studentId}','${p.code}',${p.is_workout})">${p.label}</button>
       `).join("")}
@@ -7335,26 +7420,97 @@ window.deleteCustomWorkout = async function(workoutId, studentId) {
    ============================================================================= */
 function renderAdminWorkouts() {
   const el = document.getElementById("view-admin-workouts");
-  const codes = ["A","B","C","D","FLEX"];
+  const workouts = Object.values(STATE.workouts || {})
+    .filter(Boolean)
+    .sort((a,b) => String(a.code || "").localeCompare(String(b.code || ""), "pt-BR", { numeric: true }));
   el.innerHTML = `
-    <h1 class="view-title">Treinos</h1>
-    <p class="view-subtitle">Edite os exercícios visíveis a todos os alunos</p>
-    ${codes.map(code => {
-      const w = STATE.workouts[code];
-      if (!w) return "";
+    <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
+      <h1 class="view-title" style="margin:0">Treinos</h1>
+      <button class="mini-btn mini-btn-primary" onclick="openCreateWorkoutTypeSheet()">Novo tipo</button>
+    </div>
+    <p class="view-subtitle">Crie e edite modelos de treino para os alunos. Ex.: A, B, C, D, FLEX ou um nome personalizado.</p>
+    ${workouts.length ? workouts.map(w => {
+      const code = w.code;
       return `<div class="card mb-14">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
           <div>
-            <div class="fw-700">${escape(w.name)}</div>
-            <div class="text-xs muted">${escape(w.focus || "")}</div>
+            <div class="fw-700">${escape(w.name || code)}</div>
+            <div class="text-xs muted">${escape(code)}${w.focus ? " · " + escape(w.focus) : ""}</div>
           </div>
-          <button class="mini-btn mini-btn-primary" onclick="openWorkoutEditor('${code}')">Editar</button>
+          <button class="mini-btn mini-btn-primary" onclick="openWorkoutEditor('${escapeAttr(code)}')">Editar</button>
         </div>
-        <div class="text-xs muted">${w.exercises.length} exercícios</div>
+        <div class="text-xs muted">${(w.exercises || []).length} exercícios</div>
       </div>`;
-    }).join("")}
+    }).join("") : `<div class="empty"><p>Nenhum tipo de treino cadastrado.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openCreateWorkoutTypeSheet()">Criar primeiro tipo</button></div></div>`}
   `;
 }
+
+window.openCreateWorkoutTypeSheet = function() {
+  if (!["admin", "coach"].includes(STATE.profile?.role)) {
+    showToast("Sem permissão para criar tipos de treino", "error");
+    return;
+  }
+  openSheet(`
+    <h3>Novo tipo de treino</h3>
+    <p style="font-size:13px;color:var(--text-2);margin-top:0">Use um código curto para aparecer na periodização do aluno.</p>
+    <div class="form-group">
+      <label class="form-label">Código</label>
+      <input class="input" id="new-workout-code" maxlength="12" placeholder="Ex.: A, B, FLEX, MOB" style="text-transform:uppercase" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nome</label>
+      <input class="input" id="new-workout-name" maxlength="60" placeholder="Ex.: Treino A" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Foco/objetivo</label>
+      <input class="input" id="new-workout-focus" maxlength="80" placeholder="Ex.: Inferiores, força, mobilidade" />
+    </div>
+    <button class="btn-primary" onclick="createWorkoutType()">Criar tipo</button>
+    <button class="btn-ghost" onclick="closeSheet()">Cancelar</button>
+  `);
+  setTimeout(() => document.getElementById("new-workout-code")?.focus(), 50);
+};
+
+window.createWorkoutType = async function() {
+  if (STATE._creatingWorkoutType) return;
+  const codeEl = document.getElementById("new-workout-code");
+  const nameEl = document.getElementById("new-workout-name");
+  const focusEl = document.getElementById("new-workout-focus");
+  const code = String(codeEl?.value || "").trim().toUpperCase().replace(/\s+/g, "_");
+  const name = String(nameEl?.value || "").trim() || `Treino ${code}`;
+  const focus = String(focusEl?.value || "").trim();
+  if (!/^[A-Z0-9_-]{1,12}$/.test(code)) {
+    showToast("Use um código curto, sem espaços ou acentos", "error");
+    codeEl?.focus();
+    return;
+  }
+  if (STATE.workouts && STATE.workouts[code]) {
+    showToast("Já existe um treino com esse código", "error");
+    return;
+  }
+  STATE._creatingWorkoutType = true;
+  try {
+    const payload = {
+      code,
+      name,
+      focus,
+      student_id: null,
+      coach_id: STATE.profile?.role === "coach" ? STATE.profile.id : null,
+      is_global: STATE.profile?.role === "admin"
+    };
+    const { data, error } = await sb.from("workouts").insert(payload).select("*").single();
+    if (error) throw error;
+    showToast("Tipo de treino criado", "success");
+    await loadWorkouts();
+    closeSheet();
+    renderAdminWorkouts();
+    openWorkoutEditor(code, data?.id);
+  } catch (e) {
+    showToast("Erro ao criar tipo: " + (e.message || "verifique permissões"), "error");
+  } finally {
+    STATE._creatingWorkoutType = false;
+  }
+};
 
 // Bug #21/#22 fix: aceita workoutId explícito para workouts de aluno
 // (STATE.workouts[code] retorna o global quando o coach edita treino de aluno)
@@ -9021,15 +9177,15 @@ async function createAsaasCharge({ paymentId, billingType="PIX" }) {
   if (STATE._creatingCharge) return null;
   STATE._creatingCharge = true;
   try {
-    const { data, error } = await sb.functions.invoke("asaas-create-charge", {
+    const { data, error } = await withTimeout(sb.functions.invoke("asaas-create-charge", {
       body: { payment_id: paymentId, billing_type: billingType }
-    });
+    }), 25000, "asaas-create-charge timeout");
     if (error) {
       const msg = error.message || String(error);
       // Mensagem amigável para erros comuns
       if (msg.includes("404") || msg.includes("not found") || msg.toLowerCase().includes("function")) {
         showToast("Edge Function não encontrada. Configure asaas-create-charge no Supabase.", "error");
-      } else if (msg.includes("ASAAS") || msg.includes("apiKey") || msg.includes("api_key")) {
+      } else if (msg.includes("ASAAS") || msg.includes("apiKey") || msg.includes("api_key") || msg.includes("ASAAS_API_KEY")) {
         showToast("Chave Asaas não configurada. Adicione ASAAS_API_KEY nas variáveis da Edge Function.", "error");
       } else {
         showToast("Erro: " + msg, "error");
@@ -9047,7 +9203,13 @@ async function createAsaasCharge({ paymentId, billingType="PIX" }) {
 }
 
 async function openAsaasSheet(paymentId) {
-  const { data: p } = await sb.from("payments").select("*, user:profiles!payments_user_id_fkey(full_name,email,phone)").eq("id", paymentId).single();
+  const { data: p, error: pErr } = await sb.from("payments").select("*").eq("id", paymentId).single();
+  if (pErr || !p) { showToast("Pagamento não encontrado", "error"); return; }
+  const payerId = p.user_id || p.payer_id;
+  const { data: payer } = payerId
+    ? await sb.from("profiles").select("full_name,email,phone").eq("id", payerId).maybeSingle()
+    : { data: null };
+  p.user = payer || {};
   if (!p) { showToast("Pagamento não encontrado", "error"); return; }
   const sheet = document.createElement("div");
   sheet.id = "asaas-overlay";
@@ -9091,7 +9253,10 @@ async function openAsaasSheet(paymentId) {
     r.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-2);display:flex;align-items:center;justify-content:center;gap:8px"><div class="spinner" style="width:18px;height:18px"></div> Gerando cobrança…</div>`;
     const result = await createAsaasCharge({ paymentId, billingType: type });
     pixBtn.disabled = false; bolBtn.disabled = false;
-    if (!result) { r.innerHTML = ""; return; }
+    if (!result) {
+      r.innerHTML = `<div style="margin-top:12px;padding:12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-size:13px">Não foi possível gerar a cobrança. Verifique se a Edge Function está publicada e se a chave ASAAS_API_KEY está configurada.</div>`;
+      return;
+    }
     if (type === "PIX" && result.pix_qr) {
       r.innerHTML = `
         <div class="ax-qr">
@@ -9160,7 +9325,7 @@ async function renderChat() {
             const isMine = t.last_from === me;
             const unread = !t.last_read_at && t.last_to === me;
             const o = t.other || {};
-            return `<div style="display:flex;align-items:center;border-bottom:1px solid var(--line);${unread ? 'background:rgba(var(--brand-rgb,99,102,241),0.08);' : ''}">
+            return `<div data-chat-other="${escapeAttr(o.id)}" style="display:flex;align-items:center;border-bottom:1px solid var(--line);${unread ? 'background:rgba(var(--brand-rgb,99,102,241),0.08);' : ''}">
               <div onclick="openChatThread('${o.id}')" style="display:flex;gap:12px;padding:14px 16px;cursor:pointer;flex:1;min-width:0;align-items:center">
                 <div style="position:relative;flex:0 0 auto">
                   <div style="width:46px;height:46px;border-radius:50%;background:var(--bg-2);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:20px">${o.avatar_url ? `<img src="${o.avatar_url}" style="width:100%;height:100%;object-fit:cover">` : (o.avatar_emoji || '👤')}</div>
@@ -9448,8 +9613,17 @@ window.deleteConversation = async function(otherUserId) {
     .delete()
     .or(`and(from_user.eq.${me},to_user.eq.${otherUserId}),and(from_user.eq.${otherUserId},to_user.eq.${me})`);
   if (error) { showToast("Erro ao excluir conversa", "error"); return; }
+  STATE.chatThreads = (STATE.chatThreads || []).filter(t => {
+    const other = t.other?.id || (t.a === me ? t.b : t.a);
+    return other !== otherUserId;
+  });
+  document.querySelectorAll("[data-chat-other]").forEach(row => {
+    if (row.dataset.chatOther === otherUserId) row.remove();
+  });
   showToast("Conversa excluída", "success");
   closeChatThread();
+  await loadChatThreads();
+  if (STATE.view === "chat") renderChat().catch(() => {});
 };
 
 /* =============================================================================
