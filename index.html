@@ -6912,6 +6912,97 @@ function setPeriodWeekBusy(weekIndex, busy) {
   if (el) el.classList.toggle("is-busy", !!busy);
 }
 
+function addDaysISO(iso, days) {
+  const d = new Date(String(iso) + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function loadPeriodDaysOrdered(studentId) {
+  const { data, error } = await sb.from("periodization_days")
+    .select("*").eq("student_id", studentId).order("date");
+  if (error) throw error;
+  return data || [];
+}
+
+async function updatePeriodDayDate(dayId, date) {
+  const { data, error } = await sb.from("periodization_days")
+    .update({ date })
+    .eq("id", dayId)
+    .select("id")
+    .single();
+  if (error || !data) throw error || new Error("Dia da periodização não foi atualizado.");
+}
+
+async function duplicatePeriodWeekClientFallback(studentId, weekIndex) {
+  const days = await loadPeriodDaysOrdered(studentId);
+  const start = weekIndex * 7;
+  const week = days.slice(start, start + 7);
+  const later = days.slice(start + 7);
+  if (week.length !== 7) throw new Error("Semana incompleta. Complete 7 dias antes de duplicar.");
+  const blocksByDay = await loadBlocksForDays(week.map(d => d.id));
+  const tempBase = "2500-01-01";
+
+  for (let i = 0; i < later.length; i++) {
+    await updatePeriodDayDate(later[i].id, addDaysISO(tempBase, i));
+  }
+
+  const newRows = week.map(d => ({
+    student_id: studentId,
+    date: addDaysISO(d.date, 7),
+    workout_code: d.workout_code || "OFF",
+    intensity: d.intensity || "off",
+    aero: !!d.aero
+  }));
+  const { data: insertedDays, error: insertError } = await sb.from("periodization_days")
+    .insert(newRows)
+    .select("*");
+  if (insertError) throw insertError;
+  const newDayByDate = {};
+  (insertedDays || []).forEach(d => { newDayByDate[d.date] = d; });
+
+  const blockRows = [];
+  week.forEach(originalDay => {
+    const newDay = newDayByDate[addDaysISO(originalDay.date, 7)];
+    (blocksByDay[originalDay.id] || []).forEach(b => {
+      blockRows.push({
+        day_id: newDay.id,
+        position: b.position || 0,
+        preset_code: b.preset_code,
+        workout_code: b.workout_code || null,
+        notes: b.notes || null
+      });
+    });
+  });
+  if (blockRows.length) {
+    const { error } = await sb.from("periodization_blocks").insert(blockRows);
+    if (error) throw error;
+  }
+
+  for (const day of later) {
+    await updatePeriodDayDate(day.id, addDaysISO(day.date, 7));
+  }
+}
+
+async function movePeriodWeekClientFallback(studentId, weekIndex, dir) {
+  const days = await loadPeriodDaysOrdered(studentId);
+  const targetIndex = weekIndex + dir;
+  const source = days.slice(weekIndex * 7, weekIndex * 7 + 7);
+  const target = days.slice(targetIndex * 7, targetIndex * 7 + 7);
+  if (source.length !== 7 || target.length !== 7) throw new Error("Semana incompleta. Complete 7 dias antes de reordenar.");
+  const tempBase = "2600-01-01";
+  const moving = [...source, ...target];
+  for (let i = 0; i < moving.length; i++) {
+    await updatePeriodDayDate(moving[i].id, addDaysISO(tempBase, i));
+  }
+  for (let i = 0; i < 7; i++) {
+    await updatePeriodDayDate(source[i].id, target[i].date);
+  }
+  for (let i = 0; i < 7; i++) {
+    await updatePeriodDayDate(target[i].id, source[i].date);
+  }
+}
+
 window.duplicatePeriodWeek = async function(studentId, weekIndex) {
   if (!canManagePeriodWeeks()) return;
   STATE._periodWeekAction = true;
@@ -6922,7 +7013,10 @@ window.duplicatePeriodWeek = async function(studentId, weekIndex) {
       p_student_id: studentId,
       p_week_index: weekIndex
     });
-    if (error) throw error;
+    if (error) {
+      console.warn("duplicate_periodization_week RPC falhou; usando fallback client-side", error);
+      await duplicatePeriodWeekClientFallback(studentId, weekIndex);
+    }
     showToast("Semana duplicada", "success");
     await openStudentPeriodSheet(studentId);
   } catch (e) {
@@ -6944,7 +7038,10 @@ window.movePeriodWeek = async function(studentId, weekIndex, dir) {
       p_week_index: weekIndex,
       p_dir: dir
     });
-    if (error) throw error;
+    if (error) {
+      console.warn("move_periodization_week RPC falhou; usando fallback client-side", error);
+      await movePeriodWeekClientFallback(studentId, weekIndex, dir);
+    }
     showToast("Ordem salva", "success");
     await openStudentPeriodSheet(studentId);
   } catch (e) {
