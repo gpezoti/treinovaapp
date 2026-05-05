@@ -21,7 +21,9 @@ const checks = [
   ["pull-to-refresh resets on touchcancel", /document\.addEventListener\("touchcancel", \(\) => \{\s*pulling = false/.test(html)],
   ["resume watchdog releases stuck resume", /const resumeWatchdog = setTimeout/.test(html)],
   ["offline resume does not block UI", /Sem conexão\. O app continua aberto/.test(html)],
-  ["boot loaders have safe timeouts", /safeLoad\("workouts", loadWorkouts\)/.test(html)]
+  ["boot loaders have safe timeouts", /safeLoad\("workouts", loadWorkouts\)/.test(html)],
+  ["stuck overlay suppressed after boot with profile", /_BOOT_DONE && STATE\.profile[\s\S]*stuck suppressed after boot/.test(html)],
+  ["same-user signed-in event does not reload app", /STATE\.profile && session\?\.user\?\.id === STATE\.profile\.id[\s\S]*auth-signed-in-existing-session/.test(html)]
 ];
 
 for (const [label, ok] of checks) {
