@@ -1251,6 +1251,16 @@ function withTimeout(promise, ms, label = "timeout") {
     .finally(() => clearTimeout(timeoutId));
 }
 
+async function safeLoad(label, task, ms = 10000) {
+  try {
+    const promise = typeof task === "function" ? task() : task;
+    return await withTimeout(promise, ms, `${label} timeout`);
+  } catch (e) {
+    console.warn(`[safeLoad] ${label}:`, e);
+    return null;
+  }
+}
+
 // ============================================================
 // [M-01] showConfirm — substitui confirm() nativo em toda a app
 // Retorna Promise<boolean>. Uso: if (!await showConfirm({...})) return;
@@ -1755,10 +1765,14 @@ window.submitPasswordRecovery = async function() {
 };
 
 async function loadProfile() {
-  const { data: { user } } = await sb.auth.getUser();
+  const { data: { user } } = await withTimeout(sb.auth.getUser(), 8000, "profile user timeout");
   if (!user) return null;
   STATE.user = user;
-  const { data, error } = await sb.from("profiles").select("*").eq("id", user.id).single();
+  const { data, error } = await withTimeout(
+    sb.from("profiles").select("*").eq("id", user.id).single(),
+    9000,
+    "profile data timeout"
+  );
   if (error) {
     console.error(error);
     return null;
@@ -2711,6 +2725,11 @@ async function handleAppResume(reason = "resume") {
   _APP_RESUME_RUNNING = true;
   _APP_RESUME_LAST_AT = now;
   const awayMs = _APP_HIDDEN_AT ? now - _APP_HIDDEN_AT : 0;
+  const resumeWatchdog = setTimeout(() => {
+    console.warn("[resume] watchdog released interaction layer:", reason);
+    _APP_RESUME_RUNNING = false;
+    repairInteractionLayer(reason + ":watchdog");
+  }, 18000);
 
   try {
     restoreTimerIfActive();
@@ -2718,6 +2737,11 @@ async function handleAppResume(reason = "resume") {
     repairInteractionLayer(reason);
 
     if (!sb || !STATE.profile) return;
+
+    if (navigator.onLine === false) {
+      showToast("Sem conexão. O app continua aberto e tenta novamente ao voltar a internet.", "error");
+      return;
+    }
 
     let authSess = null;
     try {
@@ -2735,7 +2759,7 @@ async function handleAppResume(reason = "resume") {
         console.warn("[resume] refresh de sessão falhou:", e);
       }
       if (!authSess) {
-        showToast("Reconectando sessão...", "error");
+        showToast("Sessão não respondeu. Tente novamente em instantes.", "error");
         return;
       }
     }
@@ -2775,6 +2799,7 @@ async function handleAppResume(reason = "resume") {
       }
     }
   } finally {
+    clearTimeout(resumeWatchdog);
     _APP_RESUME_RUNNING = false;
     setTimeout(() => repairInteractionLayer(reason + ":final"), 50);
   }
@@ -7527,31 +7552,31 @@ async function postSignIn() {
   // === GRUPO 1: loaders independentes — executam em paralelo ===
   // (branding, workouts, library, follows, presets, blocks, periodização, cargas)
   await Promise.all([
-    loadBranding(),
-    loadWorkouts(),
-    loadExerciseLibrary(),
-    loadFollows(),
-    loadPresets().catch(e => console.warn("presets:", e)),
-    loadTodayBlocks().catch(e => console.warn("blocks:", e)),
-    loadPeriodization(),
-    loadLastLoads(),
+    safeLoad("branding", loadBranding),
+    safeLoad("workouts", loadWorkouts),
+    safeLoad("exercise library", loadExerciseLibrary),
+    safeLoad("follows", loadFollows),
+    safeLoad("presets", loadPresets),
+    safeLoad("today blocks", loadTodayBlocks),
+    safeLoad("periodization", loadPeriodization),
+    safeLoad("last loads", loadLastLoads),
   ]);
 
   // === GRUPO 2: precisa de follows (feed) + role definido — paralelo ===
   const _roleLoads = [];
   if (profile.role === "coach") {
-    _roleLoads.push(loadStudents(), loadCoachPayments());
+    _roleLoads.push(safeLoad("students", loadStudents), safeLoad("coach payments", loadCoachPayments));
   } else if (profile.role === "admin") {
-    _roleLoads.push(loadTrainers(), loadStudents(), loadAdminPayments());
+    _roleLoads.push(safeLoad("trainers", loadTrainers), safeLoad("students", loadStudents), safeLoad("admin payments", loadAdminPayments));
   }
   await Promise.all([
-    loadFeed(),            // usa STATE.follows (pronto do grupo 1)
-    checkMyPaymentStatus(),
+    safeLoad("feed", loadFeed),            // usa STATE.follows (pronto do grupo 1)
+    safeLoad("payment status", checkMyPaymentStatus),
     ..._roleLoads,
   ]);
 
   // === GRUPO 3: notificações (rápidas, sem dependências críticas) ===
-  await loadNotifications();
+  await safeLoad("notifications", loadNotifications, 7000);
   // Auto-gera lembretes (não bloqueia)
   setTimeout(() => {
     generateOverduePaymentNotifications().catch(()=>{});
@@ -9108,12 +9133,15 @@ async function resolveProgressPhotoUrl(photo) {
 
 async function loadProgressPhotos() {
   const sid = STATE.profile.id;
-  const { data, error } = await sb.from("progress_photos")
-    .select("*").eq("student_id", sid).order("date", { ascending: false }).limit(60);
+  const { data, error } = await withTimeout(
+    sb.from("progress_photos").select("*").eq("student_id", sid).order("date", { ascending: false }).limit(60),
+    9000,
+    "progress photos load timeout"
+  );
   if (error) throw error;
   return await Promise.all((data || []).map(async (p) => ({
     ...p,
-    _src: await resolveProgressPhotoUrl(p),
+    _src: await safeLoad("progress photo url", () => resolveProgressPhotoUrl(p), 5000),
     _storagePath: getProgressPhotoPath(p)
   })));
 }
@@ -9196,16 +9224,29 @@ window.openPhotoFull = (url) => {
   document.body.appendChild(div);
 };
 
+async function insertProgressPhotoRecord(payload, storagePath) {
+  const withPath = { ...payload, storage_path: storagePath };
+  const first = await sb.from("progress_photos").insert(withPath);
+  if (!first.error) return first;
+  const msg = String(first.error.message || "");
+  if (!/storage_path|schema cache|column/i.test(msg)) return first;
+  return await sb.from("progress_photos").insert(payload);
+}
+
 async function openProgressUpload() {
   const existing = document.getElementById("pp-overlay");
   if (existing) existing.remove();
   const sheet = document.createElement("div");
   sheet.id = "pp-overlay";
+  let selectedFile = null;
+  let previewUrl = "";
   sheet.innerHTML = `
     <style>
       #pp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:9500;display:flex;align-items:flex-end;justify-content:center;padding-top:24px}
       #pp-overlay .pc{background:var(--bg);border:1px solid var(--line);border-bottom:0;border-top-left-radius:18px;border-top-right-radius:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto;padding:16px 16px calc(16px + var(--safe-bottom));box-shadow:var(--shadow)}
       #pp-overlay .row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+      #pp-overlay .pick-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+      #pp-overlay .pick-btn{padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font-weight:800}
       #pp-overlay input{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg-card);color:var(--text)}
       #pp-overlay textarea{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font:inherit;min-height:60px;margin:10px 0}
       #pp-overlay .pp-up{background:var(--brand);color:var(--brand-on);padding:12px;border-radius:10px;border:0;font-weight:700;width:100%;margin-top:12px}
@@ -9217,9 +9258,14 @@ async function openProgressUpload() {
     <div class="pc">
       <div style="display:flex;align-items:center;margin-bottom:8px">
         <div style="flex:1;font-weight:700;font-size:18px">Nova foto</div>
-        <button onclick="document.getElementById('pp-overlay').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
+        <button id="pp-close" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
       </div>
-      <input type="file" id="pp-file" accept="image/*" capture="user" style="margin-top:8px;width:100%;padding:11px;border-radius:10px;border:1px dashed var(--line);background:var(--bg-card);color:var(--text)">
+      <div class="pick-row">
+        <button class="pick-btn" id="pp-gallery-btn" type="button">Galeria</button>
+        <button class="pick-btn" id="pp-camera-btn" type="button">Câmera</button>
+      </div>
+      <input type="file" id="pp-gallery-file" accept="image/*" style="display:none">
+      <input type="file" id="pp-camera-file" accept="image/*" capture="environment" style="display:none">
       <div class="preview" id="pp-preview"></div>
       <label>Peso (kg)</label>
       <div class="row">
@@ -9227,50 +9273,77 @@ async function openProgressUpload() {
         <input type="number" id="pp-fat" step="0.1" placeholder="% gordura (opcional)">
       </div>
       <textarea id="pp-notes" placeholder="Notas (como está se sentindo, mudanças notadas…)" maxlength="500"></textarea>
-      <button class="pp-up" id="pp-submit">Enviar foto</button>
+      <button class="pp-up" id="pp-submit" disabled>Selecione uma foto</button>
     </div>`;
   document.body.appendChild(sheet);
-  sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.remove(); });
-  document.getElementById("pp-file").onchange = (e) => {
+  const cleanup = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    sheet.remove();
+  };
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) cleanup(); });
+  document.getElementById("pp-close").onclick = cleanup;
+  document.getElementById("pp-gallery-btn").onclick = () => document.getElementById("pp-gallery-file").click();
+  document.getElementById("pp-camera-btn").onclick = () => document.getElementById("pp-camera-file").click();
+
+  const onPicked = (e) => {
     const file = e.target.files && e.target.files[0];
     const preview = document.getElementById("pp-preview");
     if (!file || !preview) return;
+    selectedFile = file;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(file);
     preview.style.display = "block";
-    preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Prévia da foto">`;
+    preview.innerHTML = `<img src="${previewUrl}" alt="Prévia da foto">`;
+    const btn = document.getElementById("pp-submit");
+    btn.disabled = false;
+    btn.textContent = "Salvar foto";
+    e.target.value = "";
   };
+  document.getElementById("pp-gallery-file").onchange = onPicked;
+  document.getElementById("pp-camera-file").onchange = onPicked;
 
   document.getElementById("pp-submit").onclick = async () => {
-    const file = document.getElementById("pp-file").files[0];
+    const file = selectedFile;
     if (!file) { showToast("Selecione uma foto", "error"); return; }
     const btn = document.getElementById("pp-submit");
     btn.disabled = true; btn.textContent = "Enviando…";
     try {
-      const compressed = await compressImage(file, 1200, 0.85);
+      const compressed = await withTimeout(compressImage(file, 1200, 0.85), 12000, "progress photo compress timeout");
       const path = `${STATE.profile.id}/${Date.now()}.jpg`;
-      const { error: upErr } = await sb.storage.from(PROGRESS_PHOTO_BUCKET).upload(path, compressed, {
-        cacheControl: "3600",
-        contentType: "image/jpeg",
-        upsert: false
-      });
+      const { error: upErr } = await withTimeout(
+        sb.storage.from(PROGRESS_PHOTO_BUCKET).upload(path, compressed, {
+          cacheControl: "3600",
+          contentType: "image/jpeg",
+          upsert: false
+        }),
+        20000,
+        "progress photo upload timeout"
+      );
       if (upErr) throw upErr;
       const { data: pub } = sb.storage.from(PROGRESS_PHOTO_BUCKET).getPublicUrl(path);
       const weight = document.getElementById("pp-weight").value;
       const fat = document.getElementById("pp-fat").value;
       const notes = document.getElementById("pp-notes").value || null;
-      const { error: insErr } = await sb.from("progress_photos").insert({
+      const payload = {
         student_id: STATE.profile.id,
+        date: todayISO(),
         url: pub.publicUrl,
         weight: weight ? Number(weight) : null,
         body_fat: fat ? Number(fat) : null,
         notes
-      });
+      };
+      const { error: insErr } = await withTimeout(
+        insertProgressPhotoRecord(payload, path),
+        12000,
+        "progress photo save timeout"
+      );
       if (insErr) throw insErr;
       showToast("Foto registrada ✓", "success");
-      sheet.remove();
+      cleanup();
       await renderProgress();
     } catch (e) {
       showToast(e.message || "Erro ao enviar", "error");
-      btn.disabled = false; btn.textContent = "Enviar foto";
+      btn.disabled = false; btn.textContent = "Salvar foto";
     }
   };
 }
