@@ -18,7 +18,10 @@ const checks = [
   ["expired timer clears persisted storage", /remaining <= 0[\s\S]*clearPersistedTimer\(\)/.test(html)],
   ["sheet pointer events restored on open", /sheet\.style\.pointerEvents = "";\s*sheet\.classList\.add\("active"\)/.test(html)],
   ["sheet pointer events disabled on close", /sheet\.style\.pointerEvents = "none"/.test(html)],
-  ["pull-to-refresh resets on touchcancel", /document\.addEventListener\("touchcancel", \(\) => \{\s*pulling = false/.test(html)]
+  ["pull-to-refresh resets on touchcancel", /document\.addEventListener\("touchcancel", \(\) => \{\s*pulling = false/.test(html)],
+  ["resume watchdog releases stuck resume", /const resumeWatchdog = setTimeout/.test(html)],
+  ["offline resume does not block UI", /Sem conexão\. O app continua aberto/.test(html)],
+  ["boot loaders have safe timeouts", /safeLoad\("workouts", loadWorkouts\)/.test(html)]
 ];
 
 for (const [label, ok] of checks) {
