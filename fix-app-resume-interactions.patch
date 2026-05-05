@@ -1,0 +1,356 @@
+From 2e7c3bbd006494c153f8c3936b34de252f29b557 Mon Sep 17 00:00:00 2001
+From: Guilherme Pezoti <gpezoti@hotmail.com>
+Date: Mon, 4 May 2026 20:48:57 -0300
+Subject: [PATCH] fix: recover interactions after app resume
+
+---
+ index.html | 283 +++++++++++++++++++++++++++++++++++++----------------
+ 1 file changed, 197 insertions(+), 86 deletions(-)
+
+diff --git a/index.html b/index.html
+index 781a3de..65ab8bd 100644
+--- a/index.html
++++ b/index.html
+@@ -798,6 +798,12 @@ const STATE = {
+            startedAt:null, pausedAt:null, raf:null, onDone:null, label:"Próxima série" }
+ };
+ 
++let _PULL_TO_REFRESH_BOUND = false;
++let _APP_RESUME_BOUND = false;
++let _APP_HIDDEN_AT = 0;
++let _APP_RESUME_RUNNING = false;
++let _APP_RESUME_LAST_AT = 0;
++
+ /* =============================================================================
+    HELPERS
+    ============================================================================= */
+@@ -851,6 +857,15 @@ function showToast(msg, kind) {
+   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2200);
+ }
+ 
++function withTimeout(promise, ms, label = "timeout") {
++  let timeoutId;
++  const timeout = new Promise((_, reject) => {
++    timeoutId = setTimeout(() => reject(new Error(label)), ms);
++  });
++  return Promise.race([Promise.resolve(promise), timeout])
++    .finally(() => clearTimeout(timeoutId));
++}
++
+ // ============================================================
+ // [M-01] showConfirm — substitui confirm() nativo em toda a app
+ // Retorna Promise<boolean>. Uso: if (!await showConfirm({...})) return;
+@@ -1997,6 +2012,9 @@ async function toggleLike(postId) {
+    PULL-TO-REFRESH
+    ============================================================================= */
+ function setupPullToRefresh() {
++  if (_PULL_TO_REFRESH_BOUND) return;
++  _PULL_TO_REFRESH_BOUND = true;
++
+   const THRESHOLD = 72;
+   let startY = 0, pulling = false, indicator = null;
+ 
+@@ -2153,6 +2171,168 @@ function cleanupRealtime() {
+   STATE.realtimeChannels = [];
+ }
+ 
++function repairInteractionLayer(reason = "resume") {
++  try {
++    document.documentElement.style.pointerEvents = "";
++    document.body.style.pointerEvents = "";
++
++    const stuck = document.getElementById("stuck-overlay");
++    if (stuck && _BOOT_DONE) stuck.remove();
++
++    const sheet = document.getElementById("sheet");
++    const sheetContent = document.getElementById("sheet-content");
++    if (sheet && sheet.classList.contains("active")) {
++      const hasUsefulContent = (sheetContent?.textContent || "").trim().length > 0;
++      const hasAction = !!sheet.querySelector("button,a,input,textarea,select,[onclick]");
++      if (!hasUsefulContent && !hasAction) {
++        sheet.classList.remove("active");
++        _sheetInHistory = false;
++      }
++    }
++
++    const serieModal = document.getElementById("serie-done-modal");
++    if (serieModal && window._sdmModal) {
++      const confirmBtn = document.getElementById("sdm-confirm-btn");
++      if (confirmBtn) confirmBtn.onclick = () => confirmSerieDone(false);
++      const skipBtn = serieModal.querySelector(".sdm-skip");
++      if (skipBtn) skipBtn.onclick = () => confirmSerieDone(true);
++    }
++
++    if (STATE.profile) {
++      renderBottomNav();
++      if (STATE.view === "workout") bindWorkoutSetChecks();
++    }
++  } catch(e) {
++    console.warn("[interaction-repair]", reason, e);
++  }
++}
++
++async function refreshVisibleDataAfterResume() {
++  switch (STATE.view) {
++    case "home":
++      await loadWorkouts();
++      if (STATE.profile?.role === "coach" || STATE.profile?.role === "admin") await loadStudents();
++      break;
++    case "feed":
++      await loadFeed();
++      break;
++    case "calendar":
++      await loadPeriodization();
++      break;
++    case "students":
++      if (STATE.profile?.role === "coach" || STATE.profile?.role === "admin") await loadStudents();
++      break;
++    case "payments":
++      if (STATE.profile?.role === "admin") await loadAdminPayments();
++      else if (STATE.profile?.role === "coach") await loadCoachPayments();
++      else await loadMyPayments();
++      break;
++    case "chat":
++      await renderChat().catch(()=>{});
++      break;
++    case "workout":
++      await loadWorkouts();
++      if (STATE.currentSession) await loadSetLogs(STATE.currentSession.id);
++      break;
++  }
++}
++
++async function handleAppResume(reason = "resume") {
++  if (document.visibilityState && document.visibilityState !== "visible") return;
++
++  const now = Date.now();
++  if (_APP_RESUME_RUNNING || now - _APP_RESUME_LAST_AT < 750) {
++    setTimeout(() => repairInteractionLayer(reason + ":debounced"), 50);
++    return;
++  }
++
++  _APP_RESUME_RUNNING = true;
++  _APP_RESUME_LAST_AT = now;
++  const awayMs = _APP_HIDDEN_AT ? now - _APP_HIDDEN_AT : 0;
++
++  try {
++    restoreTimerIfActive();
++    repairInteractionLayer(reason);
++
++    if (!sb || !STATE.profile) return;
++
++    let authSess = null;
++    try {
++      const { data } = await withTimeout(sb.auth.getSession(), 7000, "resume getSession timeout");
++      authSess = data?.session;
++    } catch(e) {
++      console.warn("[resume] sessão indisponível no retorno:", e);
++    }
++
++    if (!authSess) {
++      try {
++        const { data } = await withTimeout(sb.auth.refreshSession(), 8000, "resume refreshSession timeout");
++        authSess = data?.session;
++      } catch(e) {
++        console.warn("[resume] refresh de sessão falhou:", e);
++      }
++      if (!authSess) {
++        showToast("Reconectando sessão...", "error");
++        return;
++      }
++    }
++
++    const shouldReconnect = awayMs >= 30_000 || reason === "online" || reason.indexOf("pageshow") === 0;
++    if (shouldReconnect) {
++      try {
++        cleanupRealtime();
++        setupRealtime();
++      } catch(e) {
++        console.warn("[resume] realtime reconnect:", e);
++      }
++    }
++
++    if (awayMs >= 120_000 || reason === "online") {
++      try {
++        await withTimeout(refreshVisibleDataAfterResume(), 12000, "resume data refresh timeout");
++        renderCurrentView();
++      } catch(e) {
++        console.warn("[resume] data refresh:", e);
++      }
++    }
++
++    if (STATE.view === "workout") {
++      try {
++        const date = STATE.selectedDate || todayISO();
++        const code = STATE.selectedWorkout;
++        if (code && (!STATE.currentSession || STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code)) {
++          await withTimeout(loadOrCreateSession(date, code, STATE.selectedIntensity), 10000, "resume workout session timeout");
++        }
++        if (code && (!STATE.workouts || !STATE.workouts[code])) {
++          await withTimeout(loadWorkouts(), 10000, "resume workouts timeout");
++        }
++        bindWorkoutSetChecks();
++      } catch(e) {
++        console.warn("[resume] workout re-init:", e);
++      }
++    }
++  } finally {
++    _APP_RESUME_RUNNING = false;
++    setTimeout(() => repairInteractionLayer(reason + ":final"), 50);
++  }
++}
++
++function bindAppResumeHandlers() {
++  if (_APP_RESUME_BOUND) return;
++  _APP_RESUME_BOUND = true;
++
++  document.addEventListener("visibilitychange", () => {
++    if (document.visibilityState === "hidden") {
++      _APP_HIDDEN_AT = Date.now();
++      return;
++    }
++    handleAppResume("visibilitychange");
++  });
++  window.addEventListener("focus", () => handleAppResume("focus"));
++  window.addEventListener("pageshow", e => handleAppResume(e.persisted ? "pageshow-bfcache" : "pageshow"));
++  window.addEventListener("online", () => handleAppResume("online"));
++}
++
+ /* =============================================================================
+    TIMER
+    ============================================================================= */
+@@ -2211,6 +2391,7 @@ function restoreTimerIfActive() {
+     const remaining = duration - elapsed;
+     if (remaining > 1) {
+       // Reconstruir o timer com o tempo correto
++      if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
+       STATE.timer.secondsTotal = duration;
+       STATE.timer.secondsLeft = remaining;
+       STATE.timer.startedAt = start;
+@@ -2234,6 +2415,10 @@ function restoreTimerIfActive() {
+ }
+ function tickTimer() {
+   if (!STATE.timer.running) return;
++  if (STATE.timer.raf) {
++    clearTimeout(STATE.timer.raf);
++    STATE.timer.raf = null;
++  }
+   if (!STATE.timer.paused) {
+     const elapsed = Math.floor((Date.now() - STATE.timer.startedAt) / 1000);
+     STATE.timer.secondsLeft = Math.max(0, STATE.timer.secondsTotal - elapsed);
+@@ -2259,7 +2444,17 @@ function updateTimerUI() {
+   else if (s <= 10) { bar.classList.add("warning"); ring.classList.add("warning"); }
+ }
+ function finishTimer() {
++  if (STATE.timer.raf) {
++    clearTimeout(STATE.timer.raf);
++    STATE.timer.raf = null;
++  }
+   STATE.timer.running = false;
++  _releaseWakeLock();
++  try {
++    localStorage.removeItem("timer_start");
++    localStorage.removeItem("timer_duration");
++    localStorage.removeItem("timer_label");
++  } catch(e) {}
+   document.getElementById("timer-bar").classList.add("done");
+   document.getElementById("timer-ring").classList.add("done");
+   document.getElementById("timer-bar-time").textContent = "00:00";
+@@ -6677,92 +6872,8 @@ async function postLoginInit() {
+   // [M-04] Restaurar timer se o aluno voltou ao app após ligação/troca de app
+   restoreTimerIfActive();
+ 
+-  // [Bug #23] Background recovery — reconnect realtime + refresh data
+-  let _bgHiddenAt = 0;
+-  document.addEventListener("visibilitychange", async () => {
+-    if (document.visibilityState === "hidden") {
+-      _bgHiddenAt = Date.now();
+-      return;
+-    }
+-
+-    // App voltou ao foreground
+-    restoreTimerIfActive();
+-
+-    // Re-bind modal de série se ainda estiver aberto (iOS pode perder listeners)
+-    const sdm = document.getElementById("serie-done-modal");
+-    if (sdm && window._sdmModal) {
+-      const confirmBtn = document.getElementById("sdm-confirm-btn");
+-      if (confirmBtn) confirmBtn.onclick = () => confirmSerieDone(false);
+-      const skipBtn = sdm.querySelector(".sdm-skip");
+-      if (skipBtn) skipBtn.onclick = () => confirmSerieDone(true);
+-    }
+-
+-    // Verificar sessão auth — se expirada, volta para login
+-    let authSess = null;
+-    try {
+-      const { data } = await sb.auth.getSession();
+-      authSess = data?.session;
+-    } catch(e) { /* ignora erro de rede pontual */ }
+-    if (!authSess) {
+-      // Tenta refresh silencioso antes de forçar logout
+-      try {
+-        const { data } = await sb.auth.refreshSession();
+-        authSess = data?.session;
+-      } catch(e) {}
+-      if (!authSess) { signOut(); return; }
+-    }
+-
+-    const awayMs = Date.now() - _bgHiddenAt;
+-    const RECONNECT_THRESHOLD = 30_000;  // 30s — reconecta realtime
+-    const REFRESH_THRESHOLD   = 120_000; // 2min — recarrega dados
+-
+-    if (awayMs >= RECONNECT_THRESHOLD) {
+-      // Reconectar canais Supabase Realtime (WebSocket pode ter caído)
+-      try {
+-        cleanupRealtime();
+-        setupRealtime();
+-      } catch(e) { console.warn("[bg-recovery] realtime reconnect:", e); }
+-    }
+-
+-    if (awayMs >= REFRESH_THRESHOLD) {
+-      // Recarregar dados essenciais da view atual
+-      try {
+-        switch (STATE.view) {
+-          case "home":
+-            await loadWorkouts();
+-            break;
+-          case "feed":
+-            await loadFeed();
+-            break;
+-          case "chat":
+-            await renderChat().catch(()=>{});
+-            break;
+-          case "students":
+-            if (STATE.profile.role === "coach") await loadStudents();
+-            break;
+-          case "payments":
+-            if (STATE.profile.role === "coach") await loadCoachPayments();
+-            break;
+-        }
+-        renderCurrentView();
+-      } catch(e) { console.warn("[bg-recovery] data refresh:", e); }
+-    }
+-
+-    // Workout view — re-validar sessão e rebind checkboxes (independente do tempo ausente)
+-    if (STATE.view === "workout") {
+-      try {
+-        const date = STATE.selectedDate || todayISO();
+-        const code = STATE.selectedWorkout;
+-        if (code && (!STATE.currentSession || STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code)) {
+-          await loadOrCreateSession(date, code, STATE.selectedIntensity);
+-        }
+-        if (code && (!STATE.workouts || !STATE.workouts[code])) {
+-          await loadWorkouts();
+-        }
+-        bindWorkoutSetChecks();
+-      } catch(e) { console.warn("[bg-recovery] workout re-init:", e); }
+-    }
+-  });
++  // [Bug #23] Background recovery — listener único para evitar reentradas duplicadas
++  bindAppResumeHandlers();
+ 
+   // [A-02] Troca obrigatória de senha no primeiro login
+   if (STATE.profile.must_reset_password) {
+-- 
+2.50.1 (Apple Git-155)
+

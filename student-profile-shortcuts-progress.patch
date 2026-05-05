@@ -1,0 +1,387 @@
+--- outputs/index.html	2026-05-04 21:04:30
++++ index.html	2026-05-04 21:14:45
+@@ -150,6 +150,40 @@
+ .section-title { font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+   color: var(--text-3); margin: 18px 0 10px; display: flex; align-items: center; gap: 8px; }
+ .section-title::before { content: ""; width: 4px; height: 14px; background: var(--brand); border-radius: 2px; }
++
++/* Student shortcut subviews */
++.shortcut-view { padding: 16px 16px calc(104px + var(--safe-bottom)); }
++.shortcut-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
++.shortcut-back { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 12px; background: var(--bg-card);
++  border: 1px solid var(--line); color: var(--text-2); display: grid; place-items: center; }
++.shortcut-back:active { transform: scale(0.96); }
++.shortcut-copy { flex: 1; min-width: 0; }
++.shortcut-eyebrow { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.7px; font-weight: 800; }
++.shortcut-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 20px; font-weight: 900; line-height: 1.15; }
++.shortcut-title svg { flex: 0 0 auto; }
++.shortcut-action { flex: 0 0 auto; width: auto; padding-inline: 14px; min-height: 40px; }
++.shortcut-card { background: var(--bg-card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
++.shortcut-empty, .shortcut-error, .shortcut-loading { background: var(--bg-card); border: 1px solid var(--line);
++  border-radius: 14px; padding: 28px 18px; text-align: center; color: var(--text-2); }
++.shortcut-empty .title, .shortcut-error .title { color: var(--text); font-weight: 800; margin: 8px 0 4px; }
++.shortcut-empty .sub, .shortcut-error .sub { font-size: 13px; line-height: 1.35; }
++.shortcut-error { border-color: rgba(255,59,59,0.35); background: linear-gradient(135deg, var(--red-soft), transparent 70%), var(--bg-card); }
++.photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
++.photo-card { position: relative; min-width: 0; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 14px;
++  background: linear-gradient(135deg, var(--bg-3), var(--bg-card)); border: 1px solid var(--line); }
++.photo-card img { width: 100%; height: 100%; display: block; object-fit: cover; }
++.photo-card.is-broken { display: grid; place-items: center; padding: 16px; color: var(--text-3); text-align: center; font-size: 12px; }
++.photo-meta { position: absolute; left: 0; right: 0; bottom: 0; padding: 32px 10px 10px;
++  background: linear-gradient(0deg, rgba(0,0,0,0.82), transparent); color: #fff; }
++.photo-date { font-size: 12px; font-weight: 800; }
++.photo-note { margin-top: 2px; font-size: 10px; opacity: 0.82; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
++.photo-delete { position: absolute; top: 7px; right: 7px; width: 30px; height: 30px; border-radius: 999px;
++  background: rgba(0,0,0,0.62); color: #fff; display: grid; place-items: center; border: 1px solid rgba(255,255,255,0.14); }
++@media (max-width: 360px) {
++  .shortcut-view { padding-inline: 12px; }
++  .shortcut-title { font-size: 18px; }
++  .photo-grid { gap: 8px; }
++}
+ 
+ .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+ .stat-card { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius);
+@@ -7556,12 +7590,12 @@
+   const el = document.getElementById("view-home");
+   if (!el) return;
+   el.innerHTML = `
+-    <div style="padding:16px 16px 100px">
+-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+-        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+-        <div style="flex:1">
+-          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Evolução</div>
+-          <div style="font-size:20px;font-weight:800">Histórico de carga</div>
++    <div class="shortcut-view">
++      <div class="shortcut-head">
++        <button class="shortcut-back" onclick="navTo('home')" aria-label="Voltar">←</button>
++        <div class="shortcut-copy">
++          <div class="shortcut-eyebrow">Evolução</div>
++          <div class="shortcut-title">Histórico de carga</div>
+         </div>
+       </div>
+       <div id="hist-loading" style="text-align:center;padding:40px;color:var(--text-2)">Carregando…</div>
+@@ -7845,12 +7879,12 @@
+   await loadWeeklyRanking();
+   const rows = STATE.ranking || [];
+   el.innerHTML = `
+-    <div style="padding:16px 16px 100px">
+-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+-        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+-        <div style="flex:1">
+-          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Esta semana</div>
+-          <div style="display:flex;align-items:center;gap:8px;font-size:20px;font-weight:800"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H2V3h4"/><path d="M18 9h4V3h-4"/><path d="M7 15a6 6 0 0 0 10 0"/><path d="M17 3H7v9a6 6 0 0 0 12 0V3"/><path d="M12 15v5"/><path d="M8 20h8"/></svg> Ranking de frequência</div>
++    <div class="shortcut-view">
++      <div class="shortcut-head">
++        <button class="shortcut-back" onclick="navTo('home')" aria-label="Voltar">←</button>
++        <div class="shortcut-copy">
++          <div class="shortcut-eyebrow">Esta semana</div>
++          <div class="shortcut-title"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H2V3h4"/><path d="M18 9h4V3h-4"/><path d="M7 15a6 6 0 0 0 10 0"/><path d="M17 3H7v9a6 6 0 0 0 12 0V3"/><path d="M12 15v5"/><path d="M8 20h8"/></svg> Ranking de frequência</div>
+         </div>
+       </div>
+       ${rows.length === 0 ? `<div style="padding:40px;text-align:center;color:var(--text-3)">Ninguém treinou esta semana ainda</div>` : `
+@@ -8492,66 +8526,150 @@
+ }
+ 
+ /* ---------- FOTO DE PROGRESSO ---------- */
+-async function renderProgress() {
+-  const el = document.getElementById("view-home");
+-  if (!el) return;
+-  const sid = STATE.profile.id;
+-  const { data: photos } = await sb.from("progress_photos")
++const PROGRESS_PHOTO_BUCKET = "progress";
++
++function getProgressPhotoPath(photo) {
++  const direct = photo && (photo.storage_path || photo.path || photo.file_path || photo.object_path);
++  if (direct) return String(direct).replace(/^\/+/, "");
++  const raw = String((photo && photo.url) || "").trim();
++  if (!raw) return "";
++  if (!/^https?:\/\//i.test(raw) && !/^data:/i.test(raw) && !/^blob:/i.test(raw)) {
++    return raw.replace(/^\/+/, "");
++  }
++  try {
++    const parsed = new URL(raw, location.href);
++    const parts = parsed.pathname.split(`/storage/v1/object/public/${PROGRESS_PHOTO_BUCKET}/`);
++    if (parts[1]) return decodeURIComponent(parts[1]);
++    const signedParts = parsed.pathname.split(`/storage/v1/object/sign/${PROGRESS_PHOTO_BUCKET}/`);
++    if (signedParts[1]) return decodeURIComponent(signedParts[1]);
++  } catch (e) {}
++  return "";
++}
++
++async function resolveProgressPhotoUrl(photo) {
++  const raw = String((photo && photo.url) || "").trim();
++  if (/^(data|blob):/i.test(raw)) return raw;
++  const path = getProgressPhotoPath(photo);
++  if (path) {
++    try {
++      const { data, error } = await sb.storage.from(PROGRESS_PHOTO_BUCKET).createSignedUrl(path, 60 * 60);
++      if (!error && data && data.signedUrl) return data.signedUrl;
++    } catch (e) {}
++    try {
++      const { data } = sb.storage.from(PROGRESS_PHOTO_BUCKET).getPublicUrl(path);
++      if (data && data.publicUrl) return data.publicUrl;
++    } catch (e) {}
++  }
++  return raw;
++}
++
++async function loadProgressPhotos() {
++  const sid = STATE.profile.id;
++  const { data, error } = await sb.from("progress_photos")
+     .select("*").eq("student_id", sid).order("date", { ascending: false }).limit(60);
+-  el.innerHTML = `
+-    <div style="padding:16px 16px 100px">
+-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+-        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+-        <div style="flex:1">
+-          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Linha do tempo</div>
+-          <div style="display:flex;align-items:center;gap:8px;font-size:20px;font-weight:800"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Foto de progresso</div>
+-        </div>
+-        <button onclick="openProgressUpload()" style="background:var(--brand);color:var(--brand-on);border:0;border-radius:10px;padding:10px 14px;font-weight:700">+ Nova</button>
++  if (error) throw error;
++  return await Promise.all((data || []).map(async (p) => ({
++    ...p,
++    _src: await resolveProgressPhotoUrl(p),
++    _storagePath: getProgressPhotoPath(p)
++  })));
++}
++
++function renderProgressHead() {
++  return `
++    <div class="shortcut-head">
++      <button class="shortcut-back" onclick="navTo('home')" aria-label="Voltar">←</button>
++      <div class="shortcut-copy">
++        <div class="shortcut-eyebrow">Linha do tempo</div>
++        <div class="shortcut-title"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Foto de progresso</div>
+       </div>
+-      ${(!photos || photos.length === 0) ? `
+-        <div style="text-align:center;padding:40px 20px;color:var(--text-2)">
+-          <div style="margin-bottom:12px"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+-          <div style="font-weight:700;color:var(--text);margin-bottom:6px">Sem fotos ainda</div>
+-          <div style="font-size:13px">Tire a primeira pra acompanhar sua evolução</div>
+-        </div>
+-      ` : `
+-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+-          ${photos.map(p => `
+-            <div style="position:relative;border-radius:12px;overflow:hidden;background:var(--bg-card);border:1px solid var(--line);aspect-ratio:3/4">
+-              <img src="${p.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onclick="openPhotoFull('${p.url}')">
+-              <div style="position:absolute;left:0;right:0;bottom:0;padding:8px;background:linear-gradient(0deg,rgba(0,0,0,.85),transparent);color:#fff">
+-                <div style="font-size:11px;font-weight:700">${formatBR(p.date)}</div>
+-                ${p.weight ? `<div style="font-size:10px;opacity:.8">${p.weight}kg${p.body_fat ? ` · ${p.body_fat}%` : ''}</div>` : ''}
+-              </div>
+-              <button onclick="event.stopPropagation();deleteProgressPhoto('${p.id}','${p.url.split('/').slice(-2).join('/')}')" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:50%;width:26px;height:26px;font-size:14px">×</button>
+-            </div>
+-          `).join("")}
+-        </div>
+-      `}
++      <button class="btn-primary shortcut-action" onclick="openProgressUpload()">+ Nova</button>
++    </div>`;
++}
++
++function renderProgressPhotoCard(p) {
++  const src = escapeAttr(p._src || p.url || "");
++  const full = escapeAttr(p._src || p.url || "");
++  const storagePath = escapeAttr(p._storagePath || "");
++  const meta = [
++    p.weight ? `${Number(p.weight)}kg` : "",
++    p.body_fat ? `${Number(p.body_fat)}%` : ""
++  ].filter(Boolean).join(" · ");
++  return `
++    <div class="photo-card">
++      ${src ? `<img src="${src}" data-full-url="${full}" loading="lazy" alt="Foto de progresso de ${formatBR(p.date)}" onclick="openPhotoFull(this.dataset.fullUrl)" onerror="this.closest('.photo-card').classList.add('is-broken');this.closest('.photo-card').insertAdjacentHTML('afterbegin','<div>Foto indisponível</div>');this.remove()">` : `<div>Foto indisponível</div>`}
++      <div class="photo-meta">
++        <div class="photo-date">${formatBR(p.date)}</div>
++        ${meta ? `<div class="photo-note">${escapeHtml(meta)}</div>` : ""}
++        ${p.notes ? `<div class="photo-note">${escapeHtml(p.notes)}</div>` : ""}
++      </div>
++      <button class="photo-delete" aria-label="Apagar foto" onclick="event.stopPropagation();deleteProgressPhoto('${p.id}','${storagePath}')">×</button>
+     </div>`;
+ }
+ 
++async function renderProgress() {
++  const el = document.getElementById("view-home");
++  if (!el) return;
++  el.innerHTML = `
++    <div class="shortcut-view">
++      ${renderProgressHead()}
++      <div class="shortcut-loading">Carregando fotos…</div>
++    </div>`;
++  try {
++    const photos = await loadProgressPhotos();
++    el.innerHTML = `
++      <div class="shortcut-view">
++        ${renderProgressHead()}
++        ${(!photos || photos.length === 0) ? `
++          <div class="shortcut-empty">
++            <div><svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
++            <div class="title">Sem fotos ainda</div>
++            <div class="sub">Registre a primeira foto para acompanhar sua evolução.</div>
++            <button class="btn-primary" onclick="openProgressUpload()" style="margin-top:14px">Adicionar foto</button>
++          </div>
++        ` : `<div class="photo-grid">${photos.map(renderProgressPhotoCard).join("")}</div>`}
++      </div>`;
++  } catch (e) {
++    console.error("Erro ao carregar fotos de progresso", e);
++    el.innerHTML = `
++      <div class="shortcut-view">
++        ${renderProgressHead()}
++        <div class="shortcut-error">
++          <div class="title">Não foi possível carregar as fotos</div>
++          <div class="sub">${escapeHtml(e.message || "Verifique a conexão e tente novamente.")}</div>
++          <button class="btn-ghost" onclick="renderProgress()" style="margin-top:14px">Tentar novamente</button>
++        </div>
++      </div>`;
++  }
++}
++
+ window.openPhotoFull = (url) => {
++  if (!url) return;
+   const div = document.createElement("div");
+   div.id = "photo-full";
+   div.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9700;display:flex;align-items:center;justify-content:center;padding:20px;cursor:pointer";
+-  div.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;border-radius:12px">`;
++  div.innerHTML = `<img src="${escapeAttr(url)}" style="max-width:100%;max-height:100%;border-radius:12px">`;
+   div.onclick = () => div.remove();
+   document.body.appendChild(div);
+ };
+ 
+ async function openProgressUpload() {
++  const existing = document.getElementById("pp-overlay");
++  if (existing) existing.remove();
+   const sheet = document.createElement("div");
+   sheet.id = "pp-overlay";
+   sheet.innerHTML = `
+     <style>
+-      #pp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9500;display:flex;align-items:flex-end}
+-      #pp-overlay .pc{background:var(--bg);border-top-left-radius:18px;border-top-right-radius:18px;width:100%;max-height:85vh;overflow:auto;padding:16px}
+-      #pp-overlay .row{display:flex;gap:8px;margin:10px 0}
++      #pp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:9500;display:flex;align-items:flex-end;justify-content:center;padding-top:24px}
++      #pp-overlay .pc{background:var(--bg);border:1px solid var(--line);border-bottom:0;border-top-left-radius:18px;border-top-right-radius:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto;padding:16px 16px calc(16px + var(--safe-bottom));box-shadow:var(--shadow)}
++      #pp-overlay .row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+       #pp-overlay input{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg-card);color:var(--text)}
+       #pp-overlay textarea{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font:inherit;min-height:60px;margin:10px 0}
+       #pp-overlay .pp-up{background:var(--brand);color:var(--brand-on);padding:12px;border-radius:10px;border:0;font-weight:700;width:100%;margin-top:12px}
+       #pp-overlay label{font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-top:6px}
++      #pp-overlay .preview{display:none;aspect-ratio:3/4;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg-card);margin:10px 0}
++      #pp-overlay .preview img{width:100%;height:100%;object-fit:cover;display:block}
++      #pp-overlay .pp-up:disabled{opacity:.65}
+     </style>
+     <div class="pc">
+       <div style="display:flex;align-items:center;margin-bottom:8px">
+@@ -8559,6 +8677,7 @@
+         <button onclick="document.getElementById('pp-overlay').remove()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
+       </div>
+       <input type="file" id="pp-file" accept="image/*" capture="user" style="margin-top:8px;width:100%;padding:11px;border-radius:10px;border:1px dashed var(--line);background:var(--bg-card);color:var(--text)">
++      <div class="preview" id="pp-preview"></div>
+       <label>Peso (kg)</label>
+       <div class="row">
+         <input type="number" id="pp-weight" step="0.1" placeholder="Ex: 78.5">
+@@ -8569,6 +8688,13 @@
+     </div>`;
+   document.body.appendChild(sheet);
+   sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.remove(); });
++  document.getElementById("pp-file").onchange = (e) => {
++    const file = e.target.files && e.target.files[0];
++    const preview = document.getElementById("pp-preview");
++    if (!file || !preview) return;
++    preview.style.display = "block";
++    preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Prévia da foto">`;
++  };
+ 
+   document.getElementById("pp-submit").onclick = async () => {
+     const file = document.getElementById("pp-file").files[0];
+@@ -8578,9 +8704,13 @@
+     try {
+       const compressed = await compressImage(file, 1200, 0.85);
+       const path = `${STATE.profile.id}/${Date.now()}.jpg`;
+-      const { error: upErr } = await sb.storage.from("progress").upload(path, compressed);
++      const { error: upErr } = await sb.storage.from(PROGRESS_PHOTO_BUCKET).upload(path, compressed, {
++        cacheControl: "3600",
++        contentType: "image/jpeg",
++        upsert: false
++      });
+       if (upErr) throw upErr;
+-      const { data: pub } = sb.storage.from("progress").getPublicUrl(path);
++      const { data: pub } = sb.storage.from(PROGRESS_PHOTO_BUCKET).getPublicUrl(path);
+       const weight = document.getElementById("pp-weight").value;
+       const fat = document.getElementById("pp-fat").value;
+       const notes = document.getElementById("pp-notes").value || null;
+@@ -8605,8 +8735,14 @@
+ 
+ async function deleteProgressPhoto(id, storagePath) {
+   if (!await showConfirm({ title: "Apagar foto?", msg: "Esta foto de progresso será removida permanentemente.", confirm: "Apagar", danger: true })) return;
+-  await sb.from("progress_photos").delete().eq("id", id);
+-  if (storagePath) await sb.storage.from("progress").remove([storagePath]).catch(()=>null);
++  let path = storagePath;
++  if (!path) {
++    const { data: photo } = await sb.from("progress_photos").select("*").eq("id", id).maybeSingle();
++    path = getProgressPhotoPath(photo);
++  }
++  const { error } = await sb.from("progress_photos").delete().eq("id", id);
++  if (error) { showToast(error.message || "Erro ao apagar foto", "error"); return; }
++  if (path) await sb.storage.from(PROGRESS_PHOTO_BUCKET).remove([path]).catch(()=>null);
+   await renderProgress();
+ }
+ window.deleteProgressPhoto = deleteProgressPhoto;
+@@ -8620,12 +8756,12 @@
+   const { data: logs } = await sb.from("aero_logs")
+     .select("*").eq("student_id", sid).order("date", { ascending: false }).limit(20);
+   el.innerHTML = `
+-    <div style="padding:16px 16px 100px">
+-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+-        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+-        <div style="flex:1">
+-          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Cardio</div>
+-          <div style="display:flex;align-items:center;gap:8px;font-size:20px;font-weight:800"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M15 8l-3 3-2.5 4 3 1"/><path d="M9 20l2-6 2.5 2.5"/><path d="M5 16l2-2 2 1"/></svg> Aeróbio</div>
++    <div class="shortcut-view">
++      <div class="shortcut-head">
++        <button class="shortcut-back" onclick="navTo('home')" aria-label="Voltar">←</button>
++        <div class="shortcut-copy">
++          <div class="shortcut-eyebrow">Cardio</div>
++          <div class="shortcut-title"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M15 8l-3 3-2.5 4 3 1"/><path d="M9 20l2-6 2.5 2.5"/><path d="M5 16l2-2 2 1"/></svg> Aeróbio</div>
+         </div>
+       </div>
+       <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px">
+@@ -8755,12 +8891,12 @@
+     byEx[r.exercise_name].push(r);
+   });
+   el.innerHTML = `
+-    <div style="padding:16px 16px 100px">
+-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+-        <button class="btn-ghost" onclick="navTo('home')" style="padding:8px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text)">←</button>
+-        <div style="flex:1">
+-          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">Calibração</div>
+-          <div style="font-size:20px;font-weight:800">Testes de força (1RM)</div>
++    <div class="shortcut-view">
++      <div class="shortcut-head">
++        <button class="shortcut-back" onclick="navTo('home')" aria-label="Voltar">←</button>
++        <div class="shortcut-copy">
++          <div class="shortcut-eyebrow">Calibração</div>
++          <div class="shortcut-title">Testes de força (1RM)</div>
+         </div>
+       </div>
+       <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px">
+--- /dev/null	2026-05-04 21:15:43
++++ outputs/qa-student-profile-shortcuts-tests.mjs	2026-05-04 21:15:24
+@@ -0,0 +1,21 @@
++import { readFileSync } from "node:fs";
++import assert from "node:assert/strict";
++
++const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
++
++assert.match(html, /\.shortcut-view\s*\{/, "student shortcut shared layout CSS must exist");
++assert.match(html, /function getProgressPhotoPath\(photo\)/, "progress photo storage path resolver must exist");
++assert.match(html, /function resolveProgressPhotoUrl\(photo\)/, "progress photo URL resolver must exist");
++assert.match(html, /createSignedUrl\(path,\s*60 \* 60\)/, "progress photos should support private bucket signed URLs");
++assert.match(html, /function loadProgressPhotos\(\)/, "progress photos should load through a guarded loader");
++assert.match(html, /class="shortcut-loading"/, "progress menu should show a loading state");
++assert.match(html, /class="shortcut-error"/, "progress menu should show an error state");
++assert.match(html, /class="photo-grid"/, "progress gallery should use the polished grid");
++assert.match(html, /data-full-url=/, "full photo preview should avoid unsafe inline URL interpolation");
++assert.doesNotMatch(html, /p\.url\.split\('\/'\)\.slice\(-2\)/, "delete should not derive storage path from the last URL segments");
++
++for (const fn of ["renderHistory", "renderRanking", "renderProgress", "renderAero", "renderOneRM"]) {
++  assert.ok(html.includes(`async function ${fn}(`), `${fn} should be present`);
++}
++
++console.log("Student shortcut and progress photo static QA checks passed");
