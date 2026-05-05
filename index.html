@@ -7397,6 +7397,12 @@ let _POST_SIGN_IN_RUNNING = false;
 let _SW_RELOADING = false;
 
 function showStuckEscape(reason) {
+  if (_BOOT_DONE && STATE.profile) {
+    console.warn("[stuck suppressed after boot]", reason);
+    showToast(reason || "Conexão instável. O app continua aberto.", "error");
+    repairInteractionLayer("stuck-suppressed");
+    return;
+  }
   if (document.getElementById("stuck-overlay")) return;
   const div = document.createElement("div");
   div.id = "stuck-overlay";
@@ -7480,10 +7486,20 @@ async function boot() {
     // Durante o boot, getSession() abaixo cuida do postSignIn inicial.
     sb.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN") {
+        if (STATE.profile && session?.user?.id === STATE.profile.id) {
+          STATE.user = session.user;
+          repairInteractionLayer("auth-signed-in-existing-session");
+          return;
+        }
         if (_BOOT_DONE && !_POST_SIGN_IN_RUNNING) {
           await postSignIn().catch(e => {
             console.error("postSignIn (auth event):", e);
-            showStuckEscape("Erro ao carregar perfil.");
+            if (STATE.profile) {
+              showToast("Sessão reconectada, mas o perfil demorou para atualizar.", "error");
+              repairInteractionLayer("auth-postsign-failed-existing-profile");
+            } else {
+              showStuckEscape("Erro ao carregar perfil.");
+            }
           });
         }
       } else if (event === "SIGNED_OUT") {
