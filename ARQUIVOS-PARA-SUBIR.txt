@@ -1,5 +1,0 @@
-ARQUIVOS-PARA-SUBIR.txt
-index.html
-outputs/fix-app-resume-interactions-v3.patch
-outputs/index.html
-outputs/qa-app-resume-interactions-tests.mjs
