@@ -3111,6 +3111,32 @@ function scheduleBackgroundRestNotification() {
 function cancelBackgroundRestNotification() {
   postRestTimerToServiceWorker("CANCEL_REST_TIMER", { id: STATE.timer?.id || readPersistedTimer()?.id || "all" });
 }
+async function scheduleServerRestPush(seconds, exerciseName) {
+  try {
+    if (!sb || !STATE.user || !STATE.timer?.id) return;
+    await sb.functions.invoke("rest-timer-push", {
+      body: {
+        action: "schedule",
+        timer_id: STATE.timer.id,
+        fire_at: new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString(),
+        exercise_name: exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série"
+      }
+    });
+  } catch(e) {
+    console.warn("[rest timer server schedule]", e);
+  }
+}
+async function cancelServerRestPush(timerId) {
+  try {
+    const id = timerId || STATE.timer?.id || readPersistedTimer()?.id;
+    if (!sb || !STATE.user || !id) return;
+    await sb.functions.invoke("rest-timer-push", {
+      body: { action: "cancel", timer_id: id }
+    });
+  } catch(e) {
+    console.warn("[rest timer server cancel]", e);
+  }
+}
 function scheduleTimerChromeCleanup(delay = 800) {
   if (_TIMER_CLEANUP_HANDLE) clearTimeout(_TIMER_CLEANUP_HANDLE);
   _TIMER_CLEANUP_HANDLE = setTimeout(() => {
@@ -3207,6 +3233,7 @@ function startTimer(sec, label, onDone) {
   STATE.timer.exerciseName = exerciseName;
   STATE.timer.onDone = onDone || null;
   persistTimerState();
+  scheduleServerRestPush(sec, exerciseName);
   document.getElementById("timer-bar").classList.add("active");
   document.getElementById("timer-fs")?.classList.remove("done");
   updateTimerLabels();
@@ -3293,6 +3320,7 @@ function finishTimer() {
   STATE.timer.status = "finished";
   _releaseWakeLock();
   cancelBackgroundRestNotification();
+  cancelServerRestPush(STATE.timer.id);
   notifyRestFinished(STATE.timer.exerciseName || STATE.timer.label).catch(()=>{});
   clearPersistedTimer();
   document.getElementById("timer-bar")?.classList.add("done");
@@ -3329,10 +3357,12 @@ function finishTimer() {
   } catch(e) {}
 }
 function cancelTimer() {
+  const timerId = STATE.timer?.id;
   if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
   resetTimerState();
   _releaseWakeLock();
   cancelBackgroundRestNotification();
+  cancelServerRestPush(timerId);
   clearPersistedTimer();
 }
 function closeTimer() {
