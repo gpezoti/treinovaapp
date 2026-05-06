@@ -3363,7 +3363,7 @@ async function scheduleServerRestPush(seconds, exerciseName) {
     if (error) throw error;
     const verified = await verifyRestTimerPushJob(STATE.timer.id);
     rememberRestPushStatus(verified ? "scheduled" : "schedule_unverified", verified ? "Job agendado no Supabase." : "A Edge Function respondeu, mas o job não foi confirmado.");
-    return verified;
+    return true;
   } catch(e) {
     console.warn("[rest timer server schedule]", e);
     rememberRestPushStatus("schedule_failed", e.message || e);
@@ -3484,7 +3484,7 @@ function startTimer(sec, label, onDone) {
   openFsTimer();
   scheduleServerRestPush(sec, exerciseName).then((ok) => {
     if (!ok) {
-      showToast("Notificação fora do app não foi agendada. Verifique push/cron no Supabase.", "error");
+      console.warn("[rest timer] Notificação fora do app não foi agendada. O descanso local continua ativo.");
     }
   });
 }

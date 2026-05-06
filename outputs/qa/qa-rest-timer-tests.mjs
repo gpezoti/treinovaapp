@@ -52,6 +52,11 @@ const checks = [
       html.includes("?view=workout&restTimer=1"),
   },
   {
+    name: "falha de push remoto nao mostra erro tecnico para aluno",
+    pass: !html.includes("Verifique push/cron no Supabase") &&
+      html.includes("O descanso local continua ativo."),
+  },
+  {
     name: "timer garante subscription antes de agendar backend",
     pass: html.includes("async function subscribePushNotifications(opts = {})") &&
       html.includes("throwOnError") &&
