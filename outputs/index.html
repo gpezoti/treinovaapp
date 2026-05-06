@@ -3172,13 +3172,19 @@ function markPersistedTimerNotified(state) {
 }
 async function ensureRestNotificationPermission() {
   if (!("Notification" in window)) return false;
-  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "granted") {
+    try {
+      return Boolean(await subscribePushNotifications({ throwOnError: true }));
+    } catch(e) {
+      console.warn("[rest push subscription]", e);
+      return false;
+    }
+  }
   if (Notification.permission === "denied") return false;
   try {
     const permission = await Notification.requestPermission();
     if (permission === "granted") {
-      subscribePushNotifications().catch(()=>{});
-      return true;
+      return Boolean(await subscribePushNotifications({ throwOnError: true }));
     }
   } catch(e) {}
   return false;
@@ -3241,7 +3247,12 @@ function cancelBackgroundRestNotification() {
 async function scheduleServerRestPush(seconds, exerciseName) {
   try {
     if (!sb || !STATE.user || !STATE.timer?.id) return;
-    await sb.functions.invoke("rest-timer-push", {
+    const pushReady = await ensureRestNotificationPermission();
+    if (!pushReady) {
+      console.warn("[rest timer server schedule] Push não está pronto. Verifique permissão, PWA instalado e tabela push_subscriptions.");
+      return;
+    }
+    const { error } = await sb.functions.invoke("rest-timer-push", {
       body: {
         action: "schedule",
         timer_id: STATE.timer.id,
@@ -3250,6 +3261,7 @@ async function scheduleServerRestPush(seconds, exerciseName) {
         url: `${location.pathname || "/"}?view=workout&restTimer=1`
       }
     });
+    if (error) throw error;
   } catch(e) {
     console.warn("[rest timer server schedule]", e);
   }
@@ -3344,7 +3356,6 @@ document.addEventListener('visibilitychange', () => {
 function startTimer(sec, label, onDone) {
   cancelTimer();
   _acquireWakeLock();
-  ensureRestNotificationPermission().catch(()=>{});
   const exerciseName = label || "Próxima série";
   const startTimestamp = Date.now();
   STATE.timer.id = `rest-${startTimestamp}`;
@@ -8802,9 +8813,25 @@ function urlBase64ToUint8Array(base64String) {
   return new Uint8Array([...raw].map((c) => c.charCodeAt(0)));
 }
 
-async function subscribePushNotifications() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
-  if (!VAPID_PUBLIC_KEY) { console.warn("VAPID key não configurada — push desligado"); return null; }
+async function subscribePushNotifications(opts = {}) {
+  const throwOnError = opts.throwOnError === true;
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (throwOnError) throw new Error("Este navegador não suporta Web Push.");
+    return null;
+  }
+  if (!VAPID_PUBLIC_KEY) {
+    const err = new Error("VAPID key não configurada — push desligado");
+    console.warn(err.message);
+    if (throwOnError) throw err;
+    return null;
+  }
+  const userId = STATE.profile?.id || STATE.user?.id;
+  if (!userId) {
+    const err = new Error("Usuário não carregado para salvar push subscription.");
+    if (throwOnError) throw err;
+    console.warn(err.message);
+    return null;
+  }
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
@@ -8816,14 +8843,19 @@ async function subscribePushNotifications() {
   // Salva no Supabase (upsert by endpoint)
   try {
     const json = sub.toJSON();
-    await sb.from("push_subscriptions").upsert({
-      user_id: STATE.profile.id,
+    const { error } = await sb.from("push_subscriptions").upsert({
+      user_id: userId,
       endpoint: json.endpoint,
       p256dh: json.keys.p256dh,
       auth: json.keys.auth,
-      user_agent: navigator.userAgent
+      user_agent: navigator.userAgent,
+      last_seen_at: new Date().toISOString()
     }, { onConflict: "endpoint" });
-  } catch (e) { console.warn("save subscription", e); }
+    if (error) throw error;
+  } catch (e) {
+    console.warn("save subscription", e);
+    if (throwOnError) throw e;
+  }
   return sub;
 }
 

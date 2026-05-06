@@ -43,10 +43,18 @@ const checks = [
   {
     name: "timer agenda web push real no backend",
     pass: html.includes("scheduleServerRestPush") &&
+      html.includes("const pushReady = await ensureRestNotificationPermission()") &&
       html.includes('sb.functions.invoke("rest-timer-push"') &&
       html.includes('action: "schedule"') &&
       html.includes('action: "cancel"') &&
       html.includes("?view=workout&restTimer=1"),
+  },
+  {
+    name: "timer garante subscription antes de agendar backend",
+    pass: html.includes("async function subscribePushNotifications(opts = {})") &&
+      html.includes("throwOnError") &&
+      html.includes("last_seen_at: new Date().toISOString()") &&
+      html.includes('return Boolean(await subscribePushNotifications({ throwOnError: true }))'),
   },
   {
     name: "clique na notificacao volta para treino ativo",
@@ -75,6 +83,7 @@ const checks = [
 
 const edge = fs.readFileSync("outputs/edge-functions/rest-timer-push/index.ts", "utf8");
 const sql = fs.readFileSync("sql/rest_timer_push_jobs_2026_05_05.sql", "utf8");
+const pushSql = fs.readFileSync("sql/push_subscriptions_2026_05_06.sql", "utf8");
 
 checks.push(
   {
@@ -92,6 +101,16 @@ checks.push(
       sql.includes("idx_rest_timer_push_jobs_due") &&
       sql.includes("enable row level security") &&
       sql.includes("treinova-rest-timer-push-every-minute"),
+  },
+  {
+    name: "migration cria tabela segura de push subscriptions",
+    pass: pushSql.includes("create table if not exists public.push_subscriptions") &&
+      pushSql.includes("endpoint text not null unique") &&
+      pushSql.includes("p256dh text not null") &&
+      pushSql.includes("auth text not null") &&
+      pushSql.includes("last_seen_at") &&
+      pushSql.includes("enable row level security") &&
+      pushSql.includes("push subscriptions owner insert"),
   },
 );
 
