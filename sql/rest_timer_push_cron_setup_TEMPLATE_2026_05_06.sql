@@ -15,7 +15,16 @@
 --    SUPABASE_SERVICE_ROLE_KEY
 --    SUPABASE_ANON_KEY
 --    REST_TIMER_CRON_SECRET
--- 3. Troque os placeholders abaixo.
+-- 3. Troque os placeholders abaixo:
+--    SEU-PROJETO
+--    MESMO_VALOR_DE_REST_TIMER_CRON_SECRET
+--    SUPABASE_ANON_KEY
+--
+-- Observação importante:
+-- Se a Edge Function estiver com JWT verification ativa, a chamada do cron
+-- precisa enviar Authorization. A anon key é pública e serve para passar pela
+-- verificação de gateway; a autorização real do processamento continua sendo
+-- o header x-cron-secret validado dentro da função.
 
 create extension if not exists pg_cron with schema extensions;
 create extension if not exists pg_net with schema extensions;
@@ -33,6 +42,8 @@ select cron.schedule(
     url := 'https://SEU-PROJETO.supabase.co/functions/v1/rest-timer-push',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
+      'Authorization', 'Bearer SUPABASE_ANON_KEY',
+      'apikey', 'SUPABASE_ANON_KEY',
       'x-cron-secret', 'MESMO_VALOR_DE_REST_TIMER_CRON_SECRET'
     ),
     body := '{"action":"process"}'::jsonb

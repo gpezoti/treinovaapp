@@ -3244,13 +3244,38 @@ function scheduleBackgroundRestNotification() {
 function cancelBackgroundRestNotification() {
   postRestTimerToServiceWorker("CANCEL_REST_TIMER", { id: STATE.timer?.id || readPersistedTimer()?.id || "all" });
 }
+function rememberRestPushStatus(status, detail = "") {
+  try {
+    localStorage.setItem("treinova_rest_push_status", JSON.stringify({
+      status,
+      detail: String(detail || "").slice(0, 240),
+      at: new Date().toISOString()
+    }));
+  } catch(e) {}
+}
+async function verifyRestTimerPushJob(timerId) {
+  try {
+    if (!timerId) return false;
+    const { data, error } = await sb.from("rest_timer_push_jobs")
+      .select("id,status,fire_at")
+      .eq("timer_id", timerId)
+      .eq("status", "scheduled")
+      .maybeSingle();
+    if (error) throw error;
+    return Boolean(data);
+  } catch(e) {
+    console.warn("[rest timer verify job]", e);
+    return false;
+  }
+}
 async function scheduleServerRestPush(seconds, exerciseName) {
   try {
-    if (!sb || !STATE.user || !STATE.timer?.id) return;
+    if (!sb || !STATE.user || !STATE.timer?.id) return false;
     const pushReady = await ensureRestNotificationPermission();
     if (!pushReady) {
       console.warn("[rest timer server schedule] Push não está pronto. Verifique permissão, PWA instalado e tabela push_subscriptions.");
-      return;
+      rememberRestPushStatus("subscription_failed", "Permissão/assinatura Web Push não está pronta.");
+      return false;
     }
     const { error } = await sb.functions.invoke("rest-timer-push", {
       body: {
@@ -3262,8 +3287,13 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       }
     });
     if (error) throw error;
+    const verified = await verifyRestTimerPushJob(STATE.timer.id);
+    rememberRestPushStatus(verified ? "scheduled" : "schedule_unverified", verified ? "Job agendado no Supabase." : "A Edge Function respondeu, mas o job não foi confirmado.");
+    return verified;
   } catch(e) {
     console.warn("[rest timer server schedule]", e);
+    rememberRestPushStatus("schedule_failed", e.message || e);
+    return false;
   }
 }
 async function cancelServerRestPush(timerId) {
@@ -3372,13 +3402,17 @@ function startTimer(sec, label, onDone) {
   STATE.timer.exerciseName = exerciseName;
   STATE.timer.onDone = onDone || null;
   persistTimerState();
-  scheduleServerRestPush(sec, exerciseName);
   document.getElementById("timer-bar").classList.add("active");
   document.getElementById("timer-fs")?.classList.remove("done");
   updateTimerLabels();
   setTimerIcon(false);
   tickTimer();
   openFsTimer();
+  scheduleServerRestPush(sec, exerciseName).then((ok) => {
+    if (!ok) {
+      showToast("Notificação fora do app não foi agendada. Verifique push/cron no Supabase.", "error");
+    }
+  });
 }
 
 function restoreTimerIfActive() {

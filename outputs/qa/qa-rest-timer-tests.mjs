@@ -45,6 +45,8 @@ const checks = [
     pass: html.includes("scheduleServerRestPush") &&
       html.includes("const pushReady = await ensureRestNotificationPermission()") &&
       html.includes('sb.functions.invoke("rest-timer-push"') &&
+      html.includes("verifyRestTimerPushJob") &&
+      html.includes("rememberRestPushStatus") &&
       html.includes('action: "schedule"') &&
       html.includes('action: "cancel"') &&
       html.includes("?view=workout&restTimer=1"),
@@ -84,6 +86,7 @@ const checks = [
 const edge = fs.readFileSync("outputs/edge-functions/rest-timer-push/index.ts", "utf8");
 const sql = fs.readFileSync("sql/rest_timer_push_jobs_2026_05_05.sql", "utf8");
 const pushSql = fs.readFileSync("sql/push_subscriptions_2026_05_06.sql", "utf8");
+const cronSql = fs.readFileSync("sql/rest_timer_push_cron_setup_TEMPLATE_2026_05_06.sql", "utf8");
 
 checks.push(
   {
@@ -111,6 +114,12 @@ checks.push(
       pushSql.includes("last_seen_at") &&
       pushSql.includes("enable row level security") &&
       pushSql.includes("push subscriptions owner insert"),
+  },
+  {
+    name: "template do cron passa pela verificacao JWT da edge function",
+    pass: cronSql.includes("'Authorization', 'Bearer SUPABASE_ANON_KEY'") &&
+      cronSql.includes("'apikey', 'SUPABASE_ANON_KEY'") &&
+      cronSql.includes("'x-cron-secret', 'MESMO_VALOR_DE_REST_TIMER_CRON_SECRET'"),
   },
 );
 
