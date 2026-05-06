@@ -8983,9 +8983,15 @@ async function requestPushPermission() {
   if (!("Notification" in window)) { showToast("Seu navegador não suporta push", "error"); return false; }
   const r = await Notification.requestPermission();
   if (r === "granted") {
-    await subscribePushNotifications();
-    showToast("Notificações ativadas", "success");
-    return true;
+    try {
+      await subscribePushNotifications({ throwOnError: true });
+      showToast("Notificações ativadas", "success");
+      return true;
+    } catch (e) {
+      console.warn("[push permission] assinatura falhou", e);
+      showToast("Permissão aprovada, mas o push fora do app ainda não está pronto.", "error");
+      return false;
+    }
   } else if (r === "denied") {
     showToast("Notificações bloqueadas. Habilite nas config. do navegador.", "error");
   }
