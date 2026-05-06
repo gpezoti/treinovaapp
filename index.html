@@ -3707,12 +3707,20 @@ async function isUserPaymentBlocked(userId) {
 }
 
 function renderCoachFinanceTabs() {
+  const ownOpen = (STATE.myPayments || []).filter(p => {
+    const status = paymentEffectiveStatus(p);
+    return status === "overdue" || status === "upcoming" || status === "pending";
+  }).length;
+  const receivablesOpen = (STATE.coachPayments || []).filter(p => Number(p.open_count || 0) > 0).length;
   const tabs = [
-    { id: "mine", label: "Minha mensalidade" },
-    { id: "receivables", label: "Recebimentos" }
+    { id: "mine", label: "Minha mensalidade", sub: ownOpen ? `${ownOpen} em aberto` : "Tudo em dia" },
+    { id: "receivables", label: "Recebimentos", sub: receivablesOpen ? `${receivablesOpen} aluno(s)` : "Alunos" }
   ];
-  return `<div class="student-tabs" style="margin:0 0 16px;overflow-x:auto;-webkit-overflow-scrolling:touch">
-    ${tabs.map(t => `<button class="${_coachFinanceTab === t.id ? 'active' : ''}" onclick="setCoachFinanceTab('${t.id}')">${t.label}</button>`).join("")}
+  return `<div class="coach-finance-tabs" role="tablist" aria-label="Financeiro do professor">
+    ${tabs.map(t => `<button type="button" role="tab" aria-selected="${_coachFinanceTab === t.id ? 'true' : 'false'}" class="coach-finance-tab ${_coachFinanceTab === t.id ? 'active' : ''}" onclick="setCoachFinanceTab('${t.id}')">
+      <span class="coach-finance-tab-label">${t.label}</span>
+      <span class="coach-finance-tab-sub">${t.sub}</span>
+    </button>`).join("")}
   </div>`;
 }
 
