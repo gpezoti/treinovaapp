@@ -2468,6 +2468,80 @@ async function completeSession() {
   }
 }
 
+function canManageCompletedWorkoutSession() {
+  return Boolean(
+    STATE.profile?.role === "student" &&
+    STATE.currentSession &&
+    STATE.currentSession.student_id === STATE.profile.id &&
+    STATE.currentSession.date === todayISO() &&
+    STATE.currentSession.status === "completed"
+  );
+}
+
+async function mutateCompletedWorkoutSession(action) {
+  if (!canManageCompletedWorkoutSession()) {
+    showToast("Essa ação só vale para seu treino concluído de hoje.", "error");
+    return false;
+  }
+  const labels = {
+    reopen: "reabrir treino",
+    restart: "reiniciar treino",
+    delete: "apagar treino"
+  };
+  try {
+    const { error } = await sb.rpc("manage_my_workout_session", {
+      p_session_id: STATE.currentSession.id,
+      p_action: action
+    });
+    if (error) throw error;
+    if (action === "delete") {
+      STATE.currentSession = null;
+      STATE.setLogs = [];
+      await loadPeriodization();
+      showToast("Treino de hoje apagado", "success");
+      navTo("home");
+      return true;
+    }
+    await loadOrCreateSession(STATE.selectedDate || todayISO(), STATE.selectedWorkout, STATE.selectedIntensity);
+    if (action === "restart") STATE.setLogs = [];
+    showToast(action === "restart" ? "Treino reiniciado" : "Treino reaberto para continuar", "success");
+    renderWorkout();
+    return true;
+  } catch(e) {
+    console.error(`[${labels[action] || "ajustar treino"}]`, e);
+    showToast("Erro: aplique a migration student_workout_session_recovery_2026_05_06.sql no Supabase.", "error");
+    return false;
+  }
+}
+
+window.reopenCompletedWorkout = async function() {
+  await mutateCompletedWorkoutSession("reopen");
+};
+
+window.restartCompletedWorkout = async function() {
+  const ok = await showConfirm({
+    title: "Reiniciar treino de hoje?",
+    msg: "As séries já marcadas serão apagadas e o treino ficará pronto para começar novamente.",
+    confirm: "Reiniciar",
+    cancel: "Cancelar",
+    danger: true
+  });
+  if (!ok) return;
+  await mutateCompletedWorkoutSession("restart");
+};
+
+window.deleteTodayCompletedWorkout = async function() {
+  const ok = await showConfirm({
+    title: "Apagar treino concluído?",
+    msg: "A conclusão e as séries registradas hoje serão apagadas. Você poderá iniciar o treino novamente depois.",
+    confirm: "Apagar",
+    cancel: "Cancelar",
+    danger: true
+  });
+  if (!ok) return;
+  await mutateCompletedWorkoutSession("delete");
+};
+
 async function approveStudent(id, status) {
   if (STATE.profile?.role !== "coach") {
     showToast("Apenas professores podem aprovar, recusar ou reativar alunos.", "error");
@@ -5599,6 +5673,7 @@ async function renderWorkout() {
   const totalTarget = W.exercises.reduce((s,e) => s + (e.sets_count || 0), 0);
   const doneCount = STATE.setLogs.filter(s => s.done).length;
   const allDone = totalTarget > 0 && doneCount >= totalTarget;
+  const canRecoverCompletedToday = completed && canManageCompletedWorkoutSession();
 
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
@@ -5625,6 +5700,17 @@ async function renderWorkout() {
     </div>
 
     ${completed ? `<div class="complete-banner show"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Treino concluído! Bom trabalho.</div>` : ""}
+    ${canRecoverCompletedToday ? `
+      <div class="card" style="margin-bottom:14px;border-color:rgba(0,180,255,.35);background:linear-gradient(135deg,var(--brand-soft),var(--bg-card));">
+        <div class="fw-700 text-sm" style="margin-bottom:4px">Concluiu antes da hora?</div>
+        <div class="text-xs muted" style="line-height:1.45;margin-bottom:12px">Você pode continuar editando as séries, reiniciar o treino do zero ou apagar a conclusão de hoje.</div>
+        <div class="mobile-action-row" style="gap:8px">
+          <button class="mini-btn mini-btn-primary" onclick="reopenCompletedWorkout()">Continuar treino</button>
+          <button class="mini-btn mini-btn-ghost" onclick="restartCompletedWorkout()">Reiniciar</button>
+          <button class="mini-btn mini-btn-danger" onclick="deleteTodayCompletedWorkout()">Apagar</button>
+        </div>
+      </div>
+    ` : ""}
 
     <div class="section-title">Exercícios do treino</div>
     <div class="ux-helper">Toque em um exercício para abrir séries, carga, descanso e instruções.</div>
