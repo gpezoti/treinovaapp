@@ -3361,6 +3361,24 @@ async function verifyRestTimerPushJob(timerId) {
     return false;
   }
 }
+async function upsertRestTimerPushJobDirect(timerId, seconds, exerciseName) {
+  if (!sb || !STATE.user?.id || !timerId) return false;
+  const fireAt = new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString();
+  const { error } = await sb.from("rest_timer_push_jobs").upsert({
+    user_id: STATE.user.id,
+    timer_id: timerId,
+    exercise_name: exerciseName || "Próxima série",
+    fire_at: fireAt,
+    status: "scheduled",
+    attempts: 0,
+    last_error: null,
+    sent_at: null,
+    cancelled_at: null,
+    updated_at: new Date().toISOString()
+  }, { onConflict: "user_id,timer_id" });
+  if (error) throw error;
+  return true;
+}
 async function scheduleServerRestPush(seconds, exerciseName) {
   try {
     if (!sb || !STATE.user || !STATE.timer?.id) return false;
@@ -3370,19 +3388,24 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       rememberRestPushStatus("subscription_failed", "Permissão/assinatura Web Push não está pronta.");
       return false;
     }
+    const fireAt = new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString();
     const { error } = await sb.functions.invoke("rest-timer-push", {
       body: {
         action: "schedule",
         timer_id: STATE.timer.id,
-        fire_at: new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString(),
+        fire_at: fireAt,
         exercise_name: exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
         url: `${location.pathname || "/"}?view=workout&restTimer=1`
       }
     });
-    if (error) throw error;
-    const verified = await verifyRestTimerPushJob(STATE.timer.id);
+    if (error) console.warn("[rest timer server schedule invoke]", error);
+    let verified = await verifyRestTimerPushJob(STATE.timer.id);
+    if (!verified) {
+      await upsertRestTimerPushJobDirect(STATE.timer.id, seconds, exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série");
+      verified = await verifyRestTimerPushJob(STATE.timer.id);
+    }
     rememberRestPushStatus(verified ? "scheduled" : "schedule_unverified", verified ? "Job agendado no Supabase." : "A Edge Function respondeu, mas o job não foi confirmado.");
-    return true;
+    return verified;
   } catch(e) {
     console.warn("[rest timer server schedule]", e);
     rememberRestPushStatus("schedule_failed", e.message || e);
@@ -9062,17 +9085,24 @@ window.testRestTimerPushDelayed = async function() {
       return;
     }
     const timerId = `manual-test-${Date.now()}`;
+    const fireAt = new Date(Date.now() + 15_000).toISOString();
     const { data, error } = await sb.functions.invoke("rest-timer-push", {
       body: {
         action: "schedule",
         timer_id: timerId,
-        fire_at: new Date(Date.now() + 15_000).toISOString(),
+        fire_at: fireAt,
         exercise_name: "Teste bloqueado"
       }
     });
-    if (error) throw error;
+    if (error) console.warn("[rest push delayed invoke]", error);
     if (data?.error) throw new Error(data.error);
-    showToast("Bloqueie o celular agora. Teste em 15s.", "success");
+    let verified = await verifyRestTimerPushJob(timerId);
+    if (!verified) {
+      await upsertRestTimerPushJobDirect(timerId, 15, "Teste bloqueado");
+      verified = await verifyRestTimerPushJob(timerId);
+    }
+    if (!verified) throw new Error("Não consegui gravar o job de push.");
+    showToast("Job gravado. Bloqueie o celular agora. Teste em 15s.", "success");
   } catch(e) {
     console.warn("[rest push delayed test]", e);
     showToast("Erro no teste bloqueado: " + await getFunctionErrorMessage(e), "error");
