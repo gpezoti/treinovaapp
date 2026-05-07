@@ -2426,8 +2426,7 @@ async function completeSession() {
   try {
   // calcula volume e duração
   const totalVolume = STATE.setLogs.filter(s => s.done && s.load_kg).reduce((acc, s) => acc + (s.load_kg || 0), 0);
-  const startedAt = STATE.currentSession.started_at ? new Date(STATE.currentSession.started_at).getTime() : Date.now();
-  const duration = Math.floor((Date.now() - startedAt) / 1000);
+  const duration = calculateWorkoutDurationSeconds();
   const { error } = await sb.from("sessions").update({
     status: "completed",
     completed_at: new Date().toISOString(),
@@ -2466,6 +2465,25 @@ async function completeSession() {
       stillBtn.textContent = "Concluir";
     }
   }
+}
+
+function calculateWorkoutDurationSeconds() {
+  const now = Date.now();
+  const startedAtRaw = STATE.currentSession?.started_at ? new Date(STATE.currentSession.started_at).getTime() : now;
+  const startedAt = Number.isFinite(startedAtRaw) ? startedAtRaw : now;
+  const wallSeconds = Math.max(60, Math.floor((now - startedAt) / 1000));
+  const doneTimes = (STATE.setLogs || [])
+    .filter(s => s.done && s.done_at)
+    .map(s => new Date(s.done_at).getTime())
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  const maxPlausible = 4 * 60 * 60;
+  if (wallSeconds <= maxPlausible) return wallSeconds;
+  if (doneTimes.length >= 2) {
+    const activeSpan = Math.floor((doneTimes[doneTimes.length - 1] - doneTimes[0]) / 1000);
+    return Math.max(5 * 60, Math.min(maxPlausible, activeSpan + 10 * 60));
+  }
+  return Math.min(maxPlausible, wallSeconds);
 }
 
 function canManageCompletedWorkoutSession() {
@@ -4749,6 +4767,15 @@ window.openNewTrainerSheet = function() {
     <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Cancelar</button>
   `);
 };
+async function getFunctionErrorMessage(error, fallback = "tente novamente") {
+  try {
+    if (error?.context && typeof error.context.json === "function") {
+      const body = await error.context.json();
+      if (body?.error) return body.error;
+    }
+  } catch(e) {}
+  return error?.message || fallback;
+}
 window.submitNewTrainer = async function() {
   // [C-NEW-03 FIX] Guard: apenas admin pode criar treinadores
   if (!STATE.profile || STATE.profile.role !== "admin") {
@@ -4778,7 +4805,7 @@ window.submitNewTrainer = async function() {
     await loadTrainers(); renderTrainers();
   } catch (e) {
     console.error("[submitNewTrainer] Falha:", e);
-    showToast("Erro: " + (e.message || "tente novamente"), "error");
+    showToast("Erro: " + await getFunctionErrorMessage(e), "error");
   } finally {
     setBusy(false);
   }
@@ -6947,7 +6974,7 @@ window.submitNewStudent = async function() {
     renderStudents();
   } catch (e) {
     console.error("Falha criar aluno:", e);
-    showToast("Erro: " + (e.message || "tente novamente"), "error");
+    showToast("Erro: " + await getFunctionErrorMessage(e), "error");
   } finally {
     setBusy(false);
   }
