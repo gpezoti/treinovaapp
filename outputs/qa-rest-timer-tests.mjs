@@ -43,10 +43,43 @@ const checks = [
   {
     name: "timer agenda web push real no backend",
     pass: html.includes("scheduleServerRestPush") &&
+      html.includes("const pushReady = await ensureRestNotificationPermission()") &&
       html.includes('sb.functions.invoke("rest-timer-push"') &&
+      html.includes("verifyRestTimerPushJob") &&
+      html.includes("rememberRestPushStatus") &&
       html.includes('action: "schedule"') &&
       html.includes('action: "cancel"') &&
       html.includes("?view=workout&restTimer=1"),
+  },
+  {
+    name: "falha de push remoto nao mostra erro tecnico para aluno",
+    pass: !html.includes("Verifique push/cron no Supabase") &&
+      html.includes("O descanso local continua ativo."),
+  },
+  {
+    name: "timer garante subscription antes de agendar backend",
+    pass: html.includes("async function subscribePushNotifications(opts = {})") &&
+      html.includes("throwOnError") &&
+      html.includes("isWebPushRuntimeSupported") &&
+      html.includes("last_seen_at: new Date().toISOString()") &&
+      html.includes('return Boolean(await subscribePushNotifications({ throwOnError: true }))'),
+  },
+  {
+    name: "timer expoe teste e diagnostico de push remoto",
+    pass: html.includes("testRestTimerPushNow") &&
+      html.includes("diagnoseRestTimerPush") &&
+      html.includes('action: "test"') &&
+      html.includes('action: "diagnose"') &&
+      html.includes("Testar push agora") &&
+      html.includes("Diagnóstico push"),
+  },
+  {
+    name: "onboarding nao marca push como ativo quando subscription falha",
+    pass: html.includes("async function requestPushPermission()") &&
+      html.includes("await subscribePushNotifications({ throwOnError: true })") &&
+      html.includes("Permissão aprovada, mas o push fora do app ainda não está pronto.") &&
+      html.includes('return false;') &&
+      !html.includes("await subscribePushNotifications();\n    showToast(\"Notificações ativadas\""),
   },
   {
     name: "clique na notificacao volta para treino ativo",
@@ -65,25 +98,34 @@ const checks = [
   },
   {
     name: "service worker aceita notificacao local",
-    pass: sw.includes('VERSION = "v8"') &&
+    pass: sw.includes('VERSION = "v9"') &&
       sw.includes('type === "SHOW_NOTIFICATION"') &&
       sw.includes('type === "SCHEDULE_REST_TIMER"') &&
       sw.includes('type === "CANCEL_REST_TIMER"') &&
-      sw.includes("self.registration.showNotification"),
+      sw.includes("self.registration.showNotification") &&
+      sw.includes("silent: false"),
   },
 ];
 
 const edge = fs.readFileSync("outputs/edge-functions/rest-timer-push/index.ts", "utf8");
 const sql = fs.readFileSync("sql/rest_timer_push_jobs_2026_05_05.sql", "utf8");
+const pushSql = fs.readFileSync("sql/push_subscriptions_2026_05_06.sql", "utf8");
+const cronSql = fs.readFileSync("sql/rest_timer_push_cron_setup_TEMPLATE_2026_05_06.sql", "utf8");
 
 checks.push(
   {
     name: "edge function processa jobs vencidos com VAPID",
     pass: edge.includes("webpush.setVapidDetails") &&
       edge.includes("processDueJobs") &&
+      edge.includes("processSingleDueJob") &&
+      edge.includes("testPush") &&
+      edge.includes("diagnosePush") &&
+      edge.includes("EdgeRuntime") &&
+      edge.includes("DIRECT_SEND_MAX_DELAY_MS") &&
       edge.includes("rest_timer_push_jobs") &&
       edge.includes("push_subscriptions") &&
       edge.includes("Descanso finalizado") &&
+      edge.includes("silent: false") &&
       edge.includes("/?view=workout&restTimer=1"),
   },
   {
@@ -92,6 +134,22 @@ checks.push(
       sql.includes("idx_rest_timer_push_jobs_due") &&
       sql.includes("enable row level security") &&
       sql.includes("treinova-rest-timer-push-every-minute"),
+  },
+  {
+    name: "migration cria tabela segura de push subscriptions",
+    pass: pushSql.includes("create table if not exists public.push_subscriptions") &&
+      pushSql.includes("endpoint text not null unique") &&
+      pushSql.includes("p256dh text not null") &&
+      pushSql.includes("auth text not null") &&
+      pushSql.includes("last_seen_at") &&
+      pushSql.includes("enable row level security") &&
+      pushSql.includes("push subscriptions owner insert"),
+  },
+  {
+    name: "template do cron passa pela verificacao JWT da edge function",
+    pass: cronSql.includes("'Authorization', 'Bearer SUPABASE_ANON_KEY'") &&
+      cronSql.includes("'apikey', 'SUPABASE_ANON_KEY'") &&
+      cronSql.includes("'x-cron-secret', 'MESMO_VALOR_DE_REST_TIMER_CRON_SECRET'"),
   },
 );
 

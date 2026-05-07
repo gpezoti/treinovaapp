@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Treinova" />
-<script>window.VAPID_PUBLIC_KEY="BJKGigAT91DUeib34dF-iA5nJWeTgK80dJeFPSNdim3QXqJUrc8pRb84wc5bK6RImztWBLpgsqJs85wgli6hi3c";</script>
+<script>window.VAPID_PUBLIC_KEY="BF-W4LTAGlDygmQAlD3Ud2QYClioKylYRbSqSUfNKqajaGJjR0co8bZqXEcXtLaKMNjh1MsmNOYeIC9A37jZvV0";</script>
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="application-name" content="Treinova" />
 <meta name="description" content="Treinova — seu app, seu treino, sua marca." />
@@ -2426,8 +2426,7 @@ async function completeSession() {
   try {
   // calcula volume e duração
   const totalVolume = STATE.setLogs.filter(s => s.done && s.load_kg).reduce((acc, s) => acc + (s.load_kg || 0), 0);
-  const startedAt = STATE.currentSession.started_at ? new Date(STATE.currentSession.started_at).getTime() : Date.now();
-  const duration = Math.floor((Date.now() - startedAt) / 1000);
+  const duration = calculateWorkoutDurationSeconds();
   const { error } = await sb.from("sessions").update({
     status: "completed",
     completed_at: new Date().toISOString(),
@@ -2466,6 +2465,25 @@ async function completeSession() {
       stillBtn.textContent = "Concluir";
     }
   }
+}
+
+function calculateWorkoutDurationSeconds() {
+  const now = Date.now();
+  const startedAtRaw = STATE.currentSession?.started_at ? new Date(STATE.currentSession.started_at).getTime() : now;
+  const startedAt = Number.isFinite(startedAtRaw) ? startedAtRaw : now;
+  const wallSeconds = Math.max(60, Math.floor((now - startedAt) / 1000));
+  const doneTimes = (STATE.setLogs || [])
+    .filter(s => s.done && s.done_at)
+    .map(s => new Date(s.done_at).getTime())
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  const maxPlausible = 4 * 60 * 60;
+  if (wallSeconds <= maxPlausible) return wallSeconds;
+  if (doneTimes.length >= 2) {
+    const activeSpan = Math.floor((doneTimes[doneTimes.length - 1] - doneTimes[0]) / 1000);
+    return Math.max(5 * 60, Math.min(maxPlausible, activeSpan + 10 * 60));
+  }
+  return Math.min(maxPlausible, wallSeconds);
 }
 
 function canManageCompletedWorkoutSession() {
@@ -3271,6 +3289,7 @@ async function notifyRestFinished(exerciseName) {
     body,
     tag: "treinova-rest-timer",
     renotify: true,
+    silent: false,
     vibrate: [160, 80, 160],
     icon: "/assets/icon-192.png",
     badge: "/assets/favicon-32x32.png",
@@ -4043,12 +4062,19 @@ window.openNotificationsSheet = function() {
   const list = STATE.notifications || [];
   const html = `
     <h3>Notificações</h3>
-    <div class="row-flex" style="margin-bottom:12px;">
-      <span class="text-xs muted">${list.filter(n=>!n.read_at).length} não lidas</span>
-      <span style="flex:1"></span>
-      ${list.some(n=>!n.read_at) ? `<button class="mini-btn mini-btn-ghost" onclick="onMarkAllRead()">Marcar todas como lidas</button>` : ''}
-    </div>
-    ${list.length === 0 ? `<div class="empty"><p>Sem notificações</p></div>` : list.map(n => {
+	    <div class="row-flex" style="margin-bottom:12px;">
+	      <span class="text-xs muted">${list.filter(n=>!n.read_at).length} não lidas</span>
+	      <span style="flex:1"></span>
+	      ${list.some(n=>!n.read_at) ? `<button class="mini-btn mini-btn-ghost" onclick="onMarkAllRead()">Marcar todas como lidas</button>` : ''}
+	    </div>
+	    <div class="card mb-12">
+	      <div class="row-flex" style="gap:8px; flex-wrap:wrap">
+	        <button class="mini-btn" onclick="testRestTimerPushNow()">Testar push agora</button>
+	        <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
+	      </div>
+	      <div class="text-xs muted" style="margin-top:8px; line-height:1.4">Use este teste com o celular bloqueado ou em outro app. Se o teste imediato não chegar, o problema está na permissão/instalação/assinatura do dispositivo.</div>
+	    </div>
+	    ${list.length === 0 ? `<div class="empty"><p>Sem notificações</p></div>` : list.map(n => {
       const icon = n.kind === 'payment_overdue' ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' :
                    n.kind === 'period_reminder_7d' ? 'calendar_emoji' :
                    n.kind === 'period_due_today' ? '⏰' :
@@ -4749,6 +4775,15 @@ window.openNewTrainerSheet = function() {
     <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Cancelar</button>
   `);
 };
+async function getFunctionErrorMessage(error, fallback = "tente novamente") {
+  try {
+    if (error?.context && typeof error.context.json === "function") {
+      const body = await error.context.json();
+      if (body?.error) return body.error;
+    }
+  } catch(e) {}
+  return error?.message || fallback;
+}
 window.submitNewTrainer = async function() {
   // [C-NEW-03 FIX] Guard: apenas admin pode criar treinadores
   if (!STATE.profile || STATE.profile.role !== "admin") {
@@ -4762,43 +4797,23 @@ window.submitNewTrainer = async function() {
   if (!name || !email || !pass || pass.length < 6) { showToast("Preencha tudo (senha 6+)", "error"); return; }
   setBusy(true);
   try {
-    const tmp = createTempClient();
-    const { data: signRes, error: signErr } = await tmp.auth.signUp({
-      email, password: pass,
-      options: { data: { full_name: name, role: "coach" } }
+    const { data, error } = await sb.functions.invoke("admin-user", {
+      body: {
+        action: "create_trainer",
+        full_name: name,
+        email,
+        password: pass
+      }
     });
-    if (signErr) throw signErr;
-    const trainerId = signRes.user && signRes.user.id;
-    if (!trainerId) throw new Error("Falha ao obter ID do novo treinador.");
-
-    // [C-NEW-03 FIX] Trigger C-04 agora cria SEMPRE student/pending.
-    // Aguardamos o profile existir, depois o admin o promove explicitamente.
-    let profileFound = false;
-    for (let i = 0; i < 12; i++) {
-      await new Promise(r => setTimeout(r, 500));
-      const { data } = await sb.from("profiles").select("id").eq("id", trainerId).maybeSingle();
-      if (data) { profileFound = true; break; }
-    }
-    if (!profileFound) throw new Error("Perfil não foi criado a tempo. Tente novamente.");
-
-    const { error: upErr } = await sb.from("profiles").update({
-      full_name: name, role: "coach", status: "approved"
-    }).eq("id", trainerId);
-
-    // [C-NEW-03 FIX] NUNCA ignorar o erro silenciosamente.
-    if (upErr) {
-      console.error("[submitNewTrainer] Falha ao promover perfil para coach:", upErr);
-      showToast("Conta criada mas falha ao definir permissões. Ajuste manualmente no Supabase ou contate o suporte. Erro: " + upErr.message, "error");
-      setBusy(false);
-      return;
-    }
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
 
     showToast("Treinador criado com sucesso!", "success");
     closeSheet();
     await loadTrainers(); renderTrainers();
   } catch (e) {
     console.error("[submitNewTrainer] Falha:", e);
-    showToast("Erro: " + (e.message || "tente novamente"), "error");
+    showToast("Erro: " + await getFunctionErrorMessage(e), "error");
   } finally {
     setBusy(false);
   }
@@ -6939,37 +6954,23 @@ window.submitNewStudent = async function() {
   if (!name || !email || !pass || pass.length < 6) { showToast("Preencha tudo (senha 6+)", "error"); return; }
   setBusy(true);
   try {
-    // 1) Cria a conta de auth com cliente isolado (não desloga o staff)
-    const tmp = createTempClient();
-    const { data: signRes, error: signErr } = await tmp.auth.signUp({
-      email, password: pass,
-      options: { data: { full_name: name, role: "student" } }
+    // 1) Cria Auth + profile no backend administrativo.
+    // Evita signUp no frontend e evita RLS esconder aluno ainda sem coach_id.
+    const { data, error } = await sb.functions.invoke("admin-user", {
+      body: {
+        action: "create_student",
+        full_name: name,
+        email,
+        phone,
+        password: pass
+      }
     });
-    if (signErr) throw signErr;
-    const studentId = signRes.user && signRes.user.id;
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    const studentId = data?.user_id;
     if (!studentId) throw new Error("Não retornou id do usuário criado");
 
-    // 2) Aguarda trigger handle_new_user criar profile (varia 200-1500ms)
-    let prof = null;
-    for (let i = 0; i < 8; i++) {
-      await new Promise(r => setTimeout(r, 400));
-      const { data } = await sb.from("profiles").select("*").eq("id", studentId).maybeSingle();
-      if (data) { prof = data; break; }
-    }
-    if (!prof) throw new Error("Profile não foi criado pelo trigger (verifique RLS)");
-
-    // 3) Aprova + vincula + telefone (chamado com a sessão do staff atual)
-    const patch = {
-      status: "approved",
-      phone: phone || null,
-      full_name: name,
-      must_reset_password: true  // [A-02] Coach definiu a senha — aluno deve criar a sua
-    };
-    if (STATE.profile.role === "coach") patch.coach_id = STATE.profile.id;
-    const { error: upErr } = await sb.from("profiles").update(patch).eq("id", studentId);
-    if (upErr) throw upErr;
-
-    // 4) Periodização padrão (opcional)
+    // 2) Periodização padrão (opcional)
     if (seedPer) {
       const { error: seedErr } = await sb.rpc("seed_periodization_for_student", { p_student: studentId });
       if (seedErr) console.warn("seed periodização falhou:", seedErr);
@@ -6981,7 +6982,7 @@ window.submitNewStudent = async function() {
     renderStudents();
   } catch (e) {
     console.error("Falha criar aluno:", e);
-    showToast("Erro: " + (e.message || "tente novamente"), "error");
+    showToast("Erro: " + await getFunctionErrorMessage(e), "error");
   } finally {
     setBusy(false);
   }
@@ -8731,6 +8732,7 @@ const timeAgo = (typeof window.timeAgo === "function") ? window.timeAgo : (typeo
 
 /* ---------- VAPID public key (gere o seu — instruções no OPERACIONAL.md) ---------- */
 const VAPID_PUBLIC_KEY = window.VAPID_PUBLIC_KEY || ""; // se vazio, push desabilitado
+const PUSH_VAPID_KEY_STORAGE = "treinova_push_vapid_public_key";
 
 /* ---------- postLoginInit: chamado depois do postSignIn ---------- */
 async function postLoginInit() {
@@ -8935,6 +8937,12 @@ function urlBase64ToUint8Array(base64String) {
 
 async function subscribePushNotifications(opts = {}) {
   const throwOnError = opts.throwOnError === true;
+  if (!isWebPushRuntimeSupported()) {
+    const err = new Error(getWebPushUnsupportedMessage());
+    if (throwOnError) throw err;
+    console.warn(err.message);
+    return null;
+  }
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     if (throwOnError) throw new Error("Este navegador não suporta Web Push.");
     return null;
@@ -8954,12 +8962,18 @@ async function subscribePushNotifications(opts = {}) {
   }
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
+  const previousVapidKey = localStorage.getItem(PUSH_VAPID_KEY_STORAGE);
+  if (sub && previousVapidKey && previousVapidKey !== VAPID_PUBLIC_KEY) {
+    await sub.unsubscribe();
+    sub = null;
+  }
   if (!sub) {
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
   }
+  localStorage.setItem(PUSH_VAPID_KEY_STORAGE, VAPID_PUBLIC_KEY);
   // Salva no Supabase (upsert by endpoint)
   try {
     const json = sub.toJSON();
@@ -8979,18 +8993,87 @@ async function subscribePushNotifications(opts = {}) {
   return sub;
 }
 
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+function isStandaloneApp() {
+  return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+}
+
+function isWebPushRuntimeSupported() {
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+  // No iOS, Web Push fora do app so funciona em app instalado na Tela de Inicio.
+  if (isIOSDevice() && !isStandaloneApp()) return false;
+  return true;
+}
+
+function getWebPushUnsupportedMessage() {
+  if (isIOSDevice() && !isStandaloneApp()) {
+    return "No iPhone, notificação com tela bloqueada só funciona com o Treinova instalado na Tela de Início.";
+  }
+  return "Este navegador não suporta notificação fora do app.";
+}
+
 async function requestPushPermission() {
-  if (!("Notification" in window)) { showToast("Seu navegador não suporta push", "error"); return false; }
+  if (!isWebPushRuntimeSupported()) { showToast(getWebPushUnsupportedMessage(), "error"); return false; }
   const r = await Notification.requestPermission();
   if (r === "granted") {
-    await subscribePushNotifications();
-    showToast("Notificações ativadas", "success");
-    return true;
+    try {
+      await subscribePushNotifications({ throwOnError: true });
+      showToast("Notificações ativadas", "success");
+      return true;
+    } catch (e) {
+      console.warn("[push permission] assinatura falhou", e);
+      showToast("Permissão aprovada, mas o push fora do app ainda não está pronto.", "error");
+      return false;
+    }
   } else if (r === "denied") {
     showToast("Notificações bloqueadas. Habilite nas config. do navegador.", "error");
   }
   return false;
 }
+
+window.testRestTimerPushNow = async function() {
+  try {
+    const pushReady = await ensureRestNotificationPermission();
+    if (!pushReady) {
+      showToast("Push fora do app não está pronto neste dispositivo.", "error");
+      return;
+    }
+    const { data, error } = await sb.functions.invoke("rest-timer-push", {
+      body: { action: "test" }
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    showToast(`Teste enviado (${data?.sent || 0})`, "success");
+  } catch(e) {
+    console.warn("[rest push test]", e);
+    showToast("Erro no teste push: " + await getFunctionErrorMessage(e), "error");
+  }
+};
+
+window.diagnoseRestTimerPush = async function() {
+  try {
+    const { data, error } = await sb.functions.invoke("rest-timer-push", {
+      body: { action: "diagnose" }
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    const subs = data?.subscriptions || [];
+    const jobs = data?.jobs || [];
+    const lastJob = jobs[0];
+    const detail = [
+      `Assinaturas: ${subs.length}`,
+      lastJob ? `Último job: ${lastJob.status}${lastJob.last_error ? " - " + lastJob.last_error : ""}` : "Último job: nenhum",
+      `iOS instalado: ${isIOSDevice() ? (isStandaloneApp() ? "sim" : "não") : "não é iOS"}`
+    ].join("\n");
+    alert(detail);
+  } catch(e) {
+    console.warn("[rest push diagnose]", e);
+    showToast("Erro no diagnóstico: " + await getFunctionErrorMessage(e), "error");
+  }
+};
 
 /* ---------- ONBOARDING ---------- */
 function showOnboarding() {
