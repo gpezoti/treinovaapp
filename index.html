@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Treinova" />
-<script>window.VAPID_PUBLIC_KEY="BJKGigAT91DUeib34dF-iA5nJWeTgK80dJeFPSNdim3QXqJUrc8pRb84wc5bK6RImztWBLpgsqJs85wgli6hi3c";</script>
+<script>window.VAPID_PUBLIC_KEY="BF-W4LTAGlDygmQAlD3Ud2QYClioKylYRbSqSUfNKqajaGJjR0co8bZqXEcXtLaKMNjh1MsmNOYeIC9A37jZvV0";</script>
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="application-name" content="Treinova" />
 <meta name="description" content="Treinova — seu app, seu treino, sua marca." />
@@ -4762,36 +4762,16 @@ window.submitNewTrainer = async function() {
   if (!name || !email || !pass || pass.length < 6) { showToast("Preencha tudo (senha 6+)", "error"); return; }
   setBusy(true);
   try {
-    const tmp = createTempClient();
-    const { data: signRes, error: signErr } = await tmp.auth.signUp({
-      email, password: pass,
-      options: { data: { full_name: name, role: "coach" } }
+    const { data, error } = await sb.functions.invoke("admin-user", {
+      body: {
+        action: "create_trainer",
+        full_name: name,
+        email,
+        password: pass
+      }
     });
-    if (signErr) throw signErr;
-    const trainerId = signRes.user && signRes.user.id;
-    if (!trainerId) throw new Error("Falha ao obter ID do novo treinador.");
-
-    // [C-NEW-03 FIX] Trigger C-04 agora cria SEMPRE student/pending.
-    // Aguardamos o profile existir, depois o admin o promove explicitamente.
-    let profileFound = false;
-    for (let i = 0; i < 12; i++) {
-      await new Promise(r => setTimeout(r, 500));
-      const { data } = await sb.from("profiles").select("id").eq("id", trainerId).maybeSingle();
-      if (data) { profileFound = true; break; }
-    }
-    if (!profileFound) throw new Error("Perfil não foi criado a tempo. Tente novamente.");
-
-    const { error: upErr } = await sb.from("profiles").update({
-      full_name: name, role: "coach", status: "approved"
-    }).eq("id", trainerId);
-
-    // [C-NEW-03 FIX] NUNCA ignorar o erro silenciosamente.
-    if (upErr) {
-      console.error("[submitNewTrainer] Falha ao promover perfil para coach:", upErr);
-      showToast("Conta criada mas falha ao definir permissões. Ajuste manualmente no Supabase ou contate o suporte. Erro: " + upErr.message, "error");
-      setBusy(false);
-      return;
-    }
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
 
     showToast("Treinador criado com sucesso!", "success");
     closeSheet();
@@ -6939,37 +6919,23 @@ window.submitNewStudent = async function() {
   if (!name || !email || !pass || pass.length < 6) { showToast("Preencha tudo (senha 6+)", "error"); return; }
   setBusy(true);
   try {
-    // 1) Cria a conta de auth com cliente isolado (não desloga o staff)
-    const tmp = createTempClient();
-    const { data: signRes, error: signErr } = await tmp.auth.signUp({
-      email, password: pass,
-      options: { data: { full_name: name, role: "student" } }
+    // 1) Cria Auth + profile no backend administrativo.
+    // Evita signUp no frontend e evita RLS esconder aluno ainda sem coach_id.
+    const { data, error } = await sb.functions.invoke("admin-user", {
+      body: {
+        action: "create_student",
+        full_name: name,
+        email,
+        phone,
+        password: pass
+      }
     });
-    if (signErr) throw signErr;
-    const studentId = signRes.user && signRes.user.id;
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    const studentId = data?.user_id;
     if (!studentId) throw new Error("Não retornou id do usuário criado");
 
-    // 2) Aguarda trigger handle_new_user criar profile (varia 200-1500ms)
-    let prof = null;
-    for (let i = 0; i < 8; i++) {
-      await new Promise(r => setTimeout(r, 400));
-      const { data } = await sb.from("profiles").select("*").eq("id", studentId).maybeSingle();
-      if (data) { prof = data; break; }
-    }
-    if (!prof) throw new Error("Profile não foi criado pelo trigger (verifique RLS)");
-
-    // 3) Aprova + vincula + telefone (chamado com a sessão do staff atual)
-    const patch = {
-      status: "approved",
-      phone: phone || null,
-      full_name: name,
-      must_reset_password: true  // [A-02] Coach definiu a senha — aluno deve criar a sua
-    };
-    if (STATE.profile.role === "coach") patch.coach_id = STATE.profile.id;
-    const { error: upErr } = await sb.from("profiles").update(patch).eq("id", studentId);
-    if (upErr) throw upErr;
-
-    // 4) Periodização padrão (opcional)
+    // 2) Periodização padrão (opcional)
     if (seedPer) {
       const { error: seedErr } = await sb.rpc("seed_periodization_for_student", { p_student: studentId });
       if (seedErr) console.warn("seed periodização falhou:", seedErr);
@@ -8731,6 +8697,7 @@ const timeAgo = (typeof window.timeAgo === "function") ? window.timeAgo : (typeo
 
 /* ---------- VAPID public key (gere o seu — instruções no OPERACIONAL.md) ---------- */
 const VAPID_PUBLIC_KEY = window.VAPID_PUBLIC_KEY || ""; // se vazio, push desabilitado
+const PUSH_VAPID_KEY_STORAGE = "treinova_push_vapid_public_key";
 
 /* ---------- postLoginInit: chamado depois do postSignIn ---------- */
 async function postLoginInit() {
@@ -8954,12 +8921,18 @@ async function subscribePushNotifications(opts = {}) {
   }
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
+  const previousVapidKey = localStorage.getItem(PUSH_VAPID_KEY_STORAGE);
+  if (sub && previousVapidKey && previousVapidKey !== VAPID_PUBLIC_KEY) {
+    await sub.unsubscribe();
+    sub = null;
+  }
   if (!sub) {
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
   }
+  localStorage.setItem(PUSH_VAPID_KEY_STORAGE, VAPID_PUBLIC_KEY);
   // Salva no Supabase (upsert by endpoint)
   try {
     const json = sub.toJSON();
