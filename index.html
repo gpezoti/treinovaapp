@@ -9027,15 +9027,10 @@ function isStandaloneApp() {
 
 function isWebPushRuntimeSupported() {
   if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return false;
-  // No iOS, Web Push fora do app so funciona em app instalado na Tela de Inicio.
-  if (isIOSDevice() && !isStandaloneApp()) return false;
   return true;
 }
 
 function getWebPushUnsupportedMessage() {
-  if (isIOSDevice() && !isStandaloneApp()) {
-    return "No iPhone, notificação com tela bloqueada só funciona com o Treinova instalado na Tela de Início.";
-  }
   return "Este navegador não suporta notificação fora do app.";
 }
 
