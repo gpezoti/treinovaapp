@@ -4069,10 +4069,11 @@ window.openNotificationsSheet = function() {
 	    </div>
 	    <div class="card mb-12">
 	      <div class="row-flex" style="gap:8px; flex-wrap:wrap">
-	        <button class="mini-btn" onclick="testRestTimerPushNow()">Testar push agora</button>
+	        <button class="mini-btn" onclick="testRestTimerPushDelayed()">Teste bloqueado 15s</button>
+	        <button class="mini-btn mini-btn-ghost" onclick="testRestTimerPushNow()">Testar agora</button>
 	        <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
 	      </div>
-	      <div class="text-xs muted" style="margin-top:8px; line-height:1.4">Use este teste com o celular bloqueado ou em outro app. Se o teste imediato não chegar, o problema está na permissão/instalação/assinatura do dispositivo.</div>
+	      <div class="text-xs muted" style="margin-top:8px; line-height:1.4">Toque em "Teste bloqueado 15s" e bloqueie o celular imediatamente. Esse é o teste real de push fora do app.</div>
 	    </div>
 	    ${list.length === 0 ? `<div class="empty"><p>Sem notificações</p></div>` : list.map(n => {
       const icon = n.kind === 'payment_overdue' ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' :
@@ -9053,6 +9054,25 @@ window.testRestTimerPushNow = async function() {
   }
 };
 
+window.testRestTimerPushDelayed = async function() {
+  try {
+    const pushReady = await ensureRestNotificationPermission();
+    if (!pushReady) {
+      showToast("Push fora do app não está pronto neste dispositivo.", "error");
+      return;
+    }
+    const { data, error } = await sb.functions.invoke("rest-timer-push", {
+      body: { action: "test_delayed" }
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    showToast("Bloqueie o celular agora. Teste em 15s.", "success");
+  } catch(e) {
+    console.warn("[rest push delayed test]", e);
+    showToast("Erro no teste bloqueado: " + await getFunctionErrorMessage(e), "error");
+  }
+};
+
 window.diagnoseRestTimerPush = async function() {
   try {
     const { data, error } = await sb.functions.invoke("rest-timer-push", {
@@ -9065,6 +9085,7 @@ window.diagnoseRestTimerPush = async function() {
     const lastJob = jobs[0];
     const detail = [
       `Assinaturas: ${subs.length}`,
+      subs[0]?.endpoint_host ? `Endpoint: ${subs[0].endpoint_host}` : "Endpoint: nenhum",
       lastJob ? `Último job: ${lastJob.status}${lastJob.last_error ? " - " + lastJob.last_error : ""}` : "Último job: nenhum",
       `iOS instalado: ${isIOSDevice() ? (isStandaloneApp() ? "sim" : "não") : "não é iOS"}`
     ].join("\n");
