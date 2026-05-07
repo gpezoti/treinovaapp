@@ -4062,12 +4062,19 @@ window.openNotificationsSheet = function() {
   const list = STATE.notifications || [];
   const html = `
     <h3>Notificações</h3>
-    <div class="row-flex" style="margin-bottom:12px;">
-      <span class="text-xs muted">${list.filter(n=>!n.read_at).length} não lidas</span>
-      <span style="flex:1"></span>
-      ${list.some(n=>!n.read_at) ? `<button class="mini-btn mini-btn-ghost" onclick="onMarkAllRead()">Marcar todas como lidas</button>` : ''}
-    </div>
-    ${list.length === 0 ? `<div class="empty"><p>Sem notificações</p></div>` : list.map(n => {
+	    <div class="row-flex" style="margin-bottom:12px;">
+	      <span class="text-xs muted">${list.filter(n=>!n.read_at).length} não lidas</span>
+	      <span style="flex:1"></span>
+	      ${list.some(n=>!n.read_at) ? `<button class="mini-btn mini-btn-ghost" onclick="onMarkAllRead()">Marcar todas como lidas</button>` : ''}
+	    </div>
+	    <div class="card mb-12">
+	      <div class="row-flex" style="gap:8px; flex-wrap:wrap">
+	        <button class="mini-btn" onclick="testRestTimerPushNow()">Testar push agora</button>
+	        <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
+	      </div>
+	      <div class="text-xs muted" style="margin-top:8px; line-height:1.4">Use este teste com o celular bloqueado ou em outro app. Se o teste imediato não chegar, o problema está na permissão/instalação/assinatura do dispositivo.</div>
+	    </div>
+	    ${list.length === 0 ? `<div class="empty"><p>Sem notificações</p></div>` : list.map(n => {
       const icon = n.kind === 'payment_overdue' ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' :
                    n.kind === 'period_reminder_7d' ? 'calendar_emoji' :
                    n.kind === 'period_due_today' ? '⏰' :
@@ -8930,6 +8937,12 @@ function urlBase64ToUint8Array(base64String) {
 
 async function subscribePushNotifications(opts = {}) {
   const throwOnError = opts.throwOnError === true;
+  if (!isWebPushRuntimeSupported()) {
+    const err = new Error(getWebPushUnsupportedMessage());
+    if (throwOnError) throw err;
+    console.warn(err.message);
+    return null;
+  }
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     if (throwOnError) throw new Error("Este navegador não suporta Web Push.");
     return null;
@@ -8980,8 +8993,30 @@ async function subscribePushNotifications(opts = {}) {
   return sub;
 }
 
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+function isStandaloneApp() {
+  return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+}
+
+function isWebPushRuntimeSupported() {
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+  // No iOS, Web Push fora do app so funciona em app instalado na Tela de Inicio.
+  if (isIOSDevice() && !isStandaloneApp()) return false;
+  return true;
+}
+
+function getWebPushUnsupportedMessage() {
+  if (isIOSDevice() && !isStandaloneApp()) {
+    return "No iPhone, notificação com tela bloqueada só funciona com o Treinova instalado na Tela de Início.";
+  }
+  return "Este navegador não suporta notificação fora do app.";
+}
+
 async function requestPushPermission() {
-  if (!("Notification" in window)) { showToast("Seu navegador não suporta push", "error"); return false; }
+  if (!isWebPushRuntimeSupported()) { showToast(getWebPushUnsupportedMessage(), "error"); return false; }
   const r = await Notification.requestPermission();
   if (r === "granted") {
     try {
@@ -8998,6 +9033,47 @@ async function requestPushPermission() {
   }
   return false;
 }
+
+window.testRestTimerPushNow = async function() {
+  try {
+    const pushReady = await ensureRestNotificationPermission();
+    if (!pushReady) {
+      showToast("Push fora do app não está pronto neste dispositivo.", "error");
+      return;
+    }
+    const { data, error } = await sb.functions.invoke("rest-timer-push", {
+      body: { action: "test" }
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    showToast(`Teste enviado (${data?.sent || 0})`, "success");
+  } catch(e) {
+    console.warn("[rest push test]", e);
+    showToast("Erro no teste push: " + await getFunctionErrorMessage(e), "error");
+  }
+};
+
+window.diagnoseRestTimerPush = async function() {
+  try {
+    const { data, error } = await sb.functions.invoke("rest-timer-push", {
+      body: { action: "diagnose" }
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    const subs = data?.subscriptions || [];
+    const jobs = data?.jobs || [];
+    const lastJob = jobs[0];
+    const detail = [
+      `Assinaturas: ${subs.length}`,
+      lastJob ? `Último job: ${lastJob.status}${lastJob.last_error ? " - " + lastJob.last_error : ""}` : "Último job: nenhum",
+      `iOS instalado: ${isIOSDevice() ? (isStandaloneApp() ? "sim" : "não") : "não é iOS"}`
+    ].join("\n");
+    alert(detail);
+  } catch(e) {
+    console.warn("[rest push diagnose]", e);
+    showToast("Erro no diagnóstico: " + await getFunctionErrorMessage(e), "error");
+  }
+};
 
 /* ---------- ONBOARDING ---------- */
 function showOnboarding() {
