@@ -9061,8 +9061,14 @@ window.testRestTimerPushDelayed = async function() {
       showToast("Push fora do app não está pronto neste dispositivo.", "error");
       return;
     }
+    const timerId = `manual-test-${Date.now()}`;
     const { data, error } = await sb.functions.invoke("rest-timer-push", {
-      body: { action: "test_delayed" }
+      body: {
+        action: "schedule",
+        timer_id: timerId,
+        fire_at: new Date(Date.now() + 15_000).toISOString(),
+        exercise_name: "Teste bloqueado"
+      }
     });
     if (error) throw error;
     if (data?.error) throw new Error(data.error);
