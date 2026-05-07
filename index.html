@@ -474,7 +474,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 .toast { position: fixed; bottom: calc(110px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
   background: var(--bg-3); color: var(--text); border: 1px solid var(--line); padding: 10px 16px;
-  border-radius: 999px; font-size: 12px; font-weight: 600; z-index: 70; pointer-events: none;
+  border-radius: 999px; font-size: 12px; font-weight: 600; z-index: 100010; pointer-events: none;
   opacity: 0; transition: opacity 0.2s ease, transform 0.2s ease; max-width: 90%; text-align: center; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
 .toast.error { background: rgba(255,59,59,0.2); border-color: rgba(255,59,59,0.5); color: #ffaaaa; }
@@ -9055,11 +9055,7 @@ async function requestPushPermission() {
 
 window.testRestTimerPushNow = async function() {
   try {
-    const pushReady = await ensureRestNotificationPermission();
-    if (!pushReady) {
-      showToast("Push fora do app não está pronto neste dispositivo.", "error");
-      return;
-    }
+    ensureRestNotificationPermission().catch((e) => console.warn("[rest push test permission]", e));
     const { data, error } = await sb.functions.invoke("rest-timer-push", {
       body: { action: "test" }
     });
@@ -9074,11 +9070,7 @@ window.testRestTimerPushNow = async function() {
 
 window.testRestTimerPushDelayed = async function() {
   try {
-    const pushReady = await ensureRestNotificationPermission();
-    if (!pushReady) {
-      showToast("Push fora do app não está pronto neste dispositivo.", "error");
-      return;
-    }
+    ensureRestNotificationPermission().catch((e) => console.warn("[rest push delayed permission]", e));
     const timerId = `manual-test-${Date.now()}`;
     const fireAt = new Date(Date.now() + 15_000).toISOString();
     const { data, error } = await sb.functions.invoke("rest-timer-push", {
