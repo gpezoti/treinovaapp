@@ -7,11 +7,16 @@ alter table public.push_subscriptions
 alter table public.push_subscriptions
   add column if not exists user_agent text;
 
+alter table public.push_subscriptions
+  add column if not exists updated_at timestamptz not null default now();
+
 create index if not exists idx_push_subscriptions_last_seen
   on public.push_subscriptions(last_seen_at desc);
 
 update public.push_subscriptions
-set last_seen_at = coalesce(last_seen_at, updated_at, created_at, now());
+set
+  last_seen_at = coalesce(last_seen_at, created_at, now()),
+  updated_at = coalesce(updated_at, created_at, now());
 
 select
   column_name,
@@ -21,5 +26,5 @@ select
 from information_schema.columns
 where table_schema = 'public'
   and table_name = 'push_subscriptions'
-  and column_name in ('last_seen_at', 'user_agent')
+  and column_name in ('last_seen_at', 'updated_at', 'user_agent')
 order by column_name;
