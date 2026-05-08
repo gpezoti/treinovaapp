@@ -557,8 +557,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   display: none; align-items: flex-end; justify-content: center; }
 .sheet-overlay.active { display: flex; animation: fadein 0.2s ease; }
 .sheet { background: var(--bg-2); border-top-left-radius: 22px; border-top-right-radius: 22px;
-  width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; padding: 20px;
-  padding-bottom: calc(20px + var(--safe-bottom)); border-top: 1px solid var(--line); animation: slideup 0.25s ease; }
+  width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; padding: 20px 20px 0;
+  border-top: 1px solid var(--line); animation: slideup 0.25s ease; -webkit-overflow-scrolling: touch; }
+.sheet-footer { position: sticky; bottom: 0; background: var(--bg-2);
+  border-top: 1px solid var(--line); margin: 14px -20px 0;
+  padding: 12px 20px calc(12px + var(--safe-bottom));
+  display: flex; flex-direction: column; gap: 8px; z-index: 5;
+  box-shadow: 0 -10px 18px -10px rgba(0,0,0,.45); }
+.sheet-footer > * { margin-top: 0 !important; }
+.sheet-footer .row-flex,
+.sheet-footer > div[style*="display:flex"],
+.sheet-footer > div[style*="display: flex"] { gap: 8px; }
 .sheet-handle { width: 40px; height: 4px; background: var(--line-2); border-radius: 2px;
   margin: -8px auto 14px; }
 .sheet h3 { margin: 0 0 6px; font-size: 18px; font-weight: 800; }
@@ -3859,15 +3868,67 @@ let _editingStudentId = null;       // aluno sendo editado na periodização
 function openSheet(html) {
   const root = document.getElementById("sheet-content");
   root.innerHTML = '<div class="sheet-handle"></div>' + html;
+  pinSheetFooter(root);
   const sheet = document.getElementById("sheet");
   sheet.style.pointerEvents = "";
   sheet.classList.add("active");
+  // reseta scroll para o topo
+  try { sheet.scrollTop = 0; } catch(e){}
   // Empurra estado para que o botão voltar (hardware/browser) feche a sheet
   if (!_sheetInHistory) {
     _sheetInHistory = true;
     try { history.pushState({ treinova: 'sheet' }, ''); } catch(e){}
   }
 }
+
+// Detecta botoes de acao no fim do conteudo do sheet e os move para um
+// footer pinado (sticky bottom), garantindo que Salvar/Voltar/Cancelar
+// fiquem sempre visiveis sem precisar de scroll.
+function pinSheetFooter(root) {
+  if (!root) return;
+  // remove footer anterior se houver
+  const old = root.querySelector(":scope > .sheet-footer");
+  if (old) {
+    while (old.firstChild) root.appendChild(old.firstChild);
+    old.remove();
+  }
+  const ACTION_CLASSES = /\b(btn-primary|btn-ghost|btn-danger|btn-success|mini-btn)\b/;
+  const isActionLike = (el) => {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.tagName === "BUTTON") return true;
+    if (el.tagName === "A" && /\bbtn-/.test(el.className || "")) return true;
+    if (typeof el.className === "string" && ACTION_CLASSES.test(el.className)) return true;
+    if (el.tagName === "DIV") {
+      const kids = Array.from(el.children);
+      if (!kids.length) return false;
+      // wrapper conta se TODOS os filhos sao acao ou span/i ignoraveis
+      return kids.every(k => isActionLike(k) || k.tagName === "SPAN" || k.tagName === "I" || k.tagName === "BR");
+    }
+    return false;
+  };
+  // collect trailing siblings until we hit non-action
+  const trailing = [];
+  for (let i = root.children.length - 1; i >= 0; i--) {
+    const child = root.children[i];
+    if (child.classList && child.classList.contains("sheet-handle")) break;
+    if (isActionLike(child)) {
+      trailing.unshift(child);
+    } else {
+      break;
+    }
+  }
+  // exige pelo menos 1 botao de classe explicita no chain
+  const hasExplicit = trailing.some(el => {
+    if (typeof el.className === "string" && ACTION_CLASSES.test(el.className)) return true;
+    return Array.from(el.querySelectorAll(".btn-primary,.btn-ghost,.btn-danger,.btn-success,.mini-btn")).length > 0;
+  });
+  if (!hasExplicit || !trailing.length) return;
+  const footer = document.createElement("div");
+  footer.className = "sheet-footer";
+  trailing.forEach(el => footer.appendChild(el));
+  root.appendChild(footer);
+}
+window.pinSheetFooter = pinSheetFooter;
 
 function closeSheet() {
   const sheet = document.getElementById("sheet");
