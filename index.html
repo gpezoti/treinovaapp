@@ -11246,16 +11246,30 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
 
-    const brand = STATE.branding && STATE.branding.brand_color || "#13baf2";
-    const appName = (STATE.branding && STATE.branding.app_name) || "TREINOVA";
+    // ---------- helpers ----------
+    const brand = (STATE.branding && STATE.branding.brand_color) || "#13baf2";
+    const appName = ((STATE.branding && STATE.branding.app_name) || "TREINOVA").toUpperCase();
+    const handleName = ((STATE.branding && STATE.branding.app_name) || "treinova").toLowerCase().replace(/\s+/g, "");
     const studentName = meta.studentName || STATE.profile?.full_name || "";
+    const firstName = (studentName.split(" ")[0] || "").trim();
+    const isFeed = meta.source === "feed";
     const dateLabel = meta.dateLabel || new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
     const minutes = Math.max(0, Math.floor(Number(duration || 0) / 60));
-    const stats = [
-      { label: "Séries", value: String(Math.max(0, Number(setsDone || 0))) },
-      { label: "Volume", value: `${Math.round(Number(totalVolume || 0))} kg` },
-      { label: "Tempo", value: `${minutes} min` },
-    ];
+    const volKg = Math.round(Number(totalVolume || 0));
+    const sets  = Math.max(0, Number(setsDone || 0));
+
+    const hexToRgb = (hex) => {
+      const h = String(hex || "").replace("#", "").trim();
+      const v = h.length === 3 ? h.split("").map(c=>c+c).join("") : h.padEnd(6,"0");
+      return [parseInt(v.slice(0,2),16)||0, parseInt(v.slice(2,4),16)||0, parseInt(v.slice(4,6),16)||0];
+    };
+    const rgba = (hex, a) => { const [r,g,b] = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; };
+    const mix = (hex, target, t) => {
+      const [r1,g1,b1] = hexToRgb(hex);
+      const [r2,g2,b2] = hexToRgb(target);
+      const m = (a,b) => Math.round(a + (b-a) * t);
+      return `rgb(${m(r1,r2)},${m(g1,g2)},${m(b1,b2)})`;
+    };
     const roundRect = (x, y, w, h, r) => {
       ctx.beginPath();
       ctx.moveTo(x + r, y);
@@ -11265,112 +11279,289 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
       ctx.arcTo(x, y, x + w, y, r);
       ctx.closePath();
     };
-    const wrapText = (text, maxWidth, maxLines = 3) => {
+    const wrapText = (text, font, maxWidth, maxLines) => {
+      ctx.font = font;
       const words = String(text || "Treino").split(/\s+/).filter(Boolean);
-      const lines = [];
-      let line = "";
-      words.forEach((word) => {
+      const lines = []; let line = "";
+      for (const word of words) {
         const test = line ? `${line} ${word}` : word;
-        if (ctx.measureText(test).width > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = test;
-        }
-      });
+        if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+        else line = test;
+      }
       if (line) lines.push(line);
-      return lines.slice(0, maxLines);
+      if (lines.length > maxLines) {
+        const last = lines.slice(maxLines - 1).join(" ");
+        let trimmed = last;
+        while (ctx.measureText(trimmed + "…").width > maxWidth && trimmed.length > 0) {
+          trimmed = trimmed.slice(0, -1);
+        }
+        return [...lines.slice(0, maxLines - 1), (trimmed + "…").trim()];
+      }
+      return lines;
     };
 
-    const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, "#050b14");
-    bg.addColorStop(0.48, "#101827");
-    bg.addColorStop(1, "#07111f");
-    ctx.fillStyle = bg;
+    const drawDumbbell = (cx, cy, size, color) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.fillStyle = color;
+      const u = size / 24;
+      ctx.fillRect(-7*u, -1.4*u, 14*u, 2.8*u);
+      ctx.fillRect(-10*u, -5*u, 3*u, 10*u);
+      ctx.fillRect(-12*u, -3.5*u, 2*u, 7*u);
+      ctx.fillRect(7*u, -5*u, 3*u, 10*u);
+      ctx.fillRect(10*u, -3.5*u, 2*u, 7*u);
+      ctx.restore();
+    };
+    const drawClock = (cx, cy, size, color) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = size * 0.10;
+      ctx.lineCap = "round";
+      ctx.beginPath(); ctx.arc(0, 0, size * 0.46, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -size*0.30); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(size*0.22, size*0.04); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, size*0.05, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    };
+    const drawFlame = (cx, cy, size, color) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.fillStyle = color;
+      const u = size / 24;
+      ctx.beginPath();
+      ctx.moveTo(0, -10*u);
+      ctx.bezierCurveTo(7*u, -4*u, 8*u, 2*u, 6*u, 6*u);
+      ctx.bezierCurveTo(5*u, 8*u, 3*u, 10*u, 0, 10*u);
+      ctx.bezierCurveTo(-3*u, 10*u, -7*u, 7*u, -7*u, 2*u);
+      ctx.bezierCurveTo(-7*u, -2*u, -3*u, -3*u, -2*u, -7*u);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = rgba("#ffffff", 0.55);
+      ctx.beginPath();
+      ctx.moveTo(0, -3*u);
+      ctx.bezierCurveTo(3*u, 0, 3.5*u, 4*u, 1.5*u, 7*u);
+      ctx.bezierCurveTo(0, 8*u, -2*u, 7*u, -2.5*u, 5*u);
+      ctx.bezierCurveTo(-3*u, 3*u, -1*u, 1*u, 0, -3*u);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    };
+    const drawCheck = (cx, cy, size, color) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size * 0.18;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(-size*0.36, 0);
+      ctx.lineTo(-size*0.08, size*0.30);
+      ctx.lineTo(size*0.40, -size*0.30);
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    // ---------- background ----------
+    ctx.fillStyle = "#06090f";
+    ctx.fillRect(0, 0, W, H);
+    const baseGrad = ctx.createLinearGradient(0, 0, W, H);
+    baseGrad.addColorStop(0, "#0a1322");
+    baseGrad.addColorStop(0.55, "#0a0f1a");
+    baseGrad.addColorStop(1, "#05080e");
+    ctx.fillStyle = baseGrad;
     ctx.fillRect(0, 0, W, H);
 
-    const glow = ctx.createRadialGradient(W * 0.76, H * 0.14, 0, W * 0.76, H * 0.14, W * 0.65);
-    glow.addColorStop(0, brand + "44");
-    glow.addColorStop(1, "transparent");
-    ctx.fillStyle = glow;
+    const glow1 = ctx.createRadialGradient(W*0.85, H*0.05, 0, W*0.85, H*0.05, W*0.95);
+    glow1.addColorStop(0, rgba(brand, 0.42));
+    glow1.addColorStop(0.45, rgba(brand, 0.10));
+    glow1.addColorStop(1, "transparent");
+    ctx.fillStyle = glow1;
+    ctx.fillRect(0, 0, W, H);
+    const glow2 = ctx.createRadialGradient(W*0.10, H*0.95, 0, W*0.10, H*0.95, W*0.85);
+    glow2.addColorStop(0, rgba(mix(brand, "#000814", 0.45), 0.32));
+    glow2.addColorStop(1, "transparent");
+    ctx.fillStyle = glow2;
     ctx.fillRect(0, 0, W, H);
 
-    ctx.fillStyle = "#ffffff";
-    ctx.globalAlpha = 0.05;
-    for (let i = -120; i < W; i += 170) {
-      ctx.fillRect(i, 0, 54, H);
+    ctx.fillStyle = rgba("#ffffff", 0.045);
+    for (let y = 60; y < H; y += 40) {
+      for (let x = 60; x < W; x += 40) {
+        ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI*2); ctx.fill();
+      }
     }
-    ctx.globalAlpha = 1;
+    ctx.save();
+    ctx.translate(W*0.78, -120);
+    ctx.rotate(-0.45);
+    const sheen = ctx.createLinearGradient(0, 0, 0, 600);
+    sheen.addColorStop(0, rgba("#ffffff", 0.0));
+    sheen.addColorStop(0.5, rgba("#ffffff", 0.06));
+    sheen.addColorStop(1, rgba("#ffffff", 0.0));
+    ctx.fillStyle = sheen;
+    ctx.fillRect(-160, 0, 320, 1700);
+    ctx.restore();
 
-    roundRect(64, 76, W - 128, 1198, 34);
-    ctx.fillStyle = "rgba(13,22,36,.82)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,.10)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    const barX = 80;
+    const barTop = 220;
+    const barBot = H - 220;
+    const barW = 6;
+    const barGrad = ctx.createLinearGradient(0, barTop, 0, barBot);
+    barGrad.addColorStop(0, rgba(brand, 0.0));
+    barGrad.addColorStop(0.18, rgba(brand, 0.95));
+    barGrad.addColorStop(0.82, rgba(brand, 0.95));
+    barGrad.addColorStop(1, rgba(brand, 0.0));
+    ctx.fillStyle = barGrad;
+    ctx.fillRect(barX, barTop, barW, barBot - barTop);
 
-    roundRect(104, 116, 116, 116, 28);
-    ctx.fillStyle = brand;
-    ctx.fill();
+    // ---------- HEADER ----------
+    const PAD = 96;
+    const tileX = PAD, tileY = 88, tileS = 96;
+    roundRect(tileX, tileY, tileS, tileS, 24);
+    const tileGrad = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS);
+    tileGrad.addColorStop(0, brand);
+    tileGrad.addColorStop(1, mix(brand, "#000814", 0.45));
+    ctx.fillStyle = tileGrad; ctx.fill();
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    const tileSheen = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS*0.65);
+    tileSheen.addColorStop(0, rgba("#ffffff", 0.32));
+    tileSheen.addColorStop(1, rgba("#ffffff", 0));
+    roundRect(tileX, tileY, tileS, tileS, 24);
+    ctx.fillStyle = tileSheen; ctx.fill();
+    ctx.restore();
     ctx.fillStyle = "#ffffff";
     ctx.font = "900 56px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("T", 162, 190);
+    ctx.textBaseline = "middle";
+    ctx.fillText("T", tileX + tileS/2, tileY + tileS/2 + 4);
+    ctx.textBaseline = "alphabetic";
 
     ctx.textAlign = "left";
-    ctx.fillStyle = "#eef6ff";
+    ctx.fillStyle = "#f4f7ff";
     ctx.font = "900 38px -apple-system, system-ui, sans-serif";
-    ctx.fillText(appName.toUpperCase(), 244, 154);
-    ctx.fillStyle = "rgba(238,246,255,.62)";
-    ctx.font = "500 26px -apple-system, system-ui, sans-serif";
-    ctx.fillText(studentName ? `${studentName} · ${dateLabel}` : dateLabel, 244, 198);
+    ctx.fillText(appName, tileX + tileS + 22, tileY + 44);
+    ctx.fillStyle = rgba("#f4f7ff", 0.55);
+    ctx.font = "700 20px -apple-system, system-ui, sans-serif";
+    ctx.fillText("APP DE TREINO PERSONAL", tileX + tileS + 22, tileY + 76);
+
+    const pillText = isFeed ? "DO FEED" : "CONCLUÍDO";
+    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
+    const pillTW = ctx.measureText(pillText).width;
+    const pillH = 56;
+    const pillW = pillTW + 84;
+    const pillX = W - PAD - pillW;
+    const pillY = tileY + (tileS - pillH)/2;
+    roundRect(pillX, pillY, pillW, pillH, pillH/2);
+    ctx.fillStyle = rgba(brand, 0.18);
+    ctx.fill();
+    ctx.strokeStyle = rgba(brand, 0.65);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    drawCheck(pillX + 30, pillY + pillH/2, 26, brand);
+    ctx.fillStyle = brand;
+    ctx.textAlign = "left";
+    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.fillText(pillText, pillX + 56, pillY + pillH/2 + 1);
+    ctx.textBaseline = "alphabetic";
+
+    // ---------- HERO ----------
+    ctx.fillStyle = rgba("#f4f7ff", 0.45);
+    ctx.font = "800 22px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(dateLabel.toUpperCase(), PAD, 308);
 
     ctx.fillStyle = brand;
-    ctx.font = "900 34px -apple-system, system-ui, sans-serif";
-    ctx.fillText(meta.source === "feed" ? "TREINO DO FEED" : "TREINO CONCLUÍDO", 104, 348);
+    ctx.font = "900 48px -apple-system, system-ui, sans-serif";
+    ctx.fillText(isFeed ? "TREINO COMPARTILHADO" : "TREINO CONCLUÍDO", PAD, 372);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "900 88px -apple-system, system-ui, sans-serif";
-    wrapText(wname, W - 208, 3).forEach((line, i) => {
-      ctx.fillText(line, 104, 446 + i * 94);
+    const titleFont = "900 96px -apple-system, system-ui, sans-serif";
+    const titleLines = wrapText(wname, titleFont, W - PAD*2 - 20, 3);
+    ctx.font = titleFont;
+    titleLines.forEach((line, i) => {
+      ctx.fillText(line, PAD, 472 + i * 104);
     });
 
-    const statY = 744;
-    const statW = (W - 248) / 3;
+    if (firstName || studentName) {
+      ctx.fillStyle = rgba("#f4f7ff", 0.72);
+      ctx.font = "600 28px -apple-system, system-ui, sans-serif";
+      const who = studentName || firstName;
+      ctx.fillText(`Por ${who}`, PAD, 472 + titleLines.length * 104 + 30);
+    }
+
+    // ---------- STATS ----------
+    const statY = 858;
+    const statH = 224;
+    roundRect(PAD, statY, W - PAD*2, statH, 32);
+    const statGrad = ctx.createLinearGradient(PAD, statY, PAD, statY+statH);
+    statGrad.addColorStop(0, rgba("#ffffff", 0.07));
+    statGrad.addColorStop(1, rgba("#ffffff", 0.025));
+    ctx.fillStyle = statGrad; ctx.fill();
+    ctx.strokeStyle = rgba("#ffffff", 0.10);
+    ctx.lineWidth = 2; ctx.stroke();
+
+    const colW = (W - PAD*2) / 3;
+    const stats = [
+      { label: "SÉRIES", value: String(sets), draw: drawDumbbell },
+      { label: "VOLUME", value: `${volKg.toLocaleString("pt-BR")} kg`, draw: drawFlame },
+      { label: "TEMPO",  value: `${minutes} min`, draw: drawClock },
+    ];
+
     stats.forEach((s, i) => {
-      const x = 104 + i * (statW + 20);
-      roundRect(x, statY, statW, 176, 26);
-      ctx.fillStyle = "rgba(255,255,255,.075)";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,.10)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      const cx = PAD + colW * i + colW/2;
+      s.draw(cx, statY + 64, 56, brand);
       ctx.fillStyle = "#ffffff";
-      ctx.font = "900 48px -apple-system, system-ui, sans-serif";
+      ctx.font = "900 60px -apple-system, system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(s.value, x + statW / 2, statY + 82);
-      ctx.fillStyle = "rgba(238,246,255,.58)";
-      ctx.font = "800 24px -apple-system, system-ui, sans-serif";
-      ctx.fillText(s.label.toUpperCase(), x + statW / 2, statY + 124);
+      ctx.fillText(s.value, cx, statY + 154);
+      ctx.fillStyle = rgba("#f4f7ff", 0.55);
+      ctx.font = "900 20px -apple-system, system-ui, sans-serif";
+      ctx.fillText(s.label, cx, statY + 192);
     });
+    ctx.strokeStyle = rgba("#ffffff", 0.10);
+    ctx.lineWidth = 1.5;
+    for (let i = 1; i < 3; i++) {
+      const x = PAD + colW * i;
+      ctx.beginPath();
+      ctx.moveTo(x, statY + 36);
+      ctx.lineTo(x, statY + statH - 36);
+      ctx.stroke();
+    }
 
+    // ---------- QUOTE ----------
+    const quoteY = 1130;
+    const quoteH = 116;
+    roundRect(PAD, quoteY, W - PAD*2, quoteH, 28);
+    const qGrad = ctx.createLinearGradient(PAD, quoteY, W - PAD, quoteY);
+    qGrad.addColorStop(0, rgba(brand, 0.22));
+    qGrad.addColorStop(1, rgba(brand, 0.06));
+    ctx.fillStyle = qGrad; ctx.fill();
+    ctx.strokeStyle = rgba(brand, 0.55);
+    ctx.lineWidth = 2; ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 32px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "left";
-    roundRect(104, 992, W - 208, 152, 28);
-    ctx.fillStyle = brand + "18";
-    ctx.fill();
-    ctx.strokeStyle = brand + "66";
-    ctx.stroke();
-    ctx.fillStyle = "#eef6ff";
-    ctx.font = "800 40px -apple-system, system-ui, sans-serif";
-    ctx.fillText("Missão cumprida.", 144, 1060);
-    ctx.fillStyle = "rgba(238,246,255,.66)";
-    ctx.font = "500 27px -apple-system, system-ui, sans-serif";
-    ctx.fillText("Compartilhado pelo Treinova", 144, 1104);
+    ctx.fillText(isFeed ? "Performance no feed." : "Mais um na conta. 💪", PAD + 32, quoteY + 50);
+    ctx.fillStyle = rgba("#f4f7ff", 0.70);
+    ctx.font = "600 22px -apple-system, system-ui, sans-serif";
+    ctx.fillText(isFeed ? "Acompanhe a evolução do aluno no Treinova." : "Disciplina vira progresso. Vamos pro próximo.", PAD + 32, quoteY + 86);
 
-    ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(238,246,255,.38)";
-    ctx.font = "700 24px -apple-system, system-ui, sans-serif";
-    ctx.fillText("#Treinova", W / 2, 1222);
+    // ---------- FOOTER ----------
+    ctx.strokeStyle = rgba("#ffffff", 0.10);
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, H - 110); ctx.lineTo(W - PAD, H - 110); ctx.stroke();
+
+    ctx.fillStyle = rgba("#f4f7ff", 0.62);
+    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(`@${handleName}`.toUpperCase(), PAD, H - 60);
+    ctx.fillStyle = brand;
+    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(`#${appName}`, W - PAD, H - 60);
 
     return await new Promise(res => canvas.toBlob(res, "image/png"));
   } catch(e) {
