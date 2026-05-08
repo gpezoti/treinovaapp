@@ -58,6 +58,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overscroll-behavior-y: none; overflow-x: hidden; }
 body { min-height: 100vh; background: radial-gradient(1200px 600px at 20% -10%, var(--brand-soft), transparent 60%),
   radial-gradient(900px 500px at 100% 0%, var(--brand-soft), transparent 60%), var(--bg); }
+body.no-scroll { overflow:hidden; touch-action:none; }
 button { font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer; padding: 0; }
 input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--brand); text-decoration: none; }
@@ -3063,8 +3064,7 @@ function repairInteractionLayer(reason = "resume") {
     document.documentElement.style.pointerEvents = "";
     document.body.style.pointerEvents = "";
     document.documentElement.style.touchAction = "";
-    document.body.style.touchAction = "";
-    document.body.classList.remove("is-loading", "is-busy", "no-scroll", "modal-open");
+    document.body.classList.remove("is-loading", "is-busy", "modal-open");
 
     const active = document.activeElement;
     if (active && active !== document.body && typeof active.blur === "function" && document.visibilityState === "visible") {
@@ -3089,6 +3089,9 @@ function repairInteractionLayer(reason = "resume") {
       if (sheet.classList.contains("active") && !hasUsefulContent && !hasAction) {
         sheet.classList.remove("active");
         _sheetInHistory = false;
+        unlockPageScrollForSheet();
+      } else if (!sheet.classList.contains("active")) {
+        unlockPageScrollForSheet();
       }
     }
 
@@ -3962,6 +3965,31 @@ let _coachFinanceTab = "mine";      // aba ativa no financeiro do professor: min
 let _trainerSelected = new Set();
 let _periodScrollTop = 0;           // preservar scroll da sheet de periodização
 let _editingStudentId = null;       // aluno sendo editado na periodização
+let _sheetScrollY = 0;
+let _exerciseLibraryFilterScrollLeft = 0;
+
+function lockPageScrollForSheet() {
+  if (document.body.classList.contains("no-scroll")) return;
+  _sheetScrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+  document.body.classList.add("no-scroll");
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${_sheetScrollY}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+}
+
+function unlockPageScrollForSheet() {
+  if (!document.body.classList.contains("no-scroll")) return;
+  document.body.classList.remove("no-scroll");
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.left = "";
+  document.body.style.right = "";
+  document.body.style.width = "";
+  window.scrollTo(0, _sheetScrollY || 0);
+  _sheetScrollY = 0;
+}
 
 function openSheet(html) {
   const root = document.getElementById("sheet-content");
@@ -3970,6 +3998,7 @@ function openSheet(html) {
   const sheet = document.getElementById("sheet");
   sheet.style.pointerEvents = "";
   sheet.classList.add("active");
+  lockPageScrollForSheet();
   // reseta scroll para o topo
   try { sheet.scrollTop = 0; } catch(e){}
   // Empurra estado para que o botão voltar (hardware/browser) feche a sheet
@@ -4033,6 +4062,7 @@ function closeSheet() {
   if (!sheet || !sheet.classList.contains("active")) return;
   sheet.classList.remove("active");
   sheet.style.pointerEvents = "none";
+  unlockPageScrollForSheet();
   // Se o estado da sheet está no histórico, volta para limpá-lo
   if (_sheetInHistory) {
     _sheetInHistory = false;
@@ -4069,6 +4099,8 @@ window.addEventListener('popstate', (e) => {
   const sheet = document.getElementById("sheet");
   if (sheet && sheet.classList.contains("active")) {
     sheet.classList.remove("active");
+    sheet.style.pointerEvents = "none";
+    unlockPageScrollForSheet();
   }
 });
 
@@ -8672,12 +8704,12 @@ function renderExerciseLibraryManagerHTML() {
         autocomplete="off" autocorrect="off" autocapitalize="off"
         oninput="setExerciseLibraryQuery(this.value)" />
     </div>
-    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px">
+    <div id="exercise-library-group-scroll" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px">
       ${groups.map(g => {
         const active = currentGroup === g;
         const label = g === "todos" ? "Todos" : g;
         const count = g === "todos" ? all.length : (counts[g] || 0);
-        return `<button class="mini-btn ${active ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" onclick="setExerciseLibraryGroup('${escapeAttr(g)}')">${escape(label)} · ${count}</button>`;
+        return `<button class="mini-btn ${active ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" aria-pressed="${active ? "true" : "false"}" onclick="setExerciseLibraryGroup('${escapeAttr(g)}')">${escape(label)} · ${count}</button>`;
       }).join("")}
     </div>
     ${filtered.length ? Object.keys(grouped).map(group => `
@@ -8711,8 +8743,14 @@ window.setExerciseLibraryQuery = function(value) {
 };
 
 window.setExerciseLibraryGroup = function(group) {
+  const scroller = document.getElementById("exercise-library-group-scroll");
+  if (scroller) _exerciseLibraryFilterScrollLeft = scroller.scrollLeft || 0;
   STATE.exerciseLibraryGroup = group || "todos";
   renderAdminWorkouts();
+  requestAnimationFrame(() => {
+    const nextScroller = document.getElementById("exercise-library-group-scroll");
+    if (nextScroller) nextScroller.scrollLeft = _exerciseLibraryFilterScrollLeft || 0;
+  });
 };
 
 window.openLibraryExerciseSheet = function(exId = "") {

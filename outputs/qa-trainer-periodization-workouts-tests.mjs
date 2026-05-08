@@ -32,6 +32,10 @@ assert.match(html, /function renderExerciseLibraryManagerHTML/, "Exercise librar
 assert.match(html, /openLibraryExerciseSheet/, "Trainer must be able to create/edit library exercises");
 assert.match(html, /deleteLibraryExercise/, "Trainer must be able to remove library exercises");
 assert.match(html, /EXERCISE_LIBRARY_GROUPS/, "Exercise library must use standardized muscle groups");
+assert.match(html, /function lockPageScrollForSheet/, "Open sheets must lock background page scroll");
+assert.match(html, /unlockPageScrollForSheet/, "Closing sheets must restore page scroll");
+assert.match(html, /exercise-library-group-scroll/, "Exercise category filters must have a stable scroll container");
+assert.match(html, /_exerciseLibraryFilterScrollLeft/, "Exercise category filters must preserve horizontal scroll");
 assert.match(html, /coach-finance-tabs[\s\S]*aria-label="Treinos do professor"/, "Trainer workouts tabs must reuse the finance tab component");
 assert.match(html, /coach-finance-tabs coach-finance-tabs-3[\s\S]*aria-label="Treinos do professor"/, "Trainer workouts tabs must fit 3 tabs on one row");
 assert.match(html, /Esse código já existe/, "Duplicate periodization type codes must show a friendly validation message");
