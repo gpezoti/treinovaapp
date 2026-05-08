@@ -435,6 +435,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .coach-finance-tab-sub { font-size:10px; font-weight:800; letter-spacing:.7px; text-transform:uppercase; color:var(--text-3);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .coach-finance-tab.active .coach-finance-tab-sub { color:var(--brand); }
+.coach-finance-tabs-3 { grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; padding:4px; }
+.coach-finance-tabs-3 .coach-finance-tab { min-height:52px; padding:8px 6px; align-items:center; text-align:center; }
+.coach-finance-tabs-3 .coach-finance-tab-label { font-size:12px; letter-spacing:0; }
+.coach-finance-tabs-3 .coach-finance-tab-sub { font-size:9px; letter-spacing:.3px; }
+@media (max-width:380px) {
+  .coach-finance-tabs-3 .coach-finance-tab { min-height:48px; padding:7px 4px; }
+  .coach-finance-tabs-3 .coach-finance-tab-label { font-size:11px; }
+  .coach-finance-tabs-3 .coach-finance-tab-sub { font-size:8px; letter-spacing:.2px; }
+}
 
 /* Empty / generic */
 .empty { text-align: center; padding: 40px 16px; color: var(--text-2); }
@@ -8560,7 +8569,7 @@ function renderAdminWorkouts() {
       ${actionButton}
     </div>
     <p class="view-subtitle">Configure modelos, periodização e biblioteca de exercícios usados nos alunos.</p>
-    <div class="coach-finance-tabs" role="tablist" aria-label="Treinos do professor">
+    <div class="coach-finance-tabs coach-finance-tabs-3" role="tablist" aria-label="Treinos do professor">
       <button type="button" role="tab" aria-selected="${tab === "workouts" ? "true" : "false"}" class="coach-finance-tab ${tab === "workouts" ? "active" : ""}" onclick="setAdminWorkoutTab('workouts')">
         <span class="coach-finance-tab-label">Treinos</span>
         <span class="coach-finance-tab-sub">${workouts.length} modelo${workouts.length === 1 ? "" : "s"}</span>

@@ -33,6 +33,7 @@ assert.match(html, /openLibraryExerciseSheet/, "Trainer must be able to create/e
 assert.match(html, /deleteLibraryExercise/, "Trainer must be able to remove library exercises");
 assert.match(html, /EXERCISE_LIBRARY_GROUPS/, "Exercise library must use standardized muscle groups");
 assert.match(html, /coach-finance-tabs[\s\S]*aria-label="Treinos do professor"/, "Trainer workouts tabs must reuse the finance tab component");
+assert.match(html, /coach-finance-tabs coach-finance-tabs-3[\s\S]*aria-label="Treinos do professor"/, "Trainer workouts tabs must fit 3 tabs on one row");
 assert.match(html, /Esse código já existe/, "Duplicate periodization type codes must show a friendly validation message");
 assert.match(html, /PERIOD_COLOR_OPTIONS/, "Period type colors must be selectable visually");
 assert.match(html, /renderPeriodColorPicker/, "New/edit period type forms must use visual color picker");
