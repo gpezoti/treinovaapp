@@ -2512,24 +2512,55 @@ async function mutateCompletedWorkoutSession(action) {
       p_action: action
     });
     if (error) throw error;
-    if (action === "delete") {
-      STATE.currentSession = null;
-      STATE.setLogs = [];
-      await loadPeriodization();
-      showToast("Treino de hoje apagado", "success");
-      navTo("home");
-      return true;
-    }
-    await loadOrCreateSession(STATE.selectedDate || todayISO(), STATE.selectedWorkout, STATE.selectedIntensity);
-    if (action === "restart") STATE.setLogs = [];
-    showToast(action === "restart" ? "Treino reiniciado" : "Treino reaberto para continuar", "success");
-    renderWorkout();
+    await afterCompletedWorkoutMutation(action);
     return true;
   } catch(e) {
-    console.error(`[${labels[action] || "ajustar treino"}]`, e);
-    showToast("Erro: aplique a migration student_workout_session_recovery_2026_05_06.sql no Supabase.", "error");
-    return false;
+    console.warn(`[${labels[action] || "ajustar treino"} rpc]`, e);
+    try {
+      await mutateCompletedWorkoutSessionDirect(action);
+      await afterCompletedWorkoutMutation(action);
+      return true;
+    } catch(directErr) {
+      console.error(`[${labels[action] || "ajustar treino"}]`, directErr);
+      showToast("Erro ao ajustar treino. Recarregue o app e tente novamente.", "error");
+      return false;
+    }
   }
+}
+
+async function mutateCompletedWorkoutSessionDirect(action) {
+  const sessionId = STATE.currentSession.id;
+  if (action === "delete" || action === "restart") {
+    const { error: logsErr } = await sb.from("set_logs").delete().eq("session_id", sessionId).eq("student_id", STATE.profile.id);
+    if (logsErr) throw logsErr;
+  }
+  if (action === "delete") {
+    const { error: sessionErr } = await sb.from("sessions").delete().eq("id", sessionId).eq("student_id", STATE.profile.id);
+    if (sessionErr) throw sessionErr;
+    return;
+  }
+  const { error: sessionErr } = await sb.from("sessions").update({
+    status: "in_progress",
+    completed_at: null,
+    duration_seconds: null,
+    total_volume_kg: null
+  }).eq("id", sessionId).eq("student_id", STATE.profile.id);
+  if (sessionErr) throw sessionErr;
+}
+
+async function afterCompletedWorkoutMutation(action) {
+  if (action === "delete") {
+    STATE.currentSession = null;
+    STATE.setLogs = [];
+    await loadPeriodization();
+    showToast("Treino de hoje apagado", "success");
+    navTo("home");
+    return true;
+  }
+  await loadOrCreateSession(STATE.selectedDate || todayISO(), STATE.selectedWorkout, STATE.selectedIntensity);
+  if (action === "restart") STATE.setLogs = [];
+  showToast(action === "restart" ? "Treino reiniciado" : "Treino reaberto para continuar", "success");
+  renderWorkout();
 }
 
 window.reopenCompletedWorkout = async function() {
@@ -3281,6 +3312,17 @@ async function ensureRestNotificationPermission() {
   } catch(e) {}
   return false;
 }
+
+async function getCurrentPushSubscriptionPayload() {
+  try {
+    const sub = await subscribePushNotifications({ throwOnError: true });
+    return sub ? sub.toJSON() : null;
+  } catch(e) {
+    console.warn("[push subscription payload]", e);
+    return null;
+  }
+}
+
 async function notifyRestFinished(exerciseName) {
   if (!("Notification" in window) || Notification.permission !== "granted") return false;
   const title = "Descanso finalizado";
@@ -3389,13 +3431,15 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       return false;
     }
     const fireAt = new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString();
+    const subscription = await getCurrentPushSubscriptionPayload();
     const { error } = await sb.functions.invoke("rest-timer-push", {
       body: {
         action: "schedule",
         timer_id: STATE.timer.id,
         fire_at: fireAt,
         exercise_name: exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
-        url: `${location.pathname || "/"}?view=workout&restTimer=1`
+        url: `${location.pathname || "/"}?view=workout&restTimer=1`,
+        subscription
       }
     });
     if (error) console.warn("[rest timer server schedule invoke]", error);
@@ -3818,12 +3862,70 @@ async function loadAdminPayments() {
     console.error("[payments] Falha ao carregar financeiro admin", error);
     showToast("Erro ao carregar financeiro ADM: " + error.message, "error");
   }
-  STATE.adminPayments = data || [];
+  const rows = data || [];
+  STATE.adminPayments = await mergeAdminPaymentProfiles(rows);
 }
 async function loadCoachPayments() {
-  const { data } = await sb.from("v_coach_payments")
+  const { data, error } = await sb.from("v_coach_payments")
     .select("*").eq("coach_id", STATE.profile.id).order("full_name");
-  STATE.coachPayments = data || [];
+  if (error) console.error("[payments] Falha ao carregar financeiro coach", error);
+  STATE.coachPayments = await mergeCoachPaymentProfiles(data || []);
+}
+
+function emptyPaymentPerson(p, idKey) {
+  return {
+    [idKey]: p.id,
+    full_name: p.full_name,
+    email: p.email,
+    avatar_emoji: p.avatar_emoji,
+    avatar_url: p.avatar_url,
+    phone: p.phone,
+    coach_id: p.coach_id,
+    is_overdue: false,
+    overdue_count: 0,
+    open_count: 0,
+    paid_count: 0,
+    open_amount: 0,
+    paid_amount_month: 0,
+    paid_amount_total: 0,
+    last_paid_at: null,
+    next_due: null
+  };
+}
+
+async function mergeAdminPaymentProfiles(rows) {
+  if (STATE.profile?.role !== "admin") return rows;
+  const byId = new Map((rows || []).map(r => [r.coach_id, r]));
+  const { data, error } = await sb.from("profiles")
+    .select("id,email,full_name,avatar_emoji,avatar_url,phone,coach_id")
+    .eq("role", "coach")
+    .order("full_name");
+  if (error) {
+    console.warn("[payments] fallback professores", error);
+    return rows;
+  }
+  (data || []).forEach(p => {
+    if (!byId.has(p.id)) byId.set(p.id, emptyPaymentPerson(p, "coach_id"));
+  });
+  return [...byId.values()].sort((a, b) => String(a.full_name || a.email || "").localeCompare(String(b.full_name || b.email || "")));
+}
+
+async function mergeCoachPaymentProfiles(rows) {
+  if (STATE.profile?.role !== "coach") return rows;
+  const byId = new Map((rows || []).map(r => [r.student_id, r]));
+  const { data, error } = await sb.from("profiles")
+    .select("id,email,full_name,avatar_emoji,avatar_url,phone,coach_id")
+    .eq("role", "student")
+    .eq("coach_id", STATE.profile.id)
+    .order("full_name");
+  if (error) {
+    console.warn("[payments] fallback alunos", error);
+    return rows;
+  }
+  (data || []).forEach(p => {
+    if (!byId.has(p.id)) byId.set(p.id, emptyPaymentPerson(p, "student_id"));
+  });
+  return [...byId.values()].sort((a, b) => String(a.full_name || a.email || "").localeCompare(String(b.full_name || b.email || "")));
 }
 async function loadPaymentsForUser(userId, opts = {}) {
   const { data, error } = await sb.from("payments")
@@ -4754,9 +4856,8 @@ window.bulkBlockTrainers = async function() {
   const ids = [..._trainerSelected];
   for (const id of ids) {
     const trainer = (STATE.trainers || []).find(t => t.id === id);
-    const { data, error } = await sb.functions.invoke("admin-user", {
-      body: {
-        action: "update_trainer",
+    try {
+      await runAdminTrainerAction("update_trainer", {
         user_id: id,
         full_name: trainer?.full_name || trainer?.email || "Treinador",
         email: trainer?.email || "",
@@ -4764,9 +4865,10 @@ window.bulkBlockTrainers = async function() {
         avatar_emoji: trainer?.avatar_emoji || "🎯",
         status: "blocked",
         role: trainer?.role || "coach",
-      }
-    });
-    if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
+      });
+    } catch (e) {
+      showToast("Erro: " + adminUserDeployMessage(e.message || "tente novamente"), "error"); return;
+    }
   }
   showToast(`${ids.length} treinador(es) bloqueado(s)`, "success");
   _trainerSelected.clear();
@@ -4777,10 +4879,11 @@ window.bulkDeleteTrainers = async function() {
   if (!await showConfirm({ title: "Remover treinadores?", msg: `${_trainerSelected.size} treinador(es) serão despromovidos para aluno, bloqueados e terão os alunos desvinculados.`, confirm: "Remover", cancel: "Cancelar", danger: true })) return;
   const ids = [..._trainerSelected];
   for (const id of ids) {
-    const { data, error } = await sb.functions.invoke("admin-user", {
-      body: { action: "remove_trainer", user_id: id }
-    });
-    if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
+    try {
+      await runAdminTrainerAction("remove_trainer", { user_id: id });
+    } catch (e) {
+      showToast("Erro: " + adminUserDeployMessage(e.message || "tente novamente"), "error"); return;
+    }
   }
   showToast(`${ids.length} treinador(es) removido(s)`, "success");
   removeUsersFromLocalLists(ids);
@@ -4790,9 +4893,8 @@ window.bulkDeleteTrainers = async function() {
 
 window.setTrainerStatus = async function(id, status) {
   const trainer = (STATE.trainers || []).find(t => t.id === id);
-  const { data, error } = await sb.functions.invoke("admin-user", {
-    body: {
-      action: "update_trainer",
+  try {
+    await runAdminTrainerAction("update_trainer", {
       user_id: id,
       full_name: trainer?.full_name || trainer?.email || "Treinador",
       email: trainer?.email || "",
@@ -4800,18 +4902,20 @@ window.setTrainerStatus = async function(id, status) {
       avatar_emoji: trainer?.avatar_emoji || "🎯",
       status,
       role: trainer?.role || "coach",
-    }
-  });
-  if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
+    });
+  } catch (e) {
+    showToast("Erro: " + adminUserDeployMessage(e.message || "tente novamente"), "error"); return;
+  }
   showToast(status === "approved" ? "Treinador aprovado" : status === "blocked" ? "Bloqueado" : "Atualizado", "success");
   await loadTrainers(); renderTrainers();
 };
 window.removeTrainer = async function(id, email) {
   if (!await showConfirm({ title: "Remover treinador?", msg: `O usuário ${email} será despromovido para aluno e bloqueado.`, confirm: "Remover", danger: true })) return;
-  const { data, error } = await sb.functions.invoke("admin-user", {
-    body: { action: "remove_trainer", user_id: id }
-  });
-  if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
+  try {
+    await runAdminTrainerAction("remove_trainer", { user_id: id });
+  } catch (e) {
+    showToast("Erro: " + adminUserDeployMessage(e.message || "tente novamente"), "error"); return;
+  }
   showToast("Treinador removido", "success");
   closeSheet();
   removeUsersFromLocalLists(id);
@@ -4839,6 +4943,42 @@ async function getFunctionErrorMessage(error, fallback = "tente novamente") {
     }
   } catch(e) {}
   return error?.message || fallback;
+}
+
+function adminUserDeployMessage(msg) {
+  if (/Ação desconhecida:\s*(update_trainer|remove_trainer)/i.test(msg) || /non-2xx status code/i.test(msg)) {
+    return "Função admin-user desatualizada no Supabase. Rode o deploy das funções e tente novamente.";
+  }
+  return msg;
+}
+
+function isAdminUserFunctionOutdated(msg) {
+  return /Ação desconhecida:\s*(update_trainer|remove_trainer)/i.test(msg) || /non-2xx status code/i.test(msg);
+}
+
+async function runAdminTrainerAction(action, body) {
+  const { data, error } = await sb.functions.invoke("admin-user", { body: { action, ...body } });
+  if (!error && !data?.error) return data;
+
+  const msg = await getFunctionErrorMessage(error || new Error(data?.error || ""));
+  if (!isAdminUserFunctionOutdated(msg)) throw new Error(msg);
+
+  const rpc = action === "remove_trainer"
+    ? await sb.rpc("admin_remove_trainer", { p_user_id: body.user_id })
+    : await sb.rpc("admin_update_trainer", {
+        p_user_id: body.user_id,
+        p_email: body.email,
+        p_full_name: body.full_name,
+        p_phone: body.phone || null,
+        p_avatar_emoji: body.avatar_emoji || null,
+        p_status: body.status || "approved",
+        p_role: body.role || "coach",
+        p_password: body.password || null,
+      });
+
+  if (rpc.error) throw new Error(rpc.error.message || msg);
+  if (rpc.data?.error) throw new Error(rpc.data.error);
+  return rpc.data || { ok: true, action };
 }
 
 async function getPushErrorMessage(error) {
@@ -5519,21 +5659,16 @@ window.submitEditTrainer = async function(id) {
   if (!name || !email) { showToast("Preencha nome e email", "error"); return; }
   if (password && password.length < 6) { showToast("Senha temporária precisa ter 6+ caracteres", "error"); return; }
   try {
-    const { data, error } = await sb.functions.invoke("admin-user", {
-      body: {
-        action: "update_trainer",
-        user_id: id,
-        full_name: name,
-        email,
-        phone,
-        avatar_emoji: emoji,
-        status,
-        role,
-        password: password || undefined,
-      }
+    await runAdminTrainerAction("update_trainer", {
+      user_id: id,
+      full_name: name,
+      email,
+      phone,
+      avatar_emoji: emoji,
+      status,
+      role,
+      password: password || undefined,
     });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
     showToast("Treinador atualizado", "success");
     closeSheet();
     await loadTrainers();
@@ -8025,13 +8160,17 @@ function renderAdminWorkouts() {
     <p class="view-subtitle">Crie e edite modelos de treino para os alunos. Ex.: A, B, C, D, FLEX ou um nome personalizado.</p>
     ${workouts.length ? workouts.map(w => {
       const code = w.code;
+      const canDelete = ["admin","coach"].includes(STATE.profile?.role);
       return `<div class="card mb-14">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-          <div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+          <div style="min-width:0;flex:1">
             <div class="fw-700">${escape(w.name || code)}</div>
             <div class="text-xs muted">${escape(code)}${w.focus ? " · " + escape(w.focus) : ""}</div>
           </div>
-          <button class="mini-btn mini-btn-primary" onclick="openWorkoutEditor('${escapeAttr(code)}')">Editar</button>
+          <div class="row-flex" style="gap:6px;flex:0 0 auto;">
+            <button class="mini-btn mini-btn-primary" onclick="openWorkoutEditor('${escapeAttr(code)}','${w.id || ''}')">Editar</button>
+            ${canDelete ? `<button class="mini-btn mini-btn-danger" title="Excluir tipo de treino" onclick="deleteWorkoutType('${w.id || ''}','${escapeAttr(code)}','${escapeAttr(w.name || code)}')">×</button>` : ""}
+          </div>
         </div>
         <div class="text-xs muted">${(w.exercises || []).length} exercícios</div>
       </div>`;
@@ -8103,6 +8242,49 @@ window.createWorkoutType = async function() {
     showToast("Erro ao criar tipo: " + (e.message || "verifique permissões"), "error");
   } finally {
     STATE._creatingWorkoutType = false;
+  }
+};
+
+window.deleteWorkoutType = async function(workoutId, code, name) {
+  if (!["admin","coach"].includes(STATE.profile?.role)) {
+    showToast("Sem permissão para excluir treinos.", "error");
+    return;
+  }
+  if (STATE._deletingWorkout) return;
+  // Aviso forte se houver alunos com sessoes desse codigo
+  const ok = await showConfirm({
+    title: `Excluir ${name || code}?`,
+    msg: "O tipo de treino e seus exercícios serão removidos. Sessões já concluídas dos alunos continuam no histórico.",
+    confirm: "Excluir",
+    cancel: "Cancelar",
+    danger: true
+  });
+  if (!ok) return;
+  STATE._deletingWorkout = true;
+  try {
+    let wid = workoutId;
+    if (!wid && code && STATE.workouts && STATE.workouts[code]) wid = STATE.workouts[code].id;
+    if (!wid) {
+      // ultima tentativa: buscar pelo codigo
+      const { data } = await sb.from("workouts").select("id").eq("code", code).limit(1).maybeSingle();
+      wid = data?.id;
+    }
+    if (!wid) {
+      showToast("Treino não encontrado para excluir.", "error");
+      return;
+    }
+    // apaga exercicios primeiro (defesa caso FK seja RESTRICT)
+    await sb.from("exercises").delete().eq("workout_id", wid);
+    const { error } = await sb.from("workouts").delete().eq("id", wid);
+    if (error) throw error;
+    showToast("Treino excluído", "success");
+    await loadWorkouts();
+    renderAdminWorkouts();
+  } catch (e) {
+    console.error("[deleteWorkoutType]", e);
+    showToast("Erro ao excluir: " + (e.message || "verifique permissões"), "error");
+  } finally {
+    STATE._deletingWorkout = false;
   }
 };
 
@@ -8404,12 +8586,20 @@ window.submitNewExercise = async function() {
 };
 
 window.editExercise = async function(exId) {
-  let ex;
+  let ex, exWorkoutCode = "", exWorkoutId = "";
   for (const code in STATE.workouts) {
-    const f = STATE.workouts[code].exercises.find(e => e.id === exId);
-    if (f) { ex = f; break; }
+    const w = STATE.workouts[code];
+    const f = (w.exercises || []).find(e => e.id === exId);
+    if (f) { ex = f; exWorkoutCode = w.code || code; exWorkoutId = w.id || ""; break; }
+  }
+  if (!ex) {
+    // fallback: buscar diretamente no banco
+    const { data: row } = await sb.from("exercises").select("*").eq("id", exId).single();
+    if (row) { ex = row; exWorkoutCode = ""; exWorkoutId = row.workout_id || ""; }
   }
   if (!ex) return;
+  // contexto preservado para Salvar/Cancelar voltarem corretamente
+  STATE._editingExerciseCtx = { exId, code: exWorkoutCode, workoutId: exWorkoutId };
   const html = `
     <h3>Editar exercício</h3>
     <p style="font-size:13px;color:var(--text-2)">${escape(ex.name)}</p>
@@ -8454,7 +8644,7 @@ window.editExercise = async function(exId) {
     <div class="form-group"><label class="form-label">Método</label><input class="input" id="ex-method" value="${escape(ex.method || '')}" /></div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="input textarea" id="ex-obs">${escape(ex.observations || '')}</textarea></div>
     <button class="btn-primary" onclick="saveExercise('${exId}')">Salvar</button>
-    <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Cancelar</button>
+    <button class="btn-ghost" onclick="returnFromExerciseEditor()" style="margin-top:8px">Cancelar</button>
   `;
   openSheet(html);
 };
@@ -8517,9 +8707,27 @@ window.saveExercise = async function(id) {
   const { error } = await sb.from("exercises").update(patch).eq("id", id);
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Exercício salvo", "success");
-  closeSheet();
   await loadWorkouts();
-  renderAdminWorkouts();
+  await returnFromExerciseEditor();
+};
+
+// Volta para a lista de exercicios do treino que estavamos editando.
+// Se nao houver contexto, fecha o sheet e renderiza a lista de treinos.
+window.returnFromExerciseEditor = async function() {
+  const ctx = STATE._editingExerciseCtx;
+  STATE._editingExerciseCtx = null;
+  if (ctx && (ctx.workoutId || ctx.code)) {
+    try {
+      await window.openWorkoutEditor(ctx.code || "", ctx.workoutId || "");
+      return;
+    } catch (e) {
+      console.warn("[returnFromExerciseEditor]", e);
+    }
+  }
+  closeSheet();
+  if (STATE.profile?.role === "coach" || STATE.profile?.role === "admin") {
+    renderAdminWorkouts();
+  }
 };
 
 /* =============================================================================
@@ -9159,8 +9367,9 @@ async function requestPushPermission() {
 window.testRestTimerPushNow = async function() {
   try {
     ensureRestNotificationPermission().catch((e) => console.warn("[rest push test permission]", e));
+    const subscription = await getCurrentPushSubscriptionPayload();
     const { data, error } = await sb.functions.invoke("rest-timer-push", {
-      body: { action: "test" }
+      body: { action: "test", subscription, user_agent: navigator.userAgent }
     });
     if (error) throw error;
     if (data?.error) throw new Error(data.error);
@@ -9174,6 +9383,7 @@ window.testRestTimerPushNow = async function() {
 window.testRestTimerPushDelayed = async function() {
   try {
     ensureRestNotificationPermission().catch((e) => console.warn("[rest push delayed permission]", e));
+    const subscription = await getCurrentPushSubscriptionPayload();
     const timerId = `manual-test-${Date.now()}`;
     const fireAt = new Date(Date.now() + 15_000).toISOString();
     const { data, error } = await sb.functions.invoke("rest-timer-push", {
@@ -9181,7 +9391,9 @@ window.testRestTimerPushDelayed = async function() {
         action: "schedule",
         timer_id: timerId,
         fire_at: fireAt,
-        exercise_name: "Teste bloqueado"
+        exercise_name: "Teste bloqueado",
+        subscription,
+        user_agent: navigator.userAgent
       }
     });
     if (error) console.warn("[rest push delayed invoke]", error);
@@ -11111,16 +11323,30 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
 
-    const brand = STATE.branding && STATE.branding.brand_color || "#13baf2";
-    const appName = (STATE.branding && STATE.branding.app_name) || "TREINOVA";
+    // ---------- helpers ----------
+    const brand = (STATE.branding && STATE.branding.brand_color) || "#13baf2";
+    const appName = ((STATE.branding && STATE.branding.app_name) || "TREINOVA").toUpperCase();
+    const handleName = ((STATE.branding && STATE.branding.app_name) || "treinova").toLowerCase().replace(/\s+/g, "");
     const studentName = meta.studentName || STATE.profile?.full_name || "";
+    const firstName = (studentName.split(" ")[0] || "").trim();
+    const isFeed = meta.source === "feed";
     const dateLabel = meta.dateLabel || new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
     const minutes = Math.max(0, Math.floor(Number(duration || 0) / 60));
-    const stats = [
-      { label: "Séries", value: String(Math.max(0, Number(setsDone || 0))) },
-      { label: "Volume", value: `${Math.round(Number(totalVolume || 0))} kg` },
-      { label: "Tempo", value: `${minutes} min` },
-    ];
+    const volKg = Math.round(Number(totalVolume || 0));
+    const sets  = Math.max(0, Number(setsDone || 0));
+
+    const hexToRgb = (hex) => {
+      const h = String(hex || "").replace("#", "").trim();
+      const v = h.length === 3 ? h.split("").map(c=>c+c).join("") : h.padEnd(6,"0");
+      return [parseInt(v.slice(0,2),16)||0, parseInt(v.slice(2,4),16)||0, parseInt(v.slice(4,6),16)||0];
+    };
+    const rgba = (hex, a) => { const [r,g,b] = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; };
+    const mix = (hex, target, t) => {
+      const [r1,g1,b1] = hexToRgb(hex);
+      const [r2,g2,b2] = hexToRgb(target);
+      const m = (a,b) => Math.round(a + (b-a) * t);
+      return `rgb(${m(r1,r2)},${m(g1,g2)},${m(b1,b2)})`;
+    };
     const roundRect = (x, y, w, h, r) => {
       ctx.beginPath();
       ctx.moveTo(x + r, y);
@@ -11130,112 +11356,289 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
       ctx.arcTo(x, y, x + w, y, r);
       ctx.closePath();
     };
-    const wrapText = (text, maxWidth, maxLines = 3) => {
+    const wrapText = (text, font, maxWidth, maxLines) => {
+      ctx.font = font;
       const words = String(text || "Treino").split(/\s+/).filter(Boolean);
-      const lines = [];
-      let line = "";
-      words.forEach((word) => {
+      const lines = []; let line = "";
+      for (const word of words) {
         const test = line ? `${line} ${word}` : word;
-        if (ctx.measureText(test).width > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = test;
-        }
-      });
+        if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+        else line = test;
+      }
       if (line) lines.push(line);
-      return lines.slice(0, maxLines);
+      if (lines.length > maxLines) {
+        const last = lines.slice(maxLines - 1).join(" ");
+        let trimmed = last;
+        while (ctx.measureText(trimmed + "…").width > maxWidth && trimmed.length > 0) {
+          trimmed = trimmed.slice(0, -1);
+        }
+        return [...lines.slice(0, maxLines - 1), (trimmed + "…").trim()];
+      }
+      return lines;
     };
 
-    const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, "#050b14");
-    bg.addColorStop(0.48, "#101827");
-    bg.addColorStop(1, "#07111f");
-    ctx.fillStyle = bg;
+    const drawDumbbell = (cx, cy, size, color) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.fillStyle = color;
+      const u = size / 24;
+      ctx.fillRect(-7*u, -1.4*u, 14*u, 2.8*u);
+      ctx.fillRect(-10*u, -5*u, 3*u, 10*u);
+      ctx.fillRect(-12*u, -3.5*u, 2*u, 7*u);
+      ctx.fillRect(7*u, -5*u, 3*u, 10*u);
+      ctx.fillRect(10*u, -3.5*u, 2*u, 7*u);
+      ctx.restore();
+    };
+    const drawClock = (cx, cy, size, color) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = size * 0.10;
+      ctx.lineCap = "round";
+      ctx.beginPath(); ctx.arc(0, 0, size * 0.46, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -size*0.30); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(size*0.22, size*0.04); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, size*0.05, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    };
+    const drawFlame = (cx, cy, size, color) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.fillStyle = color;
+      const u = size / 24;
+      ctx.beginPath();
+      ctx.moveTo(0, -10*u);
+      ctx.bezierCurveTo(7*u, -4*u, 8*u, 2*u, 6*u, 6*u);
+      ctx.bezierCurveTo(5*u, 8*u, 3*u, 10*u, 0, 10*u);
+      ctx.bezierCurveTo(-3*u, 10*u, -7*u, 7*u, -7*u, 2*u);
+      ctx.bezierCurveTo(-7*u, -2*u, -3*u, -3*u, -2*u, -7*u);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = rgba("#ffffff", 0.55);
+      ctx.beginPath();
+      ctx.moveTo(0, -3*u);
+      ctx.bezierCurveTo(3*u, 0, 3.5*u, 4*u, 1.5*u, 7*u);
+      ctx.bezierCurveTo(0, 8*u, -2*u, 7*u, -2.5*u, 5*u);
+      ctx.bezierCurveTo(-3*u, 3*u, -1*u, 1*u, 0, -3*u);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    };
+    const drawCheck = (cx, cy, size, color) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size * 0.18;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(-size*0.36, 0);
+      ctx.lineTo(-size*0.08, size*0.30);
+      ctx.lineTo(size*0.40, -size*0.30);
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    // ---------- background ----------
+    ctx.fillStyle = "#06090f";
+    ctx.fillRect(0, 0, W, H);
+    const baseGrad = ctx.createLinearGradient(0, 0, W, H);
+    baseGrad.addColorStop(0, "#0a1322");
+    baseGrad.addColorStop(0.55, "#0a0f1a");
+    baseGrad.addColorStop(1, "#05080e");
+    ctx.fillStyle = baseGrad;
     ctx.fillRect(0, 0, W, H);
 
-    const glow = ctx.createRadialGradient(W * 0.76, H * 0.14, 0, W * 0.76, H * 0.14, W * 0.65);
-    glow.addColorStop(0, brand + "44");
-    glow.addColorStop(1, "transparent");
-    ctx.fillStyle = glow;
+    const glow1 = ctx.createRadialGradient(W*0.85, H*0.05, 0, W*0.85, H*0.05, W*0.95);
+    glow1.addColorStop(0, rgba(brand, 0.42));
+    glow1.addColorStop(0.45, rgba(brand, 0.10));
+    glow1.addColorStop(1, "transparent");
+    ctx.fillStyle = glow1;
+    ctx.fillRect(0, 0, W, H);
+    const glow2 = ctx.createRadialGradient(W*0.10, H*0.95, 0, W*0.10, H*0.95, W*0.85);
+    glow2.addColorStop(0, rgba(mix(brand, "#000814", 0.45), 0.32));
+    glow2.addColorStop(1, "transparent");
+    ctx.fillStyle = glow2;
     ctx.fillRect(0, 0, W, H);
 
-    ctx.fillStyle = "#ffffff";
-    ctx.globalAlpha = 0.05;
-    for (let i = -120; i < W; i += 170) {
-      ctx.fillRect(i, 0, 54, H);
+    ctx.fillStyle = rgba("#ffffff", 0.045);
+    for (let y = 60; y < H; y += 40) {
+      for (let x = 60; x < W; x += 40) {
+        ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI*2); ctx.fill();
+      }
     }
-    ctx.globalAlpha = 1;
+    ctx.save();
+    ctx.translate(W*0.78, -120);
+    ctx.rotate(-0.45);
+    const sheen = ctx.createLinearGradient(0, 0, 0, 600);
+    sheen.addColorStop(0, rgba("#ffffff", 0.0));
+    sheen.addColorStop(0.5, rgba("#ffffff", 0.06));
+    sheen.addColorStop(1, rgba("#ffffff", 0.0));
+    ctx.fillStyle = sheen;
+    ctx.fillRect(-160, 0, 320, 1700);
+    ctx.restore();
 
-    roundRect(64, 76, W - 128, 1198, 34);
-    ctx.fillStyle = "rgba(13,22,36,.82)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,.10)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    const barX = 80;
+    const barTop = 220;
+    const barBot = H - 220;
+    const barW = 6;
+    const barGrad = ctx.createLinearGradient(0, barTop, 0, barBot);
+    barGrad.addColorStop(0, rgba(brand, 0.0));
+    barGrad.addColorStop(0.18, rgba(brand, 0.95));
+    barGrad.addColorStop(0.82, rgba(brand, 0.95));
+    barGrad.addColorStop(1, rgba(brand, 0.0));
+    ctx.fillStyle = barGrad;
+    ctx.fillRect(barX, barTop, barW, barBot - barTop);
 
-    roundRect(104, 116, 116, 116, 28);
-    ctx.fillStyle = brand;
-    ctx.fill();
+    // ---------- HEADER ----------
+    const PAD = 96;
+    const tileX = PAD, tileY = 88, tileS = 96;
+    roundRect(tileX, tileY, tileS, tileS, 24);
+    const tileGrad = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS);
+    tileGrad.addColorStop(0, brand);
+    tileGrad.addColorStop(1, mix(brand, "#000814", 0.45));
+    ctx.fillStyle = tileGrad; ctx.fill();
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    const tileSheen = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS*0.65);
+    tileSheen.addColorStop(0, rgba("#ffffff", 0.32));
+    tileSheen.addColorStop(1, rgba("#ffffff", 0));
+    roundRect(tileX, tileY, tileS, tileS, 24);
+    ctx.fillStyle = tileSheen; ctx.fill();
+    ctx.restore();
     ctx.fillStyle = "#ffffff";
     ctx.font = "900 56px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("T", 162, 190);
+    ctx.textBaseline = "middle";
+    ctx.fillText("T", tileX + tileS/2, tileY + tileS/2 + 4);
+    ctx.textBaseline = "alphabetic";
 
     ctx.textAlign = "left";
-    ctx.fillStyle = "#eef6ff";
+    ctx.fillStyle = "#f4f7ff";
     ctx.font = "900 38px -apple-system, system-ui, sans-serif";
-    ctx.fillText(appName.toUpperCase(), 244, 154);
-    ctx.fillStyle = "rgba(238,246,255,.62)";
-    ctx.font = "500 26px -apple-system, system-ui, sans-serif";
-    ctx.fillText(studentName ? `${studentName} · ${dateLabel}` : dateLabel, 244, 198);
+    ctx.fillText(appName, tileX + tileS + 22, tileY + 44);
+    ctx.fillStyle = rgba("#f4f7ff", 0.55);
+    ctx.font = "700 20px -apple-system, system-ui, sans-serif";
+    ctx.fillText("APP DE TREINO PERSONAL", tileX + tileS + 22, tileY + 76);
+
+    const pillText = isFeed ? "DO FEED" : "CONCLUÍDO";
+    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
+    const pillTW = ctx.measureText(pillText).width;
+    const pillH = 56;
+    const pillW = pillTW + 84;
+    const pillX = W - PAD - pillW;
+    const pillY = tileY + (tileS - pillH)/2;
+    roundRect(pillX, pillY, pillW, pillH, pillH/2);
+    ctx.fillStyle = rgba(brand, 0.18);
+    ctx.fill();
+    ctx.strokeStyle = rgba(brand, 0.65);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    drawCheck(pillX + 30, pillY + pillH/2, 26, brand);
+    ctx.fillStyle = brand;
+    ctx.textAlign = "left";
+    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.fillText(pillText, pillX + 56, pillY + pillH/2 + 1);
+    ctx.textBaseline = "alphabetic";
+
+    // ---------- HERO ----------
+    ctx.fillStyle = rgba("#f4f7ff", 0.45);
+    ctx.font = "800 22px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(dateLabel.toUpperCase(), PAD, 308);
 
     ctx.fillStyle = brand;
-    ctx.font = "900 34px -apple-system, system-ui, sans-serif";
-    ctx.fillText(meta.source === "feed" ? "TREINO DO FEED" : "TREINO CONCLUÍDO", 104, 348);
+    ctx.font = "900 48px -apple-system, system-ui, sans-serif";
+    ctx.fillText(isFeed ? "TREINO COMPARTILHADO" : "TREINO CONCLUÍDO", PAD, 372);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "900 88px -apple-system, system-ui, sans-serif";
-    wrapText(wname, W - 208, 3).forEach((line, i) => {
-      ctx.fillText(line, 104, 446 + i * 94);
+    const titleFont = "900 96px -apple-system, system-ui, sans-serif";
+    const titleLines = wrapText(wname, titleFont, W - PAD*2 - 20, 3);
+    ctx.font = titleFont;
+    titleLines.forEach((line, i) => {
+      ctx.fillText(line, PAD, 472 + i * 104);
     });
 
-    const statY = 744;
-    const statW = (W - 248) / 3;
+    if (firstName || studentName) {
+      ctx.fillStyle = rgba("#f4f7ff", 0.72);
+      ctx.font = "600 28px -apple-system, system-ui, sans-serif";
+      const who = studentName || firstName;
+      ctx.fillText(`Por ${who}`, PAD, 472 + titleLines.length * 104 + 30);
+    }
+
+    // ---------- STATS ----------
+    const statY = 858;
+    const statH = 224;
+    roundRect(PAD, statY, W - PAD*2, statH, 32);
+    const statGrad = ctx.createLinearGradient(PAD, statY, PAD, statY+statH);
+    statGrad.addColorStop(0, rgba("#ffffff", 0.07));
+    statGrad.addColorStop(1, rgba("#ffffff", 0.025));
+    ctx.fillStyle = statGrad; ctx.fill();
+    ctx.strokeStyle = rgba("#ffffff", 0.10);
+    ctx.lineWidth = 2; ctx.stroke();
+
+    const colW = (W - PAD*2) / 3;
+    const stats = [
+      { label: "SÉRIES", value: String(sets), draw: drawDumbbell },
+      { label: "VOLUME", value: `${volKg.toLocaleString("pt-BR")} kg`, draw: drawFlame },
+      { label: "TEMPO",  value: `${minutes} min`, draw: drawClock },
+    ];
+
     stats.forEach((s, i) => {
-      const x = 104 + i * (statW + 20);
-      roundRect(x, statY, statW, 176, 26);
-      ctx.fillStyle = "rgba(255,255,255,.075)";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,.10)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      const cx = PAD + colW * i + colW/2;
+      s.draw(cx, statY + 64, 56, brand);
       ctx.fillStyle = "#ffffff";
-      ctx.font = "900 48px -apple-system, system-ui, sans-serif";
+      ctx.font = "900 60px -apple-system, system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(s.value, x + statW / 2, statY + 82);
-      ctx.fillStyle = "rgba(238,246,255,.58)";
-      ctx.font = "800 24px -apple-system, system-ui, sans-serif";
-      ctx.fillText(s.label.toUpperCase(), x + statW / 2, statY + 124);
+      ctx.fillText(s.value, cx, statY + 154);
+      ctx.fillStyle = rgba("#f4f7ff", 0.55);
+      ctx.font = "900 20px -apple-system, system-ui, sans-serif";
+      ctx.fillText(s.label, cx, statY + 192);
     });
+    ctx.strokeStyle = rgba("#ffffff", 0.10);
+    ctx.lineWidth = 1.5;
+    for (let i = 1; i < 3; i++) {
+      const x = PAD + colW * i;
+      ctx.beginPath();
+      ctx.moveTo(x, statY + 36);
+      ctx.lineTo(x, statY + statH - 36);
+      ctx.stroke();
+    }
 
+    // ---------- QUOTE ----------
+    const quoteY = 1130;
+    const quoteH = 116;
+    roundRect(PAD, quoteY, W - PAD*2, quoteH, 28);
+    const qGrad = ctx.createLinearGradient(PAD, quoteY, W - PAD, quoteY);
+    qGrad.addColorStop(0, rgba(brand, 0.22));
+    qGrad.addColorStop(1, rgba(brand, 0.06));
+    ctx.fillStyle = qGrad; ctx.fill();
+    ctx.strokeStyle = rgba(brand, 0.55);
+    ctx.lineWidth = 2; ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 32px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "left";
-    roundRect(104, 992, W - 208, 152, 28);
-    ctx.fillStyle = brand + "18";
-    ctx.fill();
-    ctx.strokeStyle = brand + "66";
-    ctx.stroke();
-    ctx.fillStyle = "#eef6ff";
-    ctx.font = "800 40px -apple-system, system-ui, sans-serif";
-    ctx.fillText("Missão cumprida.", 144, 1060);
-    ctx.fillStyle = "rgba(238,246,255,.66)";
-    ctx.font = "500 27px -apple-system, system-ui, sans-serif";
-    ctx.fillText("Compartilhado pelo Treinova", 144, 1104);
+    ctx.fillText(isFeed ? "Performance no feed." : "Mais um na conta. 💪", PAD + 32, quoteY + 50);
+    ctx.fillStyle = rgba("#f4f7ff", 0.70);
+    ctx.font = "600 22px -apple-system, system-ui, sans-serif";
+    ctx.fillText(isFeed ? "Acompanhe a evolução do aluno no Treinova." : "Disciplina vira progresso. Vamos pro próximo.", PAD + 32, quoteY + 86);
 
-    ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(238,246,255,.38)";
-    ctx.font = "700 24px -apple-system, system-ui, sans-serif";
-    ctx.fillText("#Treinova", W / 2, 1222);
+    // ---------- FOOTER ----------
+    ctx.strokeStyle = rgba("#ffffff", 0.10);
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, H - 110); ctx.lineTo(W - PAD, H - 110); ctx.stroke();
+
+    ctx.fillStyle = rgba("#f4f7ff", 0.62);
+    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(`@${handleName}`.toUpperCase(), PAD, H - 60);
+    ctx.fillStyle = brand;
+    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(`#${appName}`, W - PAD, H - 60);
 
     return await new Promise(res => canvas.toBlob(res, "image/png"));
   } catch(e) {
@@ -11431,7 +11834,7 @@ function renderTodayBlocksCard() {
             ${hasRepRange ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px">${p.rep_min}-${p.rep_max} reps · pausa ${Math.floor((p.pause_seconds||0)/60)}:${String((p.pause_seconds||0)%60).padStart(2,'0')}</div>` : ''}
             ${W && W.focus ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px">${escape(W.focus)}</div>` : ''}
           </div>
-          ${b.workout_code && p.is_workout && W ? `
+          ${b.workout_code && W ? `
             <button class="btn-primary" style="padding:9px 14px;font-size:12px;width:auto;flex-shrink:0" onclick="openWorkoutWithPreset('${today}','${b.workout_code}','${b.preset_code}')">
               Iniciar
             </button>

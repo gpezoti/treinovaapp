@@ -18,6 +18,16 @@ set +a
   VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" \
   VAPID_PRIVATE_KEY="$VAPID_PRIVATE_KEY" \
   VAPID_SUBJECT="$VAPID_SUBJECT"
-"${SUPABASE_CLI[@]}" db push
+"${SUPABASE_CLI[@]}" db query --linked --file sql/fix_profiles_rls_admin_trainer_2026_05_07.sql
+"${SUPABASE_CLI[@]}" db query --linked --file sql/fix_admin_trainer_rpc_fallback_2026_05_07.sql
+"${SUPABASE_CLI[@]}" db query --linked --file sql/fix_beta_three_bugs_2026_05_08.sql
 "${SUPABASE_CLI[@]}" functions deploy rest-timer-push
 "${SUPABASE_CLI[@]}" functions deploy admin-user
+"${SUPABASE_CLI[@]}" functions list
+
+echo ""
+echo "Deploy concluido. Confirme na lista acima:"
+echo "- admin-user"
+echo "- rest-timer-push"
+echo ""
+echo "Depois recarregue o app no iPhone antes de testar novamente."
