@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Treinova" />
-<script>window.VAPID_PUBLIC_KEY="BF-W4LTAGlDygmQAlD3Ud2QYClioKylYRbSqSUfNKqajaGJjR0co8bZqXEcXtLaKMNjh1MsmNOYeIC9A37jZvV0";</script>
+<script>window.VAPID_PUBLIC_KEY="BKzeRbIyNBtAvl6x7bS8DmDBSojGWaC4HPzz-uQaxadrjvon4DCP1US6I0azjsxTVFZ4UMQkA3szqTzbCdwaEeE";</script>
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="application-name" content="Treinova" />
 <meta name="description" content="Treinova — seu app, seu treino, sua marca." />
@@ -474,7 +474,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 .toast { position: fixed; bottom: calc(110px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
   background: var(--bg-3); color: var(--text); border: 1px solid var(--line); padding: 10px 16px;
-  border-radius: 999px; font-size: 12px; font-weight: 600; z-index: 70; pointer-events: none;
+  border-radius: 999px; font-size: 12px; font-weight: 600; z-index: 100010; pointer-events: none;
   opacity: 0; transition: opacity 0.2s ease, transform 0.2s ease; max-width: 90%; text-align: center; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
 .toast.error { background: rgba(255,59,59,0.2); border-color: rgba(255,59,59,0.5); color: #ffaaaa; }
@@ -3361,6 +3361,24 @@ async function verifyRestTimerPushJob(timerId) {
     return false;
   }
 }
+async function upsertRestTimerPushJobDirect(timerId, seconds, exerciseName) {
+  if (!sb || !STATE.user?.id || !timerId) return false;
+  const fireAt = new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString();
+  const { error } = await sb.from("rest_timer_push_jobs").upsert({
+    user_id: STATE.user.id,
+    timer_id: timerId,
+    exercise_name: exerciseName || "Próxima série",
+    fire_at: fireAt,
+    status: "scheduled",
+    attempts: 0,
+    last_error: null,
+    sent_at: null,
+    cancelled_at: null,
+    updated_at: new Date().toISOString()
+  }, { onConflict: "user_id,timer_id" });
+  if (error) throw error;
+  return true;
+}
 async function scheduleServerRestPush(seconds, exerciseName) {
   try {
     if (!sb || !STATE.user || !STATE.timer?.id) return false;
@@ -3370,19 +3388,24 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       rememberRestPushStatus("subscription_failed", "Permissão/assinatura Web Push não está pronta.");
       return false;
     }
+    const fireAt = new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString();
     const { error } = await sb.functions.invoke("rest-timer-push", {
       body: {
         action: "schedule",
         timer_id: STATE.timer.id,
-        fire_at: new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString(),
+        fire_at: fireAt,
         exercise_name: exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
         url: `${location.pathname || "/"}?view=workout&restTimer=1`
       }
     });
-    if (error) throw error;
-    const verified = await verifyRestTimerPushJob(STATE.timer.id);
+    if (error) console.warn("[rest timer server schedule invoke]", error);
+    let verified = await verifyRestTimerPushJob(STATE.timer.id);
+    if (!verified) {
+      await upsertRestTimerPushJobDirect(STATE.timer.id, seconds, exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série");
+      verified = await verifyRestTimerPushJob(STATE.timer.id);
+    }
     rememberRestPushStatus(verified ? "scheduled" : "schedule_unverified", verified ? "Job agendado no Supabase." : "A Edge Function respondeu, mas o job não foi confirmado.");
-    return true;
+    return verified;
   } catch(e) {
     console.warn("[rest timer server schedule]", e);
     rememberRestPushStatus("schedule_failed", e.message || e);
@@ -4069,10 +4092,11 @@ window.openNotificationsSheet = function() {
 	    </div>
 	    <div class="card mb-12">
 	      <div class="row-flex" style="gap:8px; flex-wrap:wrap">
-	        <button class="mini-btn" onclick="testRestTimerPushNow()">Testar push agora</button>
+	        <button class="mini-btn" onclick="testRestTimerPushDelayed()">Teste bloqueado 15s</button>
+	        <button class="mini-btn mini-btn-ghost" onclick="testRestTimerPushNow()">Testar agora</button>
 	        <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
 	      </div>
-	      <div class="text-xs muted" style="margin-top:8px; line-height:1.4">Use este teste com o celular bloqueado ou em outro app. Se o teste imediato não chegar, o problema está na permissão/instalação/assinatura do dispositivo.</div>
+	      <div class="text-xs muted" style="margin-top:8px; line-height:1.4">Toque em "Teste bloqueado 15s" e bloqueie o celular imediatamente. Esse é o teste real de push fora do app.</div>
 	    </div>
 	    ${list.length === 0 ? `<div class="empty"><p>Sem notificações</p></div>` : list.map(n => {
       const icon = n.kind === 'payment_overdue' ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' :
@@ -6043,6 +6067,7 @@ function feedPostHTML(p, compact) {
   const liked = STATE.feedLikes[p.id];
   const isMine = STATE.profile && p.student_id === STATE.profile.id;
   const isCoach = STATE.profile.role === "coach";
+  const canShare = canShareFeedWorkout(p);
   const studentName = (p.student && p.student.full_name) || "Aluno";
   const role = p.student && p.student.role === "coach" ? ' <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>' : (p.student && p.student.role === "admin" ? ' <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zM4 20h16"/></svg>' : "");
   const avatarInner = (p.student && p.student.avatar_url)
@@ -6088,6 +6113,10 @@ function feedPostHTML(p, compact) {
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 Comentar${p.comments_count ? ` (${p.comments_count})` : ''}
               </button>
+              ${canShare ? `<button class="fp-like" onclick="shareFeedWorkout('${p.id}')">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98"/><path d="M15.41 6.51L8.59 10.49"/></svg>
+                Compartilhar
+              </button>` : ""}
               ${(isMine || isCoach) ? `<button class="btn-link" onclick="onDeletePost('${p.id}')" style="color:var(--red);margin-left:auto">Apagar</button>` : ""}
             </div>`;
         })()}
@@ -6099,6 +6128,35 @@ function feedPostHTML(p, compact) {
         </div>` : ""}` : ""}
   </div>`;
 }
+
+function canShareFeedWorkout(p) {
+  if (!STATE.profile || !p || p.student_id !== STATE.profile.id) return false;
+  return Boolean(p.workout_code || p.workout_name || p.total_volume_kg || p.duration_seconds || p.set_count);
+}
+
+function getFeedWorkoutSharePayload(p) {
+  const workoutLabel = p.workout_name || (p.workout_code ? `Treino ${p.workout_code}` : "Treino");
+  return {
+    name: workoutLabel,
+    totalVolume: Number(p.total_volume_kg || 0),
+    duration: Number(p.duration_seconds || 0),
+    setsDone: Number(p.set_count || p.sets_done || p.set_count_done || 0),
+    studentName: (p.student && p.student.full_name) || STATE.profile?.full_name || "",
+    dateLabel: p.created_at ? new Date(p.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : "",
+    source: "feed"
+  };
+}
+
+window.shareFeedWorkout = async function(postId) {
+  const post = (STATE.feed || []).find(p => p.id === postId);
+  if (!post || !canShareFeedWorkout(post)) {
+    showToast("Você só pode compartilhar treinos do seu próprio feed.", "error");
+    return;
+  }
+  const payload = getFeedWorkoutSharePayload(post);
+  await shareWorkout(payload.totalVolume, payload.duration, payload.name, payload.setsDone, payload);
+};
+
 window.onLikeToggle = (id) => toggleLike(id);
 window.onDeletePost = async (id) => {
   if (!await showConfirm({ title: "Apagar post?", confirm: "Apagar", danger: true })) return;
@@ -8935,6 +8993,18 @@ function urlBase64ToUint8Array(base64String) {
   return new Uint8Array([...raw].map((c) => c.charCodeAt(0)));
 }
 
+function uint8ArrayToUrlBase64(bytes) {
+  let binary = "";
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return window.btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function subscriptionUsesCurrentVapidKey(sub) {
+  const appKey = sub?.options?.applicationServerKey;
+  if (!appKey) return false;
+  return uint8ArrayToUrlBase64(new Uint8Array(appKey)) === VAPID_PUBLIC_KEY;
+}
+
 async function subscribePushNotifications(opts = {}) {
   const throwOnError = opts.throwOnError === true;
   if (!isWebPushRuntimeSupported()) {
@@ -8963,7 +9033,7 @@ async function subscribePushNotifications(opts = {}) {
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   const previousVapidKey = localStorage.getItem(PUSH_VAPID_KEY_STORAGE);
-  if (sub && previousVapidKey && previousVapidKey !== VAPID_PUBLIC_KEY) {
+  if (sub && (!previousVapidKey || previousVapidKey !== VAPID_PUBLIC_KEY || !subscriptionUsesCurrentVapidKey(sub))) {
     await sub.unsubscribe();
     sub = null;
   }
@@ -8977,6 +9047,10 @@ async function subscribePushNotifications(opts = {}) {
   // Salva no Supabase (upsert by endpoint)
   try {
     const json = sub.toJSON();
+    await sb.from("push_subscriptions")
+      .delete()
+      .eq("user_id", userId)
+      .neq("endpoint", json.endpoint);
     const { error } = await sb.from("push_subscriptions").upsert({
       user_id: userId,
       endpoint: json.endpoint,
@@ -9003,15 +9077,10 @@ function isStandaloneApp() {
 
 function isWebPushRuntimeSupported() {
   if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return false;
-  // No iOS, Web Push fora do app so funciona em app instalado na Tela de Inicio.
-  if (isIOSDevice() && !isStandaloneApp()) return false;
   return true;
 }
 
 function getWebPushUnsupportedMessage() {
-  if (isIOSDevice() && !isStandaloneApp()) {
-    return "No iPhone, notificação com tela bloqueada só funciona com o Treinova instalado na Tela de Início.";
-  }
   return "Este navegador não suporta notificação fora do app.";
 }
 
@@ -9036,11 +9105,7 @@ async function requestPushPermission() {
 
 window.testRestTimerPushNow = async function() {
   try {
-    const pushReady = await ensureRestNotificationPermission();
-    if (!pushReady) {
-      showToast("Push fora do app não está pronto neste dispositivo.", "error");
-      return;
-    }
+    ensureRestNotificationPermission().catch((e) => console.warn("[rest push test permission]", e));
     const { data, error } = await sb.functions.invoke("rest-timer-push", {
       body: { action: "test" }
     });
@@ -9050,6 +9115,34 @@ window.testRestTimerPushNow = async function() {
   } catch(e) {
     console.warn("[rest push test]", e);
     showToast("Erro no teste push: " + await getFunctionErrorMessage(e), "error");
+  }
+};
+
+window.testRestTimerPushDelayed = async function() {
+  try {
+    ensureRestNotificationPermission().catch((e) => console.warn("[rest push delayed permission]", e));
+    const timerId = `manual-test-${Date.now()}`;
+    const fireAt = new Date(Date.now() + 15_000).toISOString();
+    const { data, error } = await sb.functions.invoke("rest-timer-push", {
+      body: {
+        action: "schedule",
+        timer_id: timerId,
+        fire_at: fireAt,
+        exercise_name: "Teste bloqueado"
+      }
+    });
+    if (error) console.warn("[rest push delayed invoke]", error);
+    if (data?.error) throw new Error(data.error);
+    let verified = await verifyRestTimerPushJob(timerId);
+    if (!verified) {
+      await upsertRestTimerPushJobDirect(timerId, 15, "Teste bloqueado");
+      verified = await verifyRestTimerPushJob(timerId);
+    }
+    if (!verified) throw new Error("Não consegui gravar o job de push.");
+    showToast("Job gravado. Bloqueie o celular agora. Teste em 15s.", "success");
+  } catch(e) {
+    console.warn("[rest push delayed test]", e);
+    showToast("Erro no teste bloqueado: " + await getFunctionErrorMessage(e), "error");
   }
 };
 
@@ -9063,17 +9156,41 @@ window.diagnoseRestTimerPush = async function() {
     const subs = data?.subscriptions || [];
     const jobs = data?.jobs || [];
     const lastJob = jobs[0];
+    const appKey = VAPID_PUBLIC_KEY ? `${VAPID_PUBLIC_KEY.slice(0,10)}...${VAPID_PUBLIC_KEY.slice(-6)}` : "vazia";
     const detail = [
       `Assinaturas: ${subs.length}`,
+      subs[0]?.endpoint_host ? `Endpoint: ${subs[0].endpoint_host}` : "Endpoint: nenhum",
+      `Chave app: ${appKey}`,
+      data?.edge_vapid_public_key ? `Chave edge: ${data.edge_vapid_public_key}` : "Chave edge: indisponível",
       lastJob ? `Último job: ${lastJob.status}${lastJob.last_error ? " - " + lastJob.last_error : ""}` : "Último job: nenhum",
       `iOS instalado: ${isIOSDevice() ? (isStandaloneApp() ? "sim" : "não") : "não é iOS"}`
     ].join("\n");
-    alert(detail);
+    showPushDiagnosticsModal(detail);
   } catch(e) {
     console.warn("[rest push diagnose]", e);
     showToast("Erro no diagnóstico: " + await getFunctionErrorMessage(e), "error");
   }
 };
+
+function showPushDiagnosticsModal(detail) {
+  document.getElementById("push-diagnostics-modal")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "push-diagnostics-modal";
+  overlay.innerHTML = `
+    <style>
+      #push-diagnostics-modal{position:fixed;inset:0;background:rgba(0,0,0,.68);z-index:100020;display:flex;align-items:center;justify-content:center;padding:22px}
+      #push-diagnostics-modal .pd-card{width:100%;max-width:440px;background:var(--bg-card);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 24px 80px rgba(0,0,0,.55)}
+      #push-diagnostics-modal .pd-title{font-size:17px;font-weight:900;color:var(--text);margin-bottom:12px}
+      #push-diagnostics-modal .pd-body{white-space:pre-wrap;word-break:break-word;color:var(--text-2);font-size:13px;line-height:1.45;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;padding:12px}
+      #push-diagnostics-modal .pd-btn{width:100%;margin-top:14px;border:0;border-radius:12px;padding:13px;background:var(--brand);color:var(--brand-on);font-weight:800;font-size:14px}
+    </style>
+    <div class="pd-card">
+      <div class="pd-title">Diagnóstico push</div>
+      <div class="pd-body">${escape(detail)}</div>
+      <button class="pd-btn" onclick="document.getElementById('push-diagnostics-modal')?.remove()">Fechar</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
 
 /* ---------- ONBOARDING ---------- */
 function showOnboarding() {
@@ -10908,12 +11025,12 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
 }
 window.showWorkoutCompleteModal = showWorkoutCompleteModal;
 
-async function shareWorkout(totalVolume, duration, name, setsDone) {
+async function shareWorkout(totalVolume, duration, name, setsDone, meta = {}) {
   try {
-    const blob = await generateWorkoutCard(name, totalVolume, duration, setsDone);
+    const blob = await generateWorkoutCard(name, totalVolume, duration, setsDone, meta);
     if (blob && navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'treino.png', { type: 'image/png' })] })) {
       const file = new File([blob], 'treino.png', { type: 'image/png' });
-      await navigator.share({ files: [file], title: "Treino concluído 💪" });
+      await navigator.share({ files: [file], title: meta.source === "feed" ? "Meu treino no Treinova" : "Treino concluído 💪" });
       return;
     }
     if (blob) {
@@ -10927,105 +11044,145 @@ async function shareWorkout(totalVolume, duration, name, setsDone) {
     }
   } catch(e) { console.warn("shareWorkout:", e); }
   // Último fallback: texto
-  const text = `Acabei o treino de hoje 💪\n${name}\n${setsDone} séries · ${Math.round(totalVolume)}kg · ${Math.floor(duration/60)}min\n#Treinova`;
+  const text = `${meta.source === "feed" ? "Meu treino no Treinova" : "Acabei o treino de hoje 💪"}\n${name}\n${setsDone} séries · ${Math.round(totalVolume)}kg · ${Math.floor(duration/60)}min\n#Treinova`;
   try {
     await navigator.clipboard.writeText(text);
     showToast("Texto copiado — cola onde quiser 📋", "success");
   } catch(e) { showToast("Compartilhamento não suportado", "error"); }
 }
 
-async function generateWorkoutCard(wname, totalVolume, duration, setsDone) {
+async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta = {}) {
   try {
-    const W = 1080, H = 1080;
+    const W = 1080, H = 1350;
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
 
-    // Fundo gradiente escuro
+    const brand = STATE.branding && STATE.branding.brand_color || "#13baf2";
+    const appName = (STATE.branding && STATE.branding.app_name) || "TREINOVA";
+    const studentName = meta.studentName || STATE.profile?.full_name || "";
+    const dateLabel = meta.dateLabel || new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+    const minutes = Math.max(0, Math.floor(Number(duration || 0) / 60));
+    const stats = [
+      { label: "Séries", value: String(Math.max(0, Number(setsDone || 0))) },
+      { label: "Volume", value: `${Math.round(Number(totalVolume || 0))} kg` },
+      { label: "Tempo", value: `${minutes} min` },
+    ];
+    const roundRect = (x, y, w, h, r) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    };
+    const wrapText = (text, maxWidth, maxLines = 3) => {
+      const words = String(text || "Treino").split(/\s+/).filter(Boolean);
+      const lines = [];
+      let line = "";
+      words.forEach((word) => {
+        const test = line ? `${line} ${word}` : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      });
+      if (line) lines.push(line);
+      return lines.slice(0, maxLines);
+    };
+
     const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, "#0a0e1a");
-    bg.addColorStop(1, "#141928");
+    bg.addColorStop(0, "#050b14");
+    bg.addColorStop(0.48, "#101827");
+    bg.addColorStop(1, "#07111f");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // Glow de fundo
-    const brand = STATE.branding && STATE.branding.brand_color || "#6366f1";
-    const glow = ctx.createRadialGradient(W * 0.15, H * 0.15, 0, W * 0.15, H * 0.15, W * 0.55);
-    glow.addColorStop(0, brand + "33");
+    const glow = ctx.createRadialGradient(W * 0.76, H * 0.14, 0, W * 0.76, H * 0.14, W * 0.65);
+    glow.addColorStop(0, brand + "44");
     glow.addColorStop(1, "transparent");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
 
-    // Borda colorida no topo
-    ctx.fillStyle = brand;
-    ctx.fillRect(0, 0, W, 8);
-
-    // Logo/nome do app
-    const appName = (STATE.branding && STATE.branding.app_name) || "TREINOVA";
-    ctx.fillStyle = "#ffffff99";
-    ctx.font = "bold 36px -apple-system, system-ui, sans-serif";
-    ctx.letterSpacing = "4px";
-    ctx.fillText(appName.toUpperCase(), 72, 108);
-
-    // Ícone de check grande
-    ctx.fillStyle = brand;
-    ctx.font = "bold 120px sans-serif";
-    ctx.fillText("✓", W/2 - 60, 340);
-
-    // Nome do treino
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 72px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    // Quebra de linha se necessário
-    const words = wname.split(" ");
-    let line = ""; const lines = [];
-    for (const w of words) {
-      const test = line + (line ? " " : "") + w;
-      if (ctx.measureText(test).width > W - 140) { lines.push(line); line = w; }
-      else line = test;
+    ctx.globalAlpha = 0.05;
+    for (let i = -120; i < W; i += 170) {
+      ctx.fillRect(i, 0, 54, H);
     }
-    lines.push(line);
-    const lineH = 84;
-    const startY = 450 - ((lines.length - 1) * lineH) / 2;
-    lines.forEach((l, i) => ctx.fillText(l, W / 2, startY + i * lineH));
+    ctx.globalAlpha = 1;
 
-    // Linha separadora
-    ctx.strokeStyle = brand + "55";
+    roundRect(64, 76, W - 128, 1198, 34);
+    ctx.fillStyle = "rgba(13,22,36,.82)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.10)";
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(72, 560); ctx.lineTo(W - 72, 560); ctx.stroke();
+    ctx.stroke();
 
-    // Stats
-    const stats = [
-      { icon: "🔥", label: "Séries", value: String(setsDone) },
-      { icon: "kg", label: "Volume", value: `${Math.round(totalVolume)}kg` },
-      { icon: "⏱", label: "Tempo", value: `${Math.floor(duration/60)}min` },
-    ];
-    const colW = (W - 144) / 3;
+    roundRect(104, 116, 116, 116, 28);
+    ctx.fillStyle = brand;
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 56px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "center";
-    stats.forEach((s, i) => {
-      const cx = 72 + colW * i + colW / 2;
-      ctx.font = "48px sans-serif";
-      ctx.fillText(s.icon, cx, 660);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 60px -apple-system, system-ui, sans-serif";
-      ctx.fillText(s.value, cx, 760);
-      ctx.fillStyle = "#ffffff66";
-      ctx.font = "32px -apple-system, system-ui, sans-serif";
-      ctx.fillText(s.label, cx, 810);
-      ctx.fillStyle = "#ffffff";
+    ctx.fillText("T", 162, 190);
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#eef6ff";
+    ctx.font = "900 38px -apple-system, system-ui, sans-serif";
+    ctx.fillText(appName.toUpperCase(), 244, 154);
+    ctx.fillStyle = "rgba(238,246,255,.62)";
+    ctx.font = "500 26px -apple-system, system-ui, sans-serif";
+    ctx.fillText(studentName ? `${studentName} · ${dateLabel}` : dateLabel, 244, 198);
+
+    ctx.fillStyle = brand;
+    ctx.font = "900 34px -apple-system, system-ui, sans-serif";
+    ctx.fillText(meta.source === "feed" ? "TREINO DO FEED" : "TREINO CONCLUÍDO", 104, 348);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 88px -apple-system, system-ui, sans-serif";
+    wrapText(wname, W - 208, 3).forEach((line, i) => {
+      ctx.fillText(line, 104, 446 + i * 94);
     });
 
-    // Mensagem motivacional
-    ctx.fillStyle = "#ffffff55";
-    ctx.font = "italic 34px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("Missão cumprida 💪", W / 2, 930);
+    const statY = 744;
+    const statW = (W - 248) / 3;
+    stats.forEach((s, i) => {
+      const x = 104 + i * (statW + 20);
+      roundRect(x, statY, statW, 176, 26);
+      ctx.fillStyle = "rgba(255,255,255,.075)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.10)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "900 48px -apple-system, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(s.value, x + statW / 2, statY + 82);
+      ctx.fillStyle = "rgba(238,246,255,.58)";
+      ctx.font = "800 24px -apple-system, system-ui, sans-serif";
+      ctx.fillText(s.label.toUpperCase(), x + statW / 2, statY + 124);
+    });
 
-    // Data
-    const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
-    ctx.fillStyle = "#ffffff33";
-    ctx.font = "28px -apple-system, system-ui, sans-serif";
-    ctx.fillText(today, W / 2, 990);
+    ctx.textAlign = "left";
+    roundRect(104, 992, W - 208, 152, 28);
+    ctx.fillStyle = brand + "18";
+    ctx.fill();
+    ctx.strokeStyle = brand + "66";
+    ctx.stroke();
+    ctx.fillStyle = "#eef6ff";
+    ctx.font = "800 40px -apple-system, system-ui, sans-serif";
+    ctx.fillText("Missão cumprida.", 144, 1060);
+    ctx.fillStyle = "rgba(238,246,255,.66)";
+    ctx.font = "500 27px -apple-system, system-ui, sans-serif";
+    ctx.fillText("Compartilhado pelo Treinova", 144, 1104);
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(238,246,255,.38)";
+    ctx.font = "700 24px -apple-system, system-ui, sans-serif";
+    ctx.fillText("#Treinova", W / 2, 1222);
 
     return await new Promise(res => canvas.toBlob(res, "image/png"));
   } catch(e) {
