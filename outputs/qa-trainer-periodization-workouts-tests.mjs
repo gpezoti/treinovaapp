@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 const html = fs.readFileSync("index.html", "utf8");
 const sql = fs.readFileSync("sql/trainer_periodization_types_sets_2026_05_08.sql", "utf8");
 const flexSql = fs.readFileSync("sql/fix_flex_period_and_push_subscription_2026_05_08.sql", "utf8");
+const exerciseLibrarySql = fs.readFileSync("sql/exercise_library_curated_2026_05_08.sql", "utf8");
 const edgeFn = fs.readFileSync("supabase/functions/rest-timer-push/index.ts", "utf8");
 const notifSheet = html.slice(
   html.indexOf("window.openNotificationsSheet"),
@@ -26,6 +27,11 @@ assert.doesNotMatch(
 );
 assert.match(html, /STATE\.adminWorkoutTab/, "Trainer workouts page must support tabs");
 assert.match(html, /setAdminWorkoutTab\('periodization'\)/, "Trainer workouts page must expose periodization tab");
+assert.match(html, /setAdminWorkoutTab\('exercises'\)/, "Trainer workouts page must expose exercise library tab");
+assert.match(html, /function renderExerciseLibraryManagerHTML/, "Exercise library manager must render inside trainer workouts page");
+assert.match(html, /openLibraryExerciseSheet/, "Trainer must be able to create/edit library exercises");
+assert.match(html, /deleteLibraryExercise/, "Trainer must be able to remove library exercises");
+assert.match(html, /EXERCISE_LIBRARY_GROUPS/, "Exercise library must use standardized muscle groups");
 assert.match(html, /coach-finance-tabs[\s\S]*aria-label="Treinos do professor"/, "Trainer workouts tabs must reuse the finance tab component");
 assert.match(html, /Esse código já existe/, "Duplicate periodization type codes must show a friendly validation message");
 assert.match(html, /PERIOD_COLOR_OPTIONS/, "Period type colors must be selectable visually");
@@ -40,6 +46,10 @@ assert.match(sql, /duration_minutes/, "SQL must support standalone periodization
 assert.match(flexSql, /where code = 'flex'/, "Flex period data migration must target flex");
 assert.match(flexSql, /sets_count = 3/, "Flex period must default to 3 sets");
 assert.match(flexSql, /pause_seconds = 60/, "Flex period must default to 60s rest");
+assert.match(exerciseLibrarySql, /ACE Exercise Library, ExRx Exercise Directory e NASM Exercise Library/, "Curated exercise seed must document source taxonomy");
+assert.match(exerciseLibrarySql, /'Seguir período'/, "Exercise library seed must not hard-code period training parameters");
+assert.match(exerciseLibrarySql, /where is_library = true/, "Exercise library seed must normalize existing library rows");
+assert.match(exerciseLibrarySql, /when lower\(muscle_group\) in \('peito'\) then 'Peito'/, "Exercise library seed must normalize legacy group labels");
 assert.match(html, /renderPushSubscriptionCardHTML/, "Notification sheet must show production push status instead of test controls");
 assert.doesNotMatch(notifSheet, /Teste bloqueado 15s|Testar agora|Diagnóstico push/, "Notification sheet must not expose push test controls");
 assert.match(edgeFn, /request-subscription/, "Rest timer edge function must save subscriptions on login/permission renewal");

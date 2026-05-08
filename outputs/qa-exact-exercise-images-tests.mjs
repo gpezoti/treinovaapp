@@ -27,7 +27,7 @@ const requiredSeedExercises = [
 
 assert(index.includes("const EXACT_EXERCISE_IMAGE_ASSETS = {"), "Mapa exato de imagens não foi encontrado no index.html.");
 assert(index.includes("function getExactExerciseAssetUrl"), "Função de resolução por nome exato ausente.");
-assert(index.includes("return getMissingExerciseImageUrl(ex || {});"), "Fallback neutro não está configurado para exercícios sem asset específico.");
+assert(index.includes("getCategoryExerciseAssetUrl(ex || {}) || getMissingExerciseImageUrl(ex || {})"), "Fallback deve tentar asset por categoria antes do placeholder neutro.");
 assert(!index.includes("const item = STANDARD_EXERCISE_IMAGES[kind] || STANDARD_EXERCISE_IMAGES.generic;\n  return item.assetPath;"), "O fallback antigo por categoria ainda está retornando assets genéricos.");
 
 for (const name of requiredSeedExercises) {

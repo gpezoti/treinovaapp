@@ -707,8 +707,9 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
      Obtenha em: https://app.posthog.com → Project Settings → Project API Key
      Free tier: até 1M eventos/mês. Remova este bloco se não quiser analytics. -->
 <script>
-  !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]);t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a=e,u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+" (stub)"},o="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys getNextSurveyStep onSessionId setPersonPropertiesForFlags".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
-  posthog.init('YOUR_POSTHOG_KEY', { api_host: 'https://us.i.posthog.com', person_profiles: 'identified_only' });
+  window.posthog = window.posthog || {
+    init(){}, capture(){}, identify(){}, reset(){}, people: { set(){}, set_once(){} }
+  };
 </script>
 </head>
 <body>
@@ -958,8 +959,22 @@ const EXERCISE_IMAGE_RULES = [
 const EXERCISE_CAT_IMAGE_KIND = {
   chest: "bench", back: "row", shoulder: "shoulder", biceps: "curl", triceps: "triceps",
   quad: "squat", hamstring: "deadlift", glute: "hipthrust", calf: "calf", core: "crunch",
-  mobility: "mobility", rotator: "mobility", hipflex: "lunge", adductor: "squat"
+  mobility: "mobility", rotator: "mobility", hipflex: "lunge", adductor: "squat", cardio: "generic"
 };
+const EXERCISE_LIBRARY_GROUPS = [
+  { value: "Peito", cat: "chest", label: "Peito" },
+  { value: "Costas", cat: "back", label: "Costas" },
+  { value: "Ombros", cat: "shoulder", label: "Ombros" },
+  { value: "Bíceps", cat: "biceps", label: "Bíceps" },
+  { value: "Tríceps", cat: "triceps", label: "Tríceps" },
+  { value: "Quadríceps", cat: "quad", label: "Quadríceps" },
+  { value: "Posterior", cat: "hamstring", label: "Posterior" },
+  { value: "Glúteos", cat: "glute", label: "Glúteos" },
+  { value: "Panturrilha", cat: "calf", label: "Panturrilha" },
+  { value: "Abdômen", cat: "core", label: "Abdômen" },
+  { value: "Mobilidade", cat: "mobility", label: "Mobilidade" },
+  { value: "Aeróbio", cat: "cardio", label: "Aeróbio" }
+];
 const _STANDARD_EXERCISE_IMAGE_CACHE = {};
 const _MISSING_EXERCISE_IMAGE_CACHE = {};
 const EXACT_EXERCISE_IMAGE_ASSETS = {
@@ -8532,12 +8547,19 @@ function renderAdminWorkouts() {
   const workouts = Object.values(STATE.workouts || {})
     .filter(Boolean)
     .sort((a,b) => String(a.code || "").localeCompare(String(b.code || ""), "pt-BR", { numeric: true }));
+  const library = (STATE.library || []).filter(Boolean);
+  const activePresets = (_PRESETS || []).filter(p => p.active !== false);
+  const actionButton = tab === "periodization"
+    ? `<button class="mini-btn mini-btn-primary" onclick="openNewPresetSheet()">Novo período</button>`
+    : tab === "exercises"
+      ? `<button class="mini-btn mini-btn-primary" onclick="openLibraryExerciseSheet()">Novo exercício</button>`
+      : `<button class="mini-btn mini-btn-primary" onclick="openCreateWorkoutTypeSheet()">Novo treino</button>`;
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Treinos</h1>
-      ${tab === "workouts" ? `<button class="mini-btn mini-btn-primary" onclick="openCreateWorkoutTypeSheet()">Novo treino</button>` : `<button class="mini-btn mini-btn-primary" onclick="openNewPresetSheet()">Novo período</button>`}
+      ${actionButton}
     </div>
-    <p class="view-subtitle">Configure modelos de treino e tipos de periodização usados nos alunos.</p>
+    <p class="view-subtitle">Configure modelos, periodização e biblioteca de exercícios usados nos alunos.</p>
     <div class="coach-finance-tabs" role="tablist" aria-label="Treinos do professor">
       <button type="button" role="tab" aria-selected="${tab === "workouts" ? "true" : "false"}" class="coach-finance-tab ${tab === "workouts" ? "active" : ""}" onclick="setAdminWorkoutTab('workouts')">
         <span class="coach-finance-tab-label">Treinos</span>
@@ -8545,10 +8567,14 @@ function renderAdminWorkouts() {
       </button>
       <button type="button" role="tab" aria-selected="${tab === "periodization" ? "true" : "false"}" class="coach-finance-tab ${tab === "periodization" ? "active" : ""}" onclick="setAdminWorkoutTab('periodization')">
         <span class="coach-finance-tab-label">Periodização</span>
-        <span class="coach-finance-tab-sub">${(_PRESETS || []).filter(p => p.active !== false).length} tipo${(_PRESETS || []).filter(p => p.active !== false).length === 1 ? "" : "s"}</span>
+        <span class="coach-finance-tab-sub">${activePresets.length} tipo${activePresets.length === 1 ? "" : "s"}</span>
+      </button>
+      <button type="button" role="tab" aria-selected="${tab === "exercises" ? "true" : "false"}" class="coach-finance-tab ${tab === "exercises" ? "active" : ""}" onclick="setAdminWorkoutTab('exercises')">
+        <span class="coach-finance-tab-label">Exercícios</span>
+        <span class="coach-finance-tab-sub">${library.length} item${library.length === 1 ? "" : "s"}</span>
       </button>
     </div>
-    ${tab === "periodization" ? renderPresetManagerHTML() : (workouts.length ? workouts.map(w => {
+    ${tab === "periodization" ? renderPresetManagerHTML() : tab === "exercises" ? renderExerciseLibraryManagerHTML() : (workouts.length ? workouts.map(w => {
       const code = w.code;
       const canDelete = ["admin","coach"].includes(STATE.profile?.role);
       return `<div class="card mb-14">
@@ -8569,8 +8595,216 @@ function renderAdminWorkouts() {
 }
 
 window.setAdminWorkoutTab = async function(tab) {
-  STATE.adminWorkoutTab = tab === "periodization" ? "periodization" : "workouts";
+  STATE.adminWorkoutTab = ["periodization", "exercises"].includes(tab) ? tab : "workouts";
   if (STATE.adminWorkoutTab === "periodization") await reloadPresets();
+  if (STATE.adminWorkoutTab === "exercises") await loadExerciseLibrary();
+  renderAdminWorkouts();
+};
+
+function getExerciseGroupMeta(groupOrCat) {
+  const raw = String(groupOrCat || "");
+  const normalized = normalizeExerciseText(raw);
+  return EXERCISE_LIBRARY_GROUPS.find(g =>
+    normalizeExerciseText(g.value) === normalized ||
+    normalizeExerciseText(g.label) === normalized ||
+    normalizeExerciseText(g.cat) === normalized
+  ) || EXERCISE_LIBRARY_GROUPS[0];
+}
+
+function getLibraryExerciseGroup(ex) {
+  return getExerciseGroupMeta(ex?.muscle_group || ex?.cat).value;
+}
+
+function getFilteredLibraryExercises() {
+  const query = normalizeExerciseText(STATE.exerciseLibraryQuery || "");
+  const group = STATE.exerciseLibraryGroup || "todos";
+  return (STATE.library || [])
+    .filter(Boolean)
+    .filter(ex => group === "todos" || getLibraryExerciseGroup(ex) === group)
+    .filter(ex => {
+      if (!query) return true;
+      return normalizeExerciseText([ex.name, ex.muscle_group, ex.method, ex.observations].filter(Boolean).join(" ")).includes(query);
+    })
+    .sort((a,b) => {
+      const g = getLibraryExerciseGroup(a).localeCompare(getLibraryExerciseGroup(b), "pt-BR", { sensitivity: "base" });
+      return g || String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { sensitivity: "base" });
+    });
+}
+
+function renderExerciseLibraryManagerHTML() {
+  const all = (STATE.library || []).filter(Boolean);
+  const filtered = getFilteredLibraryExercises();
+  const groups = ["todos", ...EXERCISE_LIBRARY_GROUPS.map(g => g.value)];
+  const counts = all.reduce((acc, ex) => {
+    const group = getLibraryExerciseGroup(ex);
+    acc[group] = (acc[group] || 0) + 1;
+    return acc;
+  }, {});
+  const currentGroup = STATE.exerciseLibraryGroup || "todos";
+  const query = STATE.exerciseLibraryQuery || "";
+  const grouped = filtered.reduce((acc, ex) => {
+    const group = getLibraryExerciseGroup(ex);
+    (acc[group] = acc[group] || []).push(ex);
+    return acc;
+  }, {});
+
+  return `
+    <div class="card mb-12" style="background:linear-gradient(135deg,var(--brand-soft),transparent 70%),var(--bg-card);">
+      <div class="fw-700">Biblioteca de exercícios</div>
+      <div class="text-xs muted" style="margin-top:4px;line-height:1.45">Gerencie exercícios reutilizáveis por grupo muscular. Séries, repetições e descanso continuam vindo do tipo de periodização do aluno.</div>
+      <div class="row-flex" style="gap:8px;margin-top:12px;flex-wrap:wrap">
+        <span class="today-pill pill-flex">${all.length} cadastrados</span>
+        <span class="today-pill pill-white">${Object.keys(counts).length} grupos</span>
+        <span class="today-pill pill-yellow">imagem padrão automática</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <input class="input" value="${escape(query)}" placeholder="Buscar por nome, grupo ou método..."
+        autocomplete="off" autocorrect="off" autocapitalize="off"
+        oninput="setExerciseLibraryQuery(this.value)" />
+    </div>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px">
+      ${groups.map(g => {
+        const active = currentGroup === g;
+        const label = g === "todos" ? "Todos" : g;
+        const count = g === "todos" ? all.length : (counts[g] || 0);
+        return `<button class="mini-btn ${active ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" onclick="setExerciseLibraryGroup('${escapeAttr(g)}')">${escape(label)} · ${count}</button>`;
+      }).join("")}
+    </div>
+    ${filtered.length ? Object.keys(grouped).map(group => `
+      <div class="section-title">${escape(group)} (${grouped[group].length})</div>
+      ${grouped[group].map(ex => renderLibraryExerciseRow(ex)).join("")}
+    `).join("") : `<div class="empty"><p>Nenhum exercício encontrado.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openLibraryExerciseSheet()">Criar exercício</button></div></div>`}
+  `;
+}
+
+function renderLibraryExerciseRow(ex) {
+  const group = getLibraryExerciseGroup(ex);
+  const imageKind = inferExerciseImageKind(ex);
+  const hasExact = Boolean(getExactExerciseAssetUrl(ex));
+  return `<div class="card mb-8">
+    <div class="row-flex" style="gap:10px;align-items:center">
+      <div class="ex-thumb" style="width:58px;height:58px;flex:0 0 58px;overflow:hidden;">${getExThumb(ex)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="fw-700 text-sm">${escape(ex.name || "Exercício")}</div>
+        <div class="text-xs muted" style="margin-top:3px">${escape(group)}${ex.method ? " · " + escape(ex.method) : ""}</div>
+        <div class="text-xs muted" style="margin-top:3px">${hasExact ? "Imagem realista específica" : "Imagem realista por categoria"} · ${escape(imageKind)}</div>
+      </div>
+      <button class="mini-btn mini-btn-ghost" onclick="openLibraryExerciseSheet('${ex.id}')">Editar</button>
+      <button class="mini-btn mini-btn-danger" title="Excluir exercício" onclick="deleteLibraryExercise('${ex.id}','${escapeAttr(ex.name || "exercício")}')">×</button>
+    </div>
+  </div>`;
+}
+
+window.setExerciseLibraryQuery = function(value) {
+  STATE.exerciseLibraryQuery = value || "";
+  renderAdminWorkouts();
+};
+
+window.setExerciseLibraryGroup = function(group) {
+  STATE.exerciseLibraryGroup = group || "todos";
+  renderAdminWorkouts();
+};
+
+window.openLibraryExerciseSheet = function(exId = "") {
+  const ex = exId ? (STATE.library || []).find(item => item.id === exId) : null;
+  const groupMeta = getExerciseGroupMeta(ex?.muscle_group || ex?.cat || "Peito");
+  const previewEx = ex || { name: "Novo exercício", cat: groupMeta.cat, muscle_group: groupMeta.value };
+  openSheet(`
+    <h3>${ex ? "Editar exercício" : "Novo exercício"}</h3>
+    <p style="font-size:13px;color:var(--text-2);margin-top:0">Cadastro da biblioteca. O treino usará séries, repetições e descanso definidos na periodização.</p>
+    <div class="card mb-12">
+      <div class="row-flex" style="gap:10px;align-items:center">
+        <div class="ex-thumb" style="width:82px;height:82px;flex:0 0 82px;overflow:hidden;">${getExThumb(previewEx)}</div>
+        <div style="flex:1;min-width:0">
+          <div class="fw-700 text-sm">Imagem padrão realista</div>
+          <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Gerada automaticamente pelo nome/grupo. Se existir asset específico, ele é usado; senão cai para a imagem realista da categoria.</div>
+        </div>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Nome</label><input class="input" id="lib-ex-name" value="${escape(ex?.name || "")}" placeholder="Ex.: Supino reto com halteres" /></div>
+    <div class="form-group"><label class="form-label">Grupo muscular</label>
+      <select class="input" id="lib-ex-group" onchange="syncLibraryExerciseCategory()">
+        ${EXERCISE_LIBRARY_GROUPS.map(g => `<option value="${escapeAttr(g.value)}" ${g.value === groupMeta.value ? "selected" : ""}>${escape(g.label)}</option>`).join("")}
+      </select>
+    </div>
+    <input type="hidden" id="lib-ex-cat" value="${escape(groupMeta.cat)}" />
+    <div class="form-group"><label class="form-label">Cadência padrão opcional</label><input class="input" id="lib-ex-cadence" value="${escape(ex?.cadence || "")}" placeholder="Ex.: 2-0-2" /></div>
+    <div class="form-group"><label class="form-label">Método</label><input class="input" id="lib-ex-method" value="${escape(ex?.method || "Séries múltiplas")}" placeholder="Séries múltiplas" /></div>
+    <div class="form-group"><label class="form-label">Observações técnicas</label><textarea class="input textarea" id="lib-ex-obs" placeholder="Cuidados de execução, amplitude, ajustes...">${escape(ex?.observations || "")}</textarea></div>
+    <button class="btn-primary" onclick="saveLibraryExercise('${exId || ""}')">${ex ? "Salvar exercício" : "Criar exercício"}</button>
+    <button class="btn-ghost" onclick="closeSheet();renderAdminWorkouts()" style="margin-top:8px">Cancelar</button>
+  `);
+  setTimeout(() => document.getElementById("lib-ex-name")?.focus(), 60);
+};
+
+window.syncLibraryExerciseCategory = function() {
+  const group = document.getElementById("lib-ex-group")?.value || "Peito";
+  const meta = getExerciseGroupMeta(group);
+  const cat = document.getElementById("lib-ex-cat");
+  if (cat) cat.value = meta.cat;
+};
+
+window.saveLibraryExercise = async function(exId = "") {
+  if (!["admin", "coach"].includes(STATE.profile?.role)) {
+    showToast("Sem permissão para gerenciar exercícios", "error");
+    return;
+  }
+  const name = String(document.getElementById("lib-ex-name")?.value || "").trim();
+  const group = document.getElementById("lib-ex-group")?.value || "Peito";
+  const meta = getExerciseGroupMeta(group);
+  if (!name) { showToast("Preencha o nome do exercício", "error"); return; }
+  if (name.length > 90) { showToast("Nome muito longo", "error"); return; }
+  const payload = {
+    workout_id: null,
+    student_id: null,
+    position: 0,
+    name,
+    cat: meta.cat,
+    muscle_group: meta.value,
+    is_library: true,
+    sets_count: 1,
+    reps: "Seguir período",
+    pause: "Seguir período",
+    cadence: String(document.getElementById("lib-ex-cadence")?.value || "").trim(),
+    method: String(document.getElementById("lib-ex-method")?.value || "").trim() || "Séries múltiplas",
+    observations: String(document.getElementById("lib-ex-obs")?.value || "").trim(),
+    image_url: null
+  };
+  try {
+    const duplicate = (STATE.library || []).find(e => e.id !== exId && normalizeExerciseText(e.name) === normalizeExerciseText(name));
+    if (duplicate) { showToast("Já existe exercício com esse nome na biblioteca", "error"); return; }
+    const q = exId
+      ? sb.from("exercises").update(payload).eq("id", exId).eq("is_library", true)
+      : sb.from("exercises").insert(payload);
+    const { error } = await q;
+    if (error) throw error;
+    showToast(exId ? "Exercício salvo" : "Exercício criado", "success");
+    await loadExerciseLibrary();
+    closeSheet();
+    renderAdminWorkouts();
+  } catch (e) {
+    showToast("Erro: " + (e.message || "não foi possível salvar"), "error");
+  }
+};
+
+window.deleteLibraryExercise = async function(exId, name) {
+  if (!["admin", "coach"].includes(STATE.profile?.role)) {
+    showToast("Sem permissão para excluir exercícios", "error");
+    return;
+  }
+  const ok = await showConfirm({
+    title: `Excluir ${name}?`,
+    msg: "O exercício será removido da biblioteca. Treinos que já receberam uma cópia desse exercício não serão alterados.",
+    confirm: "Excluir",
+    cancel: "Cancelar",
+    danger: true
+  });
+  if (!ok) return;
+  const { error } = await sb.from("exercises").delete().eq("id", exId).eq("is_library", true);
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast("Exercício removido", "success");
+  await loadExerciseLibrary();
   renderAdminWorkouts();
 };
 
@@ -8930,7 +9164,7 @@ window.onPickerCreateNew = function() {
     <div class="form-group"><label class="form-label">Nome</label><input class="input" id="ne-name" placeholder="Ex.: Crucifixo declinado" /></div>
     <div class="form-group"><label class="form-label">Grupo muscular</label>
       <select class="input" id="ne-group">
-        ${["peito","costas","quadriceps","posterior","gluteo","panturrilha","ombro","biceps","triceps","abdomen","mobilidade"].map(g => `<option value="${g}">${g}</option>`).join("")}
+        ${EXERCISE_LIBRARY_GROUPS.map(g => `<option value="${escapeAttr(g.value)}">${escape(g.label)}</option>`).join("")}
       </select>
     </div>
     <div class="form-group"><label class="form-label">Cadência</label><input class="input" id="ne-cadence" value="20-2-0" /></div>
@@ -8955,13 +9189,11 @@ window.submitNewExercise = async function() {
   const muscle = get("ne-group").value;
   if (name.length > 80) { showToast("Nome do exercício muito longo", "error"); return; }
   if (STATE._addingExercise) return;
-  const catMap = { peito:'chest', costas:'back', quadriceps:'quad', posterior:'hamstring', gluteo:'glute',
-                   panturrilha:'calf', ombro:'shoulder', biceps:'biceps', triceps:'triceps',
-                   abdomen:'core', mobilidade:'mobility' };
+  const groupMeta = getExerciseGroupMeta(muscle);
   const data = {
     name,
-    cat: catMap[muscle] || 'core',
-    muscle_group: muscle,
+    cat: groupMeta.cat,
+    muscle_group: groupMeta.value,
     sets_count: 1,
     reps: "Seguir período",
     pause: "Seguir período",
