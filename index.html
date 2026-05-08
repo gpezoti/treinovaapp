@@ -8160,7 +8160,7 @@ function renderAdminWorkouts() {
     <p class="view-subtitle">Crie e edite modelos de treino para os alunos. Ex.: A, B, C, D, FLEX ou um nome personalizado.</p>
     ${workouts.length ? workouts.map(w => {
       const code = w.code;
-      const isOwn = (STATE.profile?.role === "admin") || (w.coach_id && STATE.profile?.id && w.coach_id === STATE.profile.id) || (!w.coach_id && !w.is_global);
+      const canDelete = ["admin","coach"].includes(STATE.profile?.role);
       return `<div class="card mb-14">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
           <div style="min-width:0;flex:1">
@@ -8169,7 +8169,7 @@ function renderAdminWorkouts() {
           </div>
           <div class="row-flex" style="gap:6px;flex:0 0 auto;">
             <button class="mini-btn mini-btn-primary" onclick="openWorkoutEditor('${escapeAttr(code)}','${w.id || ''}')">Editar</button>
-            ${isOwn ? `<button class="mini-btn mini-btn-danger" title="Excluir tipo de treino" onclick="deleteWorkoutType('${w.id || ''}','${escapeAttr(code)}','${escapeAttr(w.name || code)}')">×</button>` : ""}
+            ${canDelete ? `<button class="mini-btn mini-btn-danger" title="Excluir tipo de treino" onclick="deleteWorkoutType('${w.id || ''}','${escapeAttr(code)}','${escapeAttr(w.name || code)}')">×</button>` : ""}
           </div>
         </div>
         <div class="text-xs muted">${(w.exercises || []).length} exercícios</div>
