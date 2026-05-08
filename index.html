@@ -8000,6 +8000,7 @@ window.createPresetType = async function() {
   if (!label) { showToast("Informe o nome do tipo", "error"); return; }
   const isWorkout = !!document.getElementById("np-is-workout")?.checked;
   const nextPosition = ((_PRESETS || []).reduce((max, p) => Math.max(max, Number(p.position) || 0), 0) || 0) + 1;
+  const existing = (_PRESETS || []).find(p => p.code === code);
   const payload = {
     coach_id: myCoachId,
     code,
@@ -8014,9 +8015,32 @@ window.createPresetType = async function() {
     pause_seconds: isWorkout ? (Number(document.getElementById("np-pause")?.value) || null) : null,
     duration_minutes: isWorkout ? null : 30
   };
-  const { error } = await sb.from("intensity_presets").insert(payload);
-  if (error) { showToast("Erro: " + error.message, "error"); return; }
-  showToast("Tipo criado", "success");
+  if (existing && existing.active !== false) {
+    showToast("Esse código já existe. Edite o tipo na lista ou use outro código.", "error");
+    return;
+  }
+  let error = null;
+  if (existing && existing.active === false && existing.id) {
+    ({ error } = await sb.from("intensity_presets").update({
+      label: payload.label,
+      color: payload.color,
+      is_workout: payload.is_workout,
+      sets_count: payload.sets_count,
+      rep_min: payload.rep_min,
+      rep_max: payload.rep_max,
+      pause_seconds: payload.pause_seconds,
+      duration_minutes: payload.duration_minutes,
+      active: true
+    }).eq("id", existing.id));
+  } else {
+    ({ error } = await sb.from("intensity_presets").insert(payload));
+  }
+  if (error) {
+    const duplicate = error.code === "23505" || String(error.message || "").toLowerCase().includes("duplicate key");
+    showToast(duplicate ? "Esse código já existe. Use outro código ou edite o tipo existente." : "Erro: " + error.message, "error");
+    return;
+  }
+  showToast(existing ? "Tipo reativado" : "Tipo criado", "success");
   await reloadPresets();
   closeSheet();
   if (STATE.adminWorkoutTab === "periodization") renderAdminWorkouts();
@@ -8316,9 +8340,15 @@ function renderAdminWorkouts() {
       ${tab === "workouts" ? `<button class="mini-btn mini-btn-primary" onclick="openCreateWorkoutTypeSheet()">Novo treino</button>` : `<button class="mini-btn mini-btn-primary" onclick="openNewPresetSheet()">Novo período</button>`}
     </div>
     <p class="view-subtitle">Configure modelos de treino e tipos de periodização usados nos alunos.</p>
-    <div class="segmented" style="margin:10px 0 14px">
-      <button class="${tab === "workouts" ? "active" : ""}" onclick="setAdminWorkoutTab('workouts')">Treinos</button>
-      <button class="${tab === "periodization" ? "active" : ""}" onclick="setAdminWorkoutTab('periodization')">Periodização</button>
+    <div class="coach-finance-tabs" role="tablist" aria-label="Treinos do professor">
+      <button type="button" role="tab" aria-selected="${tab === "workouts" ? "true" : "false"}" class="coach-finance-tab ${tab === "workouts" ? "active" : ""}" onclick="setAdminWorkoutTab('workouts')">
+        <span class="coach-finance-tab-label">Treinos</span>
+        <span class="coach-finance-tab-sub">${workouts.length} modelo${workouts.length === 1 ? "" : "s"}</span>
+      </button>
+      <button type="button" role="tab" aria-selected="${tab === "periodization" ? "true" : "false"}" class="coach-finance-tab ${tab === "periodization" ? "active" : ""}" onclick="setAdminWorkoutTab('periodization')">
+        <span class="coach-finance-tab-label">Periodização</span>
+        <span class="coach-finance-tab-sub">${(_PRESETS || []).filter(p => p.active !== false).length} tipo${(_PRESETS || []).filter(p => p.active !== false).length === 1 ? "" : "s"}</span>
+      </button>
     </div>
     ${tab === "periodization" ? renderPresetManagerHTML() : (workouts.length ? workouts.map(w => {
       const code = w.code;
