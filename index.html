@@ -2020,10 +2020,32 @@ async function loadWorkouts() {
 
 async function loadPeriodization() {
   const sid = STATE.profile.id;
-  const { data, error } = await sb.from("periodization_days")
+  const { data: days, error } = await sb.from("periodization_days")
     .select("*").eq("student_id", sid).order("date");
   if (error) { console.error(error); STATE.periodization = []; return; }
-  STATE.periodization = data || [];
+  // Carrega blocos para propagar preset_code/workout_code reais p/ cada dia
+  const dayIds = (days || []).map(d => d.id).filter(Boolean);
+  let blocksByDay = {};
+  if (dayIds.length) {
+    const { data: blocks } = await sb.from("periodization_blocks")
+      .select("day_id, position, preset_code, workout_code")
+      .in("day_id", dayIds)
+      .order("position", { ascending: true });
+    (blocks || []).forEach(b => {
+      if (!blocksByDay[b.day_id]) blocksByDay[b.day_id] = [];
+      blocksByDay[b.day_id].push(b);
+    });
+  }
+  STATE.periodization = (days || []).map(d => {
+    const blocks = blocksByDay[d.id] || [];
+    const first = blocks[0];
+    return {
+      ...d,
+      blocks,
+      preset_code: first?.preset_code || null,
+      workout_code: first?.workout_code || d.workout_code
+    };
+  });
 }
 
 async function loadLastLoads() {
@@ -4534,7 +4556,7 @@ function renderHome() {
           <span class="today-pill ${pillCls}">${pillTxt}</span>
           ${info.aero ? `<span class="today-pill pill-flex" style="margin-left:6px">+ Aeróbio 35'</span>` : ""}
           <div style="margin-top:14px">
-            <button class="btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px" onclick="openWorkout('${today}','${info.workout_code}','${info.intensity}')">
+            <button class="btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px" onclick="${info.preset_code ? `openWorkoutWithPreset('${today}','${info.workout_code}','${info.preset_code}')` : `openWorkout('${today}','${info.workout_code}','${info.intensity}')`}">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               Iniciar treino
             </button>
@@ -4645,7 +4667,11 @@ window.onDayClick = function(iso) {
   const info = findDayInfo(iso);
   if (!info) return;
   if (info.workout_code === "OFF") { showToast("Dia OFF — descanso!"); return; }
-  openWorkout(iso, info.workout_code, info.intensity);
+  if (info.preset_code) {
+    openWorkoutWithPreset(iso, info.workout_code, info.preset_code);
+  } else {
+    openWorkout(iso, info.workout_code, info.intensity);
+  }
 };
 window.openWorkout = function(iso, code, intensity) {
   STATE.selectedDate = iso;
@@ -7986,7 +8012,14 @@ window.openNewPresetSheet = function() {
       <div class="form-group"><label class="form-label">Reps máx.</label><input class="input" id="np-max" type="number" value="12"></div>
       <div class="form-group"><label class="form-label">Descanso (s)</label><input class="input" id="np-pause" type="number" value="90"></div>
     </div>
-    <div class="form-group"><label class="form-label">Cor</label><input class="input" id="np-color" value="#00b4ff"></div>
+    <div class="form-group">
+      <label class="form-label">Cor</label>
+      <div class="row-flex" style="gap:8px;">
+        <input type="color" id="np-color" value="#00b4ff" style="width:48px; height:42px; padding:2px; border-radius:8px; border:1px solid var(--line); background:var(--bg-2); cursor:pointer;" oninput="document.getElementById('np-color-hex').value=this.value;" />
+        <input class="input" id="np-color-hex" value="#00b4ff" maxlength="9" style="flex:1;" oninput="document.getElementById('np-color').value=this.value;" />
+      </div>
+      <p class="text-xs muted" style="margin-top:6px">Toque no quadrado colorido para escolher visualmente.</p>
+    </div>
     <button class="btn-primary" onclick="createPresetType()">Criar tipo</button>
     <button class="btn-ghost" onclick="${STATE.adminWorkoutTab === "periodization" ? "closeSheet();renderAdminWorkouts()" : "openPresetEditor()"}" style="margin-top:8px">Cancelar</button>
   `);
@@ -8005,7 +8038,7 @@ window.createPresetType = async function() {
     coach_id: myCoachId,
     code,
     label,
-    color: document.getElementById("np-color")?.value?.trim() || "#00b4ff",
+    color: (document.getElementById("np-color-hex")?.value || document.getElementById("np-color")?.value || "#00b4ff").trim(),
     is_workout: isWorkout,
     position: nextPosition,
     active: true,
