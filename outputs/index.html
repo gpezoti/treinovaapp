@@ -4752,34 +4752,66 @@ window.bulkBlockTrainers = async function() {
   if (!_trainerSelected.size) return;
   if (!await showConfirm({ title: "Bloquear treinadores?", msg: `${_trainerSelected.size} treinador(es) serão bloqueados.`, confirm: "Bloquear", danger: true })) return;
   const ids = [..._trainerSelected];
-  const { error } = await sb.from("profiles").update({ status: "blocked" }).in("id", ids);
-  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  for (const id of ids) {
+    const trainer = (STATE.trainers || []).find(t => t.id === id);
+    const { data, error } = await sb.functions.invoke("admin-user", {
+      body: {
+        action: "update_trainer",
+        user_id: id,
+        full_name: trainer?.full_name || trainer?.email || "Treinador",
+        email: trainer?.email || "",
+        phone: trainer?.phone || "",
+        avatar_emoji: trainer?.avatar_emoji || "🎯",
+        status: "blocked",
+        role: trainer?.role || "coach",
+      }
+    });
+    if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
+  }
   showToast(`${ids.length} treinador(es) bloqueado(s)`, "success");
   _trainerSelected.clear();
   await loadTrainers(); renderTrainers();
 };
 window.bulkDeleteTrainers = async function() {
   if (!_trainerSelected.size) return;
-  if (!await showConfirm({ title: "Excluir treinadores?", msg: `Excluir permanentemente ${_trainerSelected.size} treinador(es)?\n\nIsso remove o perfil e todos os dados. A conta de autenticação permanece no Supabase.`, confirm: "Excluir", cancel: "Cancelar", danger: true })) return;
+  if (!await showConfirm({ title: "Remover treinadores?", msg: `${_trainerSelected.size} treinador(es) serão despromovidos para aluno, bloqueados e terão os alunos desvinculados.`, confirm: "Remover", cancel: "Cancelar", danger: true })) return;
   const ids = [..._trainerSelected];
-  const { error } = await sb.from("profiles").delete().in("id", ids);
-  if (error) { showToast("Erro: " + error.message, "error"); return; }
-  showToast(`${ids.length} treinador(es) excluído(s)`, "success");
+  for (const id of ids) {
+    const { data, error } = await sb.functions.invoke("admin-user", {
+      body: { action: "remove_trainer", user_id: id }
+    });
+    if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
+  }
+  showToast(`${ids.length} treinador(es) removido(s)`, "success");
   removeUsersFromLocalLists(ids);
   renderTrainers();
   await loadTrainers(); renderTrainers();
 };
 
 window.setTrainerStatus = async function(id, status) {
-  const { error } = await sb.from("profiles").update({ status }).eq("id", id);
-  if (error) { showToast("Erro: "+error.message, "error"); return; }
+  const trainer = (STATE.trainers || []).find(t => t.id === id);
+  const { data, error } = await sb.functions.invoke("admin-user", {
+    body: {
+      action: "update_trainer",
+      user_id: id,
+      full_name: trainer?.full_name || trainer?.email || "Treinador",
+      email: trainer?.email || "",
+      phone: trainer?.phone || "",
+      avatar_emoji: trainer?.avatar_emoji || "🎯",
+      status,
+      role: trainer?.role || "coach",
+    }
+  });
+  if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
   showToast(status === "approved" ? "Treinador aprovado" : status === "blocked" ? "Bloqueado" : "Atualizado", "success");
   await loadTrainers(); renderTrainers();
 };
 window.removeTrainer = async function(id, email) {
   if (!await showConfirm({ title: "Remover treinador?", msg: `O usuário ${email} será despromovido para aluno e bloqueado.`, confirm: "Remover", danger: true })) return;
-  const { error } = await sb.from("profiles").update({ status: "blocked", role: "student" }).eq("id", id);
-  if (error) { showToast("Erro: "+error.message, "error"); return; }
+  const { data, error } = await sb.functions.invoke("admin-user", {
+    body: { action: "remove_trainer", user_id: id }
+  });
+  if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
   showToast("Treinador removido", "success");
   closeSheet();
   removeUsersFromLocalLists(id);
@@ -4808,6 +4840,15 @@ async function getFunctionErrorMessage(error, fallback = "tente novamente") {
   } catch(e) {}
   return error?.message || fallback;
 }
+
+async function getPushErrorMessage(error) {
+  const msg = await getFunctionErrorMessage(error);
+  if (/VapidPkHashMismatch/i.test(msg)) {
+    return "Chave push do servidor diferente da chave do app. Rode o deploy de VAPID no Supabase.";
+  }
+  return msg;
+}
+
 window.submitNewTrainer = async function() {
   // [C-NEW-03 FIX] Guard: apenas admin pode criar treinadores
   if (!STATE.profile || STATE.profile.role !== "admin") {
@@ -5430,7 +5471,11 @@ window.openEditTrainerSheet = async function(id) {
 
     <div class="section-title">Senha</div>
     <div class="card">
-      <p class="text-xs muted" style="margin:0 0 8px;">Por segurança, a senha de login não é editável pelo painel. O próprio usuário pode redefinir entrando no app, ou você pode resetar pelo dashboard do Supabase (Authentication → Users → ⋯ → Reset password).</p>
+      <p class="text-xs muted" style="margin:0 0 10px;">Use somente quando o treinador não conseguir entrar. A senha atual não é exibida por segurança.</p>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Nova senha temporária</label>
+        <input class="input" id="et-password" type="text" autocomplete="new-password" placeholder="Opcional · mínimo 6 caracteres" />
+      </div>
     </div>
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px;">
@@ -5470,17 +5515,25 @@ window.submitEditTrainer = async function(id) {
   const emoji = document.getElementById("et-emoji").value.trim() || "🎯";
   const status = document.getElementById("et-tmp-status").value;
   const role = document.getElementById("et-tmp-role").value;
+  const password = document.getElementById("et-password").value.trim();
   if (!name || !email) { showToast("Preencha nome e email", "error"); return; }
+  if (password && password.length < 6) { showToast("Senha temporária precisa ter 6+ caracteres", "error"); return; }
   try {
-    const { error } = await sb.from("profiles").update({
-      full_name: name,
-      email: email,
-      phone: phone || null,
-      avatar_emoji: emoji,
-      status: status,
-      role: role
-    }).eq("id", id);
+    const { data, error } = await sb.functions.invoke("admin-user", {
+      body: {
+        action: "update_trainer",
+        user_id: id,
+        full_name: name,
+        email,
+        phone,
+        avatar_emoji: emoji,
+        status,
+        role,
+        password: password || undefined,
+      }
+    });
     if (error) throw error;
+    if (data?.error) throw new Error(data.error);
     showToast("Treinador atualizado", "success");
     closeSheet();
     await loadTrainers();
@@ -9114,7 +9167,7 @@ window.testRestTimerPushNow = async function() {
     showToast(`Teste enviado (${data?.sent || 0})`, "success");
   } catch(e) {
     console.warn("[rest push test]", e);
-    showToast("Erro no teste push: " + await getFunctionErrorMessage(e), "error");
+    showToast(await getPushErrorMessage(e), "error");
   }
 };
 
@@ -9142,7 +9195,7 @@ window.testRestTimerPushDelayed = async function() {
     showToast("Job gravado. Bloqueie o celular agora. Teste em 15s.", "success");
   } catch(e) {
     console.warn("[rest push delayed test]", e);
-    showToast("Erro no teste bloqueado: " + await getFunctionErrorMessage(e), "error");
+    showToast(await getPushErrorMessage(e), "error");
   }
 };
 
