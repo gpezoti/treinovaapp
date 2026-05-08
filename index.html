@@ -7867,6 +7867,13 @@ window.renderPresetItem = function(p) {
         <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Nome</div>
         <input class="input" id="pr-label-${p.code}" value="${escape(p.label || "")}" maxlength="40">
       </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Cor</div>
+        <div class="row-flex" style="gap:8px;">
+          <input type="color" id="pr-color-${p.code}" value="${escape(p.color || '#00b4ff')}" style="width:48px;height:42px;padding:2px;border-radius:8px;border:1px solid var(--line);background:var(--bg-2);cursor:pointer;" oninput="document.getElementById('pr-color-hex-${p.code}').value=this.value;document.querySelector('[data-code=\\''+'${p.code}'+'\\']').style.borderLeftColor=this.value;" />
+          <input class="input" id="pr-color-hex-${p.code}" value="${escape(p.color || '#00b4ff')}" maxlength="9" style="flex:1;" oninput="document.getElementById('pr-color-${p.code}').value=this.value;document.querySelector('[data-code=\\''+'${p.code}'+'\\']').style.borderLeftColor=this.value;" />
+        </div>
+      </div>
       ${isWorkout ? `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div>
@@ -7939,8 +7946,13 @@ window.savePreset = async function(code) {
   const pause = document.getElementById(`pr-pause-${code}`).value;
   const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
   const existing = _PRESETS.find(p => p.code === code);
+  const colorRaw = (document.getElementById(`pr-color-hex-${code}`)?.value
+                    || document.getElementById(`pr-color-${code}`)?.value
+                    || existing.color || "").trim();
+  const color = /^#[0-9a-fA-F]{6,8}$/.test(colorRaw) ? colorRaw : existing.color;
   const patch = {
     label: label || existing.label,
+    color,
     sets_count: sets ? Math.max(1, Number(sets)) : 3,
     rep_min: min ? Number(min) : null,
     rep_max: max ? Number(max) : null,
@@ -7951,8 +7963,8 @@ window.savePreset = async function(code) {
     const { error } = await sb.from("intensity_presets").insert({
       coach_id: myCoachId,
       code: existing.code,
-      label: existing.label,
-      color: existing.color,
+      label: patch.label,
+      color: patch.color,
       is_workout: existing.is_workout,
       position: existing.position,
       active: true,
@@ -7977,7 +7989,11 @@ window.savePresetDuration = async function(code) {
   const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
   const existing = _PRESETS.find(p => p.code === code);
   if (!existing) return;
-  const patch = { label: label || existing.label, duration_minutes: dur };
+  const colorRaw = (document.getElementById(`pr-color-hex-${code}`)?.value
+                    || document.getElementById(`pr-color-${code}`)?.value
+                    || existing.color || "").trim();
+  const color = /^#[0-9a-fA-F]{6,8}$/.test(colorRaw) ? colorRaw : existing.color;
+  const patch = { label: label || existing.label, color, duration_minutes: dur };
   if (myCoachId && (!existing.coach_id)) {
     const { error } = await sb.from("intensity_presets").insert({
       coach_id: myCoachId,
