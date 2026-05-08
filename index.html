@@ -297,6 +297,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .exercise-card:hover { border-color: var(--line-2); box-shadow: 0 8px 24px rgba(0,0,0,0.14); }
 .exercise-card.done { border-color: var(--green); background: linear-gradient(180deg, rgba(46,204,113,0.06), var(--bg-card)); }
 .exercise-card.is-mobility { border-style: dashed; border-color: var(--line-2); }
+.exercise-card.in-superset { border-left: 3px solid var(--brand); }
 .ex-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; user-select: none; }
 .ex-thumb { flex: 0 0 64px; width: 64px; height: 64px; border-radius: 14px;
   background: linear-gradient(135deg, var(--bg-3), var(--bg-2)); border: 1px solid var(--line);
@@ -2392,6 +2393,40 @@ async function updateSetLog(logId, patch) {
   if (local) Object.assign(local, patch);
 }
 
+// ===== SUPERSET (bi-set / tri-set) helpers =====
+function getSupersetSiblings(exercise) {
+  if (!exercise || !exercise.superset_group) return [];
+  const W = STATE.workouts[STATE.selectedWorkout];
+  if (!W) return [];
+  return (W.exercises || [])
+    .filter(e => e.superset_group && e.superset_group === exercise.superset_group)
+    .sort((a, b) => (a.position || 0) - (b.position || 0));
+}
+function isLastInSuperset(exercise) {
+  const sibs = getSupersetSiblings(exercise);
+  if (sibs.length <= 1) return true;
+  return sibs[sibs.length - 1].position === exercise.position;
+}
+function nextInSuperset(exercise) {
+  const sibs = getSupersetSiblings(exercise);
+  const idx = sibs.findIndex(e => e.position === exercise.position);
+  return idx >= 0 && idx < sibs.length - 1 ? sibs[idx + 1] : null;
+}
+function getSupersetIndex(exercise) {
+  const sibs = getSupersetSiblings(exercise);
+  if (sibs.length <= 1) return null;
+  const idx = sibs.findIndex(e => e.position === exercise.position);
+  return idx >= 0 ? { idx, total: sibs.length } : null;
+}
+function getSupersetLabel(total) {
+  return total === 2 ? "BI-SET" : total === 3 ? "TRI-SET" : `SUPER-SET ${total}x`;
+}
+window.getSupersetSiblings = getSupersetSiblings;
+window.isLastInSuperset = isLastInSuperset;
+window.nextInSuperset = nextInSuperset;
+window.getSupersetIndex = getSupersetIndex;
+window.getSupersetLabel = getSupersetLabel;
+
 async function toggleSetDone(exercise, position, setIdx) {
   const log = await ensureSetLog(exercise, position, setIdx + 1);
   if (!log) return;
@@ -2403,16 +2438,28 @@ async function toggleSetDone(exercise, position, setIdx) {
   await updateSetLog(log.id, patch);
 
   if (newDone) {
+    if (STATE.lastLoads[exercise.name] !== log.load_kg && log.load_kg) {
+      STATE.lastLoads[exercise.name] = log.load_kg;
+    }
+    // Em bi/tri-set: se houver proximo exercicio do mesmo grupo, pula
+    // direto para ele sem disparar descanso. So o ultimo aciona pausa.
+    const next = nextInSuperset(exercise);
+    if (next) {
+      showToast(`→ ${next.name}`, "success");
+      STATE.expandedEx = next.position;
+      renderWorkout();
+      setTimeout(() => {
+        const card = document.querySelector(`.exercise-card[data-pos="${next.position}"]`);
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+      return;
+    }
     const scheme = getCurrentTrainingScheme();
     const target = getExerciseTargetSets(exercise, scheme);
     const pauseSec = scheme.pauseSec || 0;
     const isLast = setIdx + 1 >= target;
     const label = isLast ? "Próximo exercício" : `Série ${setIdx + 2} de ${target}`;
-    // Mostrar modal de conclusão de série com input de carga e auto-timer
     onSerieCompleted(exercise, log, setIdx, target, pauseSec, label, isLast);
-    if (STATE.lastLoads[exercise.name] !== log.load_kg && log.load_kg) {
-      STATE.lastLoads[exercise.name] = log.load_kg;
-    }
   } else {
     showToast("Série desmarcada");
   }
@@ -6309,11 +6356,14 @@ function renderExerciseList(W, intensity, completed) {
 
     const thumbInner = getExThumb(ex);
     const illustInner = getExThumb(ex);
-    return `<div class="exercise-card ${allDone ? "done" : ""} ${isMobility ? "is-mobility" : ""} ${expanded ? "expanded" : ""}" data-pos="${ex.position}">
+    const ssInfo = getSupersetIndex(ex);
+    const ssClass = ssInfo ? "in-superset" : "";
+    const ssBadge = ssInfo ? `<span class="today-pill" style="background:rgba(0,180,255,.10);color:var(--brand);border:1px solid rgba(0,180,255,.30);font-size:9px;padding:2px 6px;margin-right:6px;letter-spacing:.4px">${getSupersetLabel(ssInfo.total)} ${ssInfo.idx+1}/${ssInfo.total}</span>` : "";
+    return `<div class="exercise-card ${allDone ? "done" : ""} ${isMobility ? "is-mobility" : ""} ${expanded ? "expanded" : ""} ${ssClass}" data-pos="${ex.position}">
       <div class="ex-head" onclick="toggleExercise(${ex.position})">
         <div class="ex-thumb" style="overflow:hidden;">${thumbInner}</div>
         <div class="ex-info">
-          <div class="ex-name">${escape(ex.name)}</div>
+          <div class="ex-name">${ssBadge}${escape(ex.name)}</div>
           <div class="ex-quick">
             <span><b>${target}×${repsTxt || ""}</b></span>
             ${pauseTxt && pauseTxt !== "—" ? `<span>· pausa <b>${pauseTxt}</b></span>` : ""}
@@ -8989,21 +9039,36 @@ window.openWorkoutEditor = async function(code, workoutId) {
     <h3>Editar ${escape(w.name)}</h3>
     <p>${escape(w.focus || "")}</p>
     ${(w.exercises || []).length === 0 ? `<div class="empty" style="padding:20px 0"><h3>Treino vazio</h3><p>Adicione o primeiro exercício para montar a sequência do aluno.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openExercisePicker('${code}', null, '${workoutId||w.id||''}')">Adicionar exercício</button></div></div>` : ""}
-    ${(w.exercises || []).map((ex, i) => `
-      <div class="card mb-8">
+    ${(w.exercises || []).map((ex, i) => {
+      const list = w.exercises || [];
+      const next = list[i+1];
+      const linkedNext = next && ex.superset_group && next.superset_group === ex.superset_group;
+      const linkedPrev = i > 0 && ex.superset_group && list[i-1].superset_group === ex.superset_group;
+      const groupSize = ex.superset_group ? list.filter(e => e.superset_group === ex.superset_group).length : 0;
+      const supersetBadge = ex.superset_group
+        ? `<span class="today-pill" style="background:rgba(0,180,255,.10);color:var(--brand);border:1px solid rgba(0,180,255,.30);font-size:9px;padding:2px 6px;margin-right:6px">${groupSize === 2 ? "BI-SET" : groupSize === 3 ? "TRI-SET" : `SUPER ${groupSize}x`}</span>`
+        : "";
+      return `
+      <div class="card mb-8" style="${linkedPrev ? 'margin-top:-6px;border-top-left-radius:4px;border-top-right-radius:4px;' : ''}${linkedNext ? 'margin-bottom:0;border-bottom-left-radius:4px;border-bottom-right-radius:4px;' : ''}${ex.superset_group ? 'border-left:3px solid var(--brand);' : ''}">
         <div class="row-flex" style="margin-bottom:8px;">
           <div class="ex-thumb" style="width:36px; height:36px; flex:0 0 36px; overflow:hidden;">${getExThumb(ex)}</div>
           <div style="flex:1; min-width:0;">
-            <div class="fw-700 text-sm">${i+1}. ${escape(ex.name)}</div>
-	            <div class="text-xs muted">${escape(ex.muscle_group || ex.cat || "")}${ex.cadence ? " · cad. " + escape(ex.cadence) : ""}</div>
+            <div class="fw-700 text-sm">${supersetBadge}${i+1}. ${escape(ex.name)}</div>
+            <div class="text-xs muted">${escape(ex.muscle_group || ex.cat || "")}${ex.cadence ? " · cad. " + escape(ex.cadence) : ""}</div>
           </div>
           <button class="mini-btn mini-btn-ghost" ${i === 0 ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''} onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',-1)">↑</button>
-          <button class="mini-btn mini-btn-ghost" ${i === (w.exercises || []).length - 1 ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''} onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',1)">↓</button>
+          <button class="mini-btn mini-btn-ghost" ${i === list.length - 1 ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''} onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',1)">↓</button>
           <button class="mini-btn mini-btn-ghost" onclick="editExercise('${ex.id}')">Editar</button>
           <button class="mini-btn mini-btn-danger" onclick="removeExerciseFromWorkout('${ex.id}','${code}','${workoutId||''}')">×</button>
         </div>
-      </div>
-    `).join("")}
+        ${next ? `
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)">
+            <button class="mini-btn ${linkedNext ? 'mini-btn-primary' : 'mini-btn-ghost'}" style="font-size:11px;padding:4px 10px;min-height:28px" onclick="toggleSupersetWithNext('${ex.id}','${next.id}','${code}','${workoutId||''}')">
+              ${linkedNext ? '🔗 Vinculado · clique para desvincular' : '+ Vincular com o próximo (bi/tri-set)'}
+            </button>
+          </div>` : ''}
+      </div>`;
+    }).join("")}
     <button class="btn-primary" onclick="openExercisePicker('${code}', null, '${workoutId||w.id||''}')" style="margin-top:8px">+ Adicionar exercício</button>
     <div style="margin-top:14px"><button class="btn-ghost" onclick="closeSheet()">Fechar</button></div>
   `;
@@ -9044,6 +9109,49 @@ window.removeExerciseFromWorkout = async function(exId, code, workoutId) {
   await loadWorkouts();
   window.openWorkoutEditor(code, workoutId || "");
 };
+
+window.toggleSupersetWithNext = async function(exId, nextId, code, workoutId) {
+  if (!["admin","coach"].includes(STATE.profile?.role)) return;
+  if (STATE._linkingSuperset) return;
+  STATE._linkingSuperset = true;
+  try {
+    const W = STATE._editingWorkout || STATE.workouts[code];
+    const list = (W && W.exercises) || [];
+    const ex = list.find(e => e.id === exId);
+    const next = list.find(e => e.id === nextId);
+    if (!ex || !next) return;
+    if (ex.superset_group && ex.superset_group === next.superset_group) {
+      const remaining = list.filter(e => e.superset_group === ex.superset_group);
+      if (remaining.length <= 2) {
+        const ids = remaining.map(e => e.id);
+        const { error } = await sb.from("exercises").update({ superset_group: null }).in("id", ids);
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from("exercises").update({ superset_group: null }).eq("id", next.id);
+        if (error) throw error;
+      }
+      showToast("Desvinculado", null);
+    } else {
+      const group = ex.superset_group || ((typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : "ss-" + Date.now() + "-" + Math.random().toString(36).slice(2,8));
+      const targetIds = [];
+      if (!ex.superset_group) targetIds.push(ex.id);
+      if (next.superset_group !== group) targetIds.push(next.id);
+      if (targetIds.length) {
+        const { error } = await sb.from("exercises").update({ superset_group: group }).in("id", targetIds);
+        if (error) throw error;
+      }
+      showToast("Vinculado", "success");
+    }
+    await loadWorkouts();
+    await openWorkoutEditor(code, workoutId || "");
+  } catch (e) {
+    console.error("[toggleSupersetWithNext]", e);
+    showToast("Erro: " + (e.message || "tente novamente"), "error");
+  } finally {
+    STATE._linkingSuperset = false;
+  }
+};
+
 
 // Biblioteca de exercícios em STATE
 async function loadExerciseLibrary() {
