@@ -4766,7 +4766,7 @@ window.bulkBlockTrainers = async function() {
         role: trainer?.role || "coach",
       }
     });
-    if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
+    if (error || data?.error) { showToast("Erro: " + adminUserDeployMessage(await getFunctionErrorMessage(error || new Error(data.error))), "error"); return; }
   }
   showToast(`${ids.length} treinador(es) bloqueado(s)`, "success");
   _trainerSelected.clear();
@@ -4780,7 +4780,7 @@ window.bulkDeleteTrainers = async function() {
     const { data, error } = await sb.functions.invoke("admin-user", {
       body: { action: "remove_trainer", user_id: id }
     });
-    if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
+    if (error || data?.error) { showToast("Erro: " + adminUserDeployMessage(await getFunctionErrorMessage(error || new Error(data.error))), "error"); return; }
   }
   showToast(`${ids.length} treinador(es) removido(s)`, "success");
   removeUsersFromLocalLists(ids);
@@ -4802,7 +4802,7 @@ window.setTrainerStatus = async function(id, status) {
       role: trainer?.role || "coach",
     }
   });
-  if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
+  if (error || data?.error) { showToast("Erro: " + adminUserDeployMessage(await getFunctionErrorMessage(error || new Error(data.error))), "error"); return; }
   showToast(status === "approved" ? "Treinador aprovado" : status === "blocked" ? "Bloqueado" : "Atualizado", "success");
   await loadTrainers(); renderTrainers();
 };
@@ -4811,7 +4811,7 @@ window.removeTrainer = async function(id, email) {
   const { data, error } = await sb.functions.invoke("admin-user", {
     body: { action: "remove_trainer", user_id: id }
   });
-  if (error || data?.error) { showToast("Erro: " + await getFunctionErrorMessage(error || new Error(data.error)), "error"); return; }
+  if (error || data?.error) { showToast("Erro: " + adminUserDeployMessage(await getFunctionErrorMessage(error || new Error(data.error))), "error"); return; }
   showToast("Treinador removido", "success");
   closeSheet();
   removeUsersFromLocalLists(id);
@@ -4839,6 +4839,13 @@ async function getFunctionErrorMessage(error, fallback = "tente novamente") {
     }
   } catch(e) {}
   return error?.message || fallback;
+}
+
+function adminUserDeployMessage(msg) {
+  if (/Ação desconhecida:\s*(update_trainer|remove_trainer)/i.test(msg) || /non-2xx status code/i.test(msg)) {
+    return "Função admin-user desatualizada no Supabase. Rode o deploy das funções e tente novamente.";
+  }
+  return msg;
 }
 
 async function getPushErrorMessage(error) {
