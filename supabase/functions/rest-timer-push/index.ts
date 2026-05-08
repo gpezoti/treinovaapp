@@ -17,6 +17,7 @@
 //   { action: "schedule", timer_id, fire_at, exercise_name }
 //   { action: "cancel", timer_id }
 //   { action: "test" }
+//   { action: "test_delayed" }
 //
 // Chamada agendada/cron:
 //   POST /functions/v1/rest-timer-push
@@ -44,6 +45,11 @@ const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
+
+function shortKey(key: string) {
+  if (!key) return "";
+  return `${key.slice(0, 10)}...${key.slice(-6)}`;
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -80,9 +86,42 @@ function isCronAuthorized(req: Request) {
   return Boolean(REST_TIMER_CRON_SECRET && secret === REST_TIMER_CRON_SECRET);
 }
 
+function normalizePushSubscription(input: any) {
+  if (!input || typeof input !== "object") return null;
+  const endpoint = String(input.endpoint || "");
+  const p256dh = String(input.keys?.p256dh || "");
+  const auth = String(input.keys?.auth || "");
+  if (!endpoint || !p256dh || !auth) return null;
+  return { endpoint, p256dh, auth };
+}
+
+async function saveRequestSubscription(userId: string, body: any) {
+  const sub = normalizePushSubscription(body?.subscription);
+  if (!sub) return false;
+  const { error } = await sbAdmin.from("push_subscriptions").upsert({
+    user_id: userId,
+    endpoint: sub.endpoint,
+    p256dh: sub.p256dh,
+    auth: sub.auth,
+    user_agent: String(body?.user_agent || "request-subscription").slice(0, 500),
+    last_seen_at: new Date().toISOString(),
+  }, { onConflict: "endpoint" });
+  if (error) throw error;
+  return true;
+}
+
+async function requestSubscription(req: Request, body: any) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) return json({ error: "Não autenticado." }, 401);
+  const saved = await saveRequestSubscription(user.id, body);
+  if (!saved) return json({ error: "Assinatura Web Push inválida." }, 400);
+  return json({ ok: true });
+}
+
 async function scheduleJob(req: Request, body: any) {
   const user = await getAuthenticatedUser(req);
   if (!user) return json({ error: "Não autenticado." }, 401);
+  await saveRequestSubscription(user.id, body);
 
   const timerId = String(body.timer_id || "");
   const exerciseName = String(body.exercise_name || "Próxima série").slice(0, 160);
@@ -144,9 +183,10 @@ async function cancelJob(req: Request, body: any) {
   return json({ ok: true });
 }
 
-async function testPush(req: Request) {
+async function testPush(req: Request, body: any) {
   const user = await getAuthenticatedUser(req);
   if (!user) return json({ error: "Não autenticado." }, 401);
+  await saveRequestSubscription(user.id, body);
 
   const result = await sendJobNotification({
     id: crypto.randomUUID(),
@@ -165,6 +205,28 @@ async function testPush(req: Request) {
     }, 500);
   }
   return json({ ok: true, sent: result.sent, subscriptions: result.subscriptions });
+}
+
+async function testDelayedPush(req: Request, body: any) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) return json({ error: "Não autenticado." }, 401);
+  await saveRequestSubscription(user.id, body);
+
+  const fireAt = new Date(Date.now() + 15_000);
+  const timerId = `test-delayed-${Date.now()}`;
+  const { data: job, error } = await sbAdmin.from("rest_timer_push_jobs").insert({
+    user_id: user.id,
+    timer_id: timerId,
+    exercise_name: "Teste bloqueado",
+    fire_at: fireAt.toISOString(),
+    status: "scheduled",
+    attempts: 0,
+    updated_at: new Date().toISOString(),
+  }).select("id,user_id,timer_id,exercise_name,fire_at,attempts").single();
+
+  if (error) return json({ error: error.message }, 500);
+  if (job?.id) runAfterResponse(processSingleDueJob(job.id, 15_000));
+  return json({ ok: true, timer_id: timerId, fire_at: fireAt.toISOString() });
 }
 
 async function diagnosePush(req: Request) {
@@ -188,6 +250,8 @@ async function diagnosePush(req: Request) {
 
   return json({
     ok: true,
+    edge_vapid_public_key: shortKey(VAPID_PUBLIC_KEY),
+    edge_vapid_subject: VAPID_SUBJECT,
     subscriptions: (subs || []).map((s: any) => ({
       id: s.id,
       endpoint_host: safeEndpointHost(s.endpoint),
@@ -272,11 +336,15 @@ async function sendJobNotification(job: any) {
     try {
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        payload
+        payload,
+        {
+          TTL: 60 * 60,
+          urgency: "high",
+        }
       );
       jobSent++;
     } catch (e: any) {
-      lastError = e?.message || String(e);
+      lastError = formatWebPushError(e);
       if (e.statusCode === 410 || e.statusCode === 404) {
         await sbAdmin.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
       }
@@ -310,6 +378,17 @@ function safeEndpointHost(endpoint: string) {
   try { return new URL(endpoint).host; } catch { return "endpoint-invalido"; }
 }
 
+function formatWebPushError(e: any) {
+  const status = e?.statusCode || e?.status || "";
+  const body = typeof e?.body === "string" ? e.body.slice(0, 240) : "";
+  const message = e?.message || String(e);
+  return [
+    status ? `HTTP ${status}` : "",
+    message,
+    body ? `Body: ${body}` : "",
+  ].filter(Boolean).join(" - ").slice(0, 500);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "POST") return json({ error: "Método não permitido." }, 405);
@@ -318,8 +397,10 @@ serve(async (req) => {
   try { body = await req.json(); } catch { body = {}; }
 
   if (body.action === "schedule") return scheduleJob(req, body);
+  if (body.action === "request-subscription") return requestSubscription(req, body);
   if (body.action === "cancel") return cancelJob(req, body);
-  if (body.action === "test") return testPush(req);
+  if (body.action === "test") return testPush(req, body);
+  if (body.action === "test_delayed") return testDelayedPush(req, body);
   if (body.action === "diagnose") return diagnosePush(req);
   if (body.action === "process") return processDueJobs(req);
 

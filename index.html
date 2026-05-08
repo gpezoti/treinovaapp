@@ -1238,8 +1238,64 @@ const REP_SCHEMES = {
   yellow: { label: "12 a 15 reps máx.", reps: "12–15", pause: "1'00\"", pauseSec: 60, sets: 3 },
   white:  { label: "8 a 10 reps máx.",  reps: "8–10",  pause: "1'30\"", pauseSec: 90, sets: 4 },
   red:    { label: "4 a 6 reps máx.",   reps: "4–6",   pause: "2'30\"–3'", pauseSec: 165, sets: 4 },
-  flex:   { label: "Mobilidade",        reps: "—",     pause: "—",     pauseSec: 30, sets: 1 },
+  flex:   { label: "Flexibilidade",     reps: "12–15", pause: "1'00\"", pauseSec: 60, sets: 3 },
   off:    { label: "Descanso",          reps: "—",     pause: "—",     pauseSec: 0, sets: 0 }
+};
+
+const PERIOD_COLOR_OPTIONS = [
+  { name: "Azul", value: "#00b4ff" },
+  { name: "Verde", value: "#2ecc71" },
+  { name: "Amarelo", value: "#ffd60a" },
+  { name: "Vermelho", value: "#ff3b3b" },
+  { name: "Roxo", value: "#a78bfa" },
+  { name: "Rosa", value: "#fb7185" },
+  { name: "Laranja", value: "#f97316" },
+  { name: "Branco", value: "#f4f7ff" }
+];
+
+function normalizePeriodColor(color) {
+  const value = String(color || "").trim();
+  return /^#[0-9a-fA-F]{6,8}$/.test(value) ? value : "#00b4ff";
+}
+
+function renderPeriodColorPicker(value, id, cardCode = "") {
+  const current = normalizePeriodColor(value);
+  return `<div class="period-color-picker" data-color-picker="${id}">
+    <input type="hidden" id="${id}" value="${escape(current)}" />
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+      ${PERIOD_COLOR_OPTIONS.map(c => `
+        <button type="button" class="period-color-swatch ${c.value.toLowerCase() === current.toLowerCase() ? 'active' : ''}"
+          title="${escape(c.name)}" aria-label="${escape(c.name)}"
+          onclick="setPeriodColor('${id}','${c.value}','${escapeAttr(cardCode)}')"
+          style="height:42px;border-radius:10px;border:2px solid ${c.value.toLowerCase() === current.toLowerCase() ? 'var(--text)' : 'var(--line)'};background:${c.value};box-shadow:inset 0 0 0 1px rgba(0,0,0,.16)">
+        </button>`).join("")}
+    </div>
+    <label class="row-flex" style="margin-top:8px;gap:8px">
+      <span class="text-xs muted" style="font-weight:800;text-transform:uppercase;letter-spacing:.5px">Personalizada</span>
+      <input type="color" value="${escape(current)}" style="width:52px;height:38px;padding:2px;border-radius:8px;border:1px solid var(--line);background:var(--bg-2)"
+        oninput="setPeriodColor('${id}', this.value, '${escapeAttr(cardCode)}')" />
+    </label>
+  </div>`;
+}
+
+window.setPeriodColor = function(inputId, color, cardCode = "") {
+  const normalized = normalizePeriodColor(color);
+  const input = document.getElementById(inputId);
+  if (input) input.value = normalized;
+  const picker = document.querySelector(`[data-color-picker="${inputId}"]`);
+  if (picker) {
+    picker.querySelectorAll(".period-color-swatch").forEach(btn => {
+      const selected = (btn.style.backgroundColor && btn.getAttribute("onclick") || "").toLowerCase().includes(normalized.toLowerCase());
+      btn.classList.toggle("active", selected);
+      btn.style.borderColor = selected ? "var(--text)" : "var(--line)";
+    });
+    const custom = picker.querySelector('input[type="color"]');
+    if (custom) custom.value = normalized;
+  }
+  if (cardCode) {
+    const card = document.querySelector(`[data-code="${CSS.escape(cardCode)}"]`);
+    if (card) card.style.borderLeftColor = normalized;
+  }
 };
 
 function formatPauseLabel(seconds) {
@@ -1462,7 +1518,27 @@ function findDayInfo(iso) {
   // calc week number
   const sorted = [...STATE.periodization].sort((a,b) => a.date.localeCompare(b.date));
   const idx = sorted.findIndex(x => x.date === iso);
-  return { ...d, week: Math.floor(idx / 7) + 1 };
+  const blocks = d.blocks || (STATE.dayBlocks || {})[iso] || [];
+  let presetCode = d.preset_code || null;
+  let workoutCode = d.workout_code;
+  const firstWorkoutBlock = blocks.find(b => b.workout_code) || blocks.find(b => b.preset_code && (b.preset_code === "flex" || b.preset_code === presetCode));
+  if (firstWorkoutBlock) {
+    presetCode = firstWorkoutBlock.preset_code || presetCode;
+    workoutCode = firstWorkoutBlock.workout_code || workoutCode;
+  }
+  return { ...d, workout_code: workoutCode, preset_code: presetCode, blocks, week: Math.floor(idx / 7) + 1 };
+}
+
+function resolvePresetForWorkoutDate(date, workoutCode) {
+  const info = findDayInfo(date);
+  if (!info) return null;
+  const blocks = info.blocks || [];
+  const exact = blocks.find(b => b.workout_code === workoutCode);
+  if (exact?.preset_code) return exact.preset_code;
+  const legacyFlex = workoutCode === "FLEX" && blocks.find(b => b.preset_code === "flex");
+  if (legacyFlex?.preset_code) return legacyFlex.preset_code;
+  if (info.workout_code === workoutCode && info.preset_code) return info.preset_code;
+  return null;
 }
 function groupWeeks() {
   const sorted = [...STATE.periodization].sort((a,b) => a.date.localeCompare(b.date));
@@ -4313,14 +4389,7 @@ window.openNotificationsSheet = function() {
 	      <span style="flex:1"></span>
 	      ${list.some(n=>!n.read_at) ? `<button class="mini-btn mini-btn-ghost" onclick="onMarkAllRead()">Marcar todas como lidas</button>` : ''}
 	    </div>
-	    <div class="card mb-12">
-	      <div class="row-flex" style="gap:8px; flex-wrap:wrap">
-	        <button class="mini-btn" onclick="testRestTimerPushDelayed()">Teste bloqueado 15s</button>
-	        <button class="mini-btn mini-btn-ghost" onclick="testRestTimerPushNow()">Testar agora</button>
-	        <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
-	      </div>
-	      <div class="text-xs muted" style="margin-top:8px; line-height:1.4">Toque em "Teste bloqueado 15s" e bloqueie o celular imediatamente. Esse é o teste real de push fora do app.</div>
-	    </div>
+	    ${renderPushSubscriptionCardHTML()}
 	    ${list.length === 0 ? `<div class="empty"><p>Sem notificações</p></div>` : list.map(n => {
       const icon = n.kind === 'payment_overdue' ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' :
                    n.kind === 'period_reminder_7d' ? 'calendar_emoji' :
@@ -4342,6 +4411,32 @@ window.openNotificationsSheet = function() {
   `;
   openSheet(html);
 };
+
+function renderPushSubscriptionCardHTML() {
+  if (!("Notification" in window)) return "";
+  if (Notification.permission === "granted") {
+    ensureUserPushSubscription().catch((e) => console.warn("[push sheet auto-subscribe]", e));
+    return `<div class="card mb-12">
+      <div class="fw-700 text-sm">Notificações ativas</div>
+      <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Este dispositivo está autorizado. O app renova a assinatura automaticamente quando você entra.</div>
+    </div>`;
+  }
+  if (Notification.permission === "denied") {
+    return `<div class="card mb-12">
+      <div class="fw-700 text-sm">Notificações bloqueadas</div>
+      <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Ative as notificações nas configurações do navegador/iPhone para receber avisos fora do app.</div>
+    </div>`;
+  }
+  return `<div class="card mb-12">
+    <div class="row-flex" style="gap:10px;align-items:center">
+      <div style="flex:1">
+        <div class="fw-700 text-sm">Ativar notificações</div>
+        <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Necessário para descanso, mensagens e lembretes aparecerem fora do app.</div>
+      </div>
+      <button class="mini-btn mini-btn-primary" onclick="requestPushPermission()">Ativar</button>
+    </div>
+  </div>`;
+}
 
 window.onMarkAllRead = async function() {
   await markAllNotifsRead();
@@ -4607,7 +4702,7 @@ function renderHome() {
       todayCardHTML = `<div class="today-card intensity-off"><div class="today-title">Treino ${info.workout_code} não encontrado</div></div>`;
 	    } else {
 	      const [pillCls, pillTxt] = intensityPill(info.intensity);
-	      const scheme = getTrainingScheme(null, info.intensity);
+	      const scheme = getTrainingScheme(info.preset_code, info.intensity);
 	      const totalSets = W.exercises ? W.exercises.reduce((a,e)=>a+getExerciseTargetSets(e, scheme),0) : 0;
 	      todayCardHTML = `
         <div class="today-card ${intensityClass(info.intensity)}">
@@ -4738,7 +4833,7 @@ window.openWorkout = function(iso, code, intensity) {
   STATE.selectedDate = iso;
   STATE.selectedWorkout = code;
   STATE.selectedIntensity = intensity || "yellow";
-  STATE.selectedPresetCode = null;
+  STATE.selectedPresetCode = resolvePresetForWorkoutDate(iso, code);
   STATE.expandedEx = null;
   navTo("workout");
 };
@@ -5986,8 +6081,11 @@ async function renderWorkout() {
     const info = findDayInfo(date);
     if (info && info.workout_code !== "OFF") {
       code = info.workout_code; intensity = info.intensity;
-      STATE.selectedDate = date; STATE.selectedWorkout = code; STATE.selectedIntensity = intensity; STATE.selectedPresetCode = null;
+      STATE.selectedDate = date; STATE.selectedWorkout = code; STATE.selectedIntensity = intensity; STATE.selectedPresetCode = info.preset_code || resolvePresetForWorkoutDate(date, code);
     }
+  }
+  if (!STATE.selectedPresetCode) {
+    STATE.selectedPresetCode = resolvePresetForWorkoutDate(date, code);
   }
 
   if (!code || code === "OFF") {
@@ -7419,8 +7517,13 @@ window.deleteStudent = async function(id, email) {
 // Cache de presets em memória (carrega ao logar; recarrega via reloadPresets)
 let _PRESETS = [];
 async function loadPresets() {
-  // pega presets do coach atual (se for staff) e fallback nos globais
-  const coachId = STATE.profile && (STATE.profile.role === "coach" ? STATE.profile.id : null);
+  // pega presets do coach responsável e fallback nos globais.
+  // Aluno também precisa carregar overrides do professor para o treino obedecer a periodização vinculada.
+  const coachId = STATE.profile && (
+    STATE.profile.role === "coach" ? STATE.profile.id :
+    STATE.profile.role === "student" ? STATE.profile.coach_id :
+    null
+  );
   const filters = coachId ? `coach_id.eq.${coachId},coach_id.is.null` : `coach_id.is.null`;
   const { data, error } = await sb.from("intensity_presets")
     .select("*").or(filters).order("position");
@@ -7930,10 +8033,7 @@ window.renderPresetItem = function(p) {
       </div>
       <div class="form-group" style="margin-bottom:8px">
         <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Cor</div>
-        <div class="row-flex" style="gap:8px;">
-          <input type="color" id="pr-color-${p.code}" value="${escape(p.color || '#00b4ff')}" style="width:48px;height:42px;padding:2px;border-radius:8px;border:1px solid var(--line);background:var(--bg-2);cursor:pointer;" oninput="document.getElementById('pr-color-hex-${p.code}').value=this.value;document.querySelector('[data-code=\\''+'${p.code}'+'\\']').style.borderLeftColor=this.value;" />
-          <input class="input" id="pr-color-hex-${p.code}" value="${escape(p.color || '#00b4ff')}" maxlength="9" style="flex:1;" oninput="document.getElementById('pr-color-${p.code}').value=this.value;document.querySelector('[data-code=\\''+'${p.code}'+'\\']').style.borderLeftColor=this.value;" />
-        </div>
+        ${renderPeriodColorPicker(p.color || '#00b4ff', `pr-color-${p.code}`, p.code)}
       </div>
       ${isWorkout ? `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -8007,10 +8107,7 @@ window.savePreset = async function(code) {
   const pause = document.getElementById(`pr-pause-${code}`).value;
   const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
   const existing = _PRESETS.find(p => p.code === code);
-  const colorRaw = (document.getElementById(`pr-color-hex-${code}`)?.value
-                    || document.getElementById(`pr-color-${code}`)?.value
-                    || existing.color || "").trim();
-  const color = /^#[0-9a-fA-F]{6,8}$/.test(colorRaw) ? colorRaw : existing.color;
+  const color = normalizePeriodColor(document.getElementById(`pr-color-${code}`)?.value || existing.color);
   const patch = {
     label: label || existing.label,
     color,
@@ -8050,10 +8147,7 @@ window.savePresetDuration = async function(code) {
   const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
   const existing = _PRESETS.find(p => p.code === code);
   if (!existing) return;
-  const colorRaw = (document.getElementById(`pr-color-hex-${code}`)?.value
-                    || document.getElementById(`pr-color-${code}`)?.value
-                    || existing.color || "").trim();
-  const color = /^#[0-9a-fA-F]{6,8}$/.test(colorRaw) ? colorRaw : existing.color;
+  const color = normalizePeriodColor(document.getElementById(`pr-color-${code}`)?.value || existing.color);
   const patch = { label: label || existing.label, color, duration_minutes: dur };
   if (myCoachId && (!existing.coach_id)) {
     const { error } = await sb.from("intensity_presets").insert({
@@ -8091,11 +8185,7 @@ window.openNewPresetSheet = function() {
     </div>
     <div class="form-group">
       <label class="form-label">Cor</label>
-      <div class="row-flex" style="gap:8px;">
-        <input type="color" id="np-color" value="#00b4ff" style="width:48px; height:42px; padding:2px; border-radius:8px; border:1px solid var(--line); background:var(--bg-2); cursor:pointer;" oninput="document.getElementById('np-color-hex').value=this.value;" />
-        <input class="input" id="np-color-hex" value="#00b4ff" maxlength="9" style="flex:1;" oninput="document.getElementById('np-color').value=this.value;" />
-      </div>
-      <p class="text-xs muted" style="margin-top:6px">Toque no quadrado colorido para escolher visualmente.</p>
+      ${renderPeriodColorPicker('#00b4ff', 'np-color')}
     </div>
     <button class="btn-primary" onclick="createPresetType()">Criar tipo</button>
     <button class="btn-ghost" onclick="${STATE.adminWorkoutTab === "periodization" ? "closeSheet();renderAdminWorkouts()" : "openPresetEditor()"}" style="margin-top:8px">Cancelar</button>
@@ -8115,7 +8205,7 @@ window.createPresetType = async function() {
     coach_id: myCoachId,
     code,
     label,
-    color: (document.getElementById("np-color-hex")?.value || document.getElementById("np-color")?.value || "#00b4ff").trim(),
+    color: normalizePeriodColor(document.getElementById("np-color")?.value || "#00b4ff"),
     is_workout: isWorkout,
     position: nextPosition,
     active: true,
@@ -9313,6 +9403,7 @@ async function postSignIn() {
       STATE.selectedDate = today;
       STATE.selectedWorkout = info.workout_code;
       STATE.selectedIntensity = info.intensity;
+      STATE.selectedPresetCode = info.preset_code || resolvePresetForWorkoutDate(today, info.workout_code);
     }
   }
 
@@ -9399,15 +9490,18 @@ async function postLoginInit() {
     showOnboarding();
   } else if (STATE.profile.role === "coach" && STATE.profile.onboarded === false) {
     showCoachOnboarding();
-  } else {
-    // Tenta subscrever silenciosamente se já tem permissão
-    if ("Notification" in window && Notification.permission === "granted") {
-      subscribePushNotifications().catch(()=>{});
-    }
-    showInstallBannerIfPossible();
+	  } else {
+	    // Tenta subscrever silenciosamente se já tem permissão
+	    ensureUserPushSubscription().catch((e) => console.warn("[postLogin push subscription]", e));
+	    showInstallBannerIfPossible();
     // [UX-06] iOS não suporta beforeinstallprompt — exibir instrução manual
     showIOSInstallHintIfNeeded();
-  }
+	}
+
+async function ensureUserPushSubscription() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return null;
+  return subscribePushNotifications({ throwOnError: false });
+}
 }
 
 // [A-02] Tela fullscreen de troca obrigatória de senha
@@ -9631,6 +9725,15 @@ async function subscribePushNotifications(opts = {}) {
   // Salva no Supabase (upsert by endpoint)
   try {
     const json = sub.toJSON();
+    try {
+      const { error: edgeError } = await sb.functions.invoke("rest-timer-push", {
+        body: { action: "request-subscription", subscription: json, user_agent: navigator.userAgent }
+      });
+      if (edgeError) throw edgeError;
+      return sub;
+    } catch (edgeSaveError) {
+      console.warn("[push subscription edge save fallback]", edgeSaveError);
+    }
     await sb.from("push_subscriptions")
       .delete()
       .eq("user_id", userId)

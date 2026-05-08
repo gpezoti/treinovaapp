@@ -22,6 +22,7 @@ set +a
 "${SUPABASE_CLI[@]}" db query --linked --file sql/fix_admin_trainer_rpc_fallback_2026_05_07.sql
 "${SUPABASE_CLI[@]}" db query --linked --file sql/fix_beta_three_bugs_2026_05_08.sql
 "${SUPABASE_CLI[@]}" db query --linked --file sql/trainer_periodization_types_sets_2026_05_08.sql
+"${SUPABASE_CLI[@]}" db query --linked --file sql/fix_flex_period_and_push_subscription_2026_05_08.sql
 "${SUPABASE_CLI[@]}" functions deploy rest-timer-push
 "${SUPABASE_CLI[@]}" functions deploy admin-user
 "${SUPABASE_CLI[@]}" functions list
