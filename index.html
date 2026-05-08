@@ -4754,9 +4754,8 @@ window.bulkBlockTrainers = async function() {
   const ids = [..._trainerSelected];
   for (const id of ids) {
     const trainer = (STATE.trainers || []).find(t => t.id === id);
-    const { data, error } = await sb.functions.invoke("admin-user", {
-      body: {
-        action: "update_trainer",
+    try {
+      await runAdminTrainerAction("update_trainer", {
         user_id: id,
         full_name: trainer?.full_name || trainer?.email || "Treinador",
         email: trainer?.email || "",
@@ -4764,9 +4763,10 @@ window.bulkBlockTrainers = async function() {
         avatar_emoji: trainer?.avatar_emoji || "🎯",
         status: "blocked",
         role: trainer?.role || "coach",
-      }
-    });
-    if (error || data?.error) { showToast("Erro: " + adminUserDeployMessage(await getFunctionErrorMessage(error || new Error(data.error))), "error"); return; }
+      });
+    } catch (e) {
+      showToast("Erro: " + adminUserDeployMessage(e.message || "tente novamente"), "error"); return;
+    }
   }
   showToast(`${ids.length} treinador(es) bloqueado(s)`, "success");
   _trainerSelected.clear();
@@ -4777,10 +4777,11 @@ window.bulkDeleteTrainers = async function() {
   if (!await showConfirm({ title: "Remover treinadores?", msg: `${_trainerSelected.size} treinador(es) serão despromovidos para aluno, bloqueados e terão os alunos desvinculados.`, confirm: "Remover", cancel: "Cancelar", danger: true })) return;
   const ids = [..._trainerSelected];
   for (const id of ids) {
-    const { data, error } = await sb.functions.invoke("admin-user", {
-      body: { action: "remove_trainer", user_id: id }
-    });
-    if (error || data?.error) { showToast("Erro: " + adminUserDeployMessage(await getFunctionErrorMessage(error || new Error(data.error))), "error"); return; }
+    try {
+      await runAdminTrainerAction("remove_trainer", { user_id: id });
+    } catch (e) {
+      showToast("Erro: " + adminUserDeployMessage(e.message || "tente novamente"), "error"); return;
+    }
   }
   showToast(`${ids.length} treinador(es) removido(s)`, "success");
   removeUsersFromLocalLists(ids);
@@ -4790,9 +4791,8 @@ window.bulkDeleteTrainers = async function() {
 
 window.setTrainerStatus = async function(id, status) {
   const trainer = (STATE.trainers || []).find(t => t.id === id);
-  const { data, error } = await sb.functions.invoke("admin-user", {
-    body: {
-      action: "update_trainer",
+  try {
+    await runAdminTrainerAction("update_trainer", {
       user_id: id,
       full_name: trainer?.full_name || trainer?.email || "Treinador",
       email: trainer?.email || "",
@@ -4800,18 +4800,20 @@ window.setTrainerStatus = async function(id, status) {
       avatar_emoji: trainer?.avatar_emoji || "🎯",
       status,
       role: trainer?.role || "coach",
-    }
-  });
-  if (error || data?.error) { showToast("Erro: " + adminUserDeployMessage(await getFunctionErrorMessage(error || new Error(data.error))), "error"); return; }
+    });
+  } catch (e) {
+    showToast("Erro: " + adminUserDeployMessage(e.message || "tente novamente"), "error"); return;
+  }
   showToast(status === "approved" ? "Treinador aprovado" : status === "blocked" ? "Bloqueado" : "Atualizado", "success");
   await loadTrainers(); renderTrainers();
 };
 window.removeTrainer = async function(id, email) {
   if (!await showConfirm({ title: "Remover treinador?", msg: `O usuário ${email} será despromovido para aluno e bloqueado.`, confirm: "Remover", danger: true })) return;
-  const { data, error } = await sb.functions.invoke("admin-user", {
-    body: { action: "remove_trainer", user_id: id }
-  });
-  if (error || data?.error) { showToast("Erro: " + adminUserDeployMessage(await getFunctionErrorMessage(error || new Error(data.error))), "error"); return; }
+  try {
+    await runAdminTrainerAction("remove_trainer", { user_id: id });
+  } catch (e) {
+    showToast("Erro: " + adminUserDeployMessage(e.message || "tente novamente"), "error"); return;
+  }
   showToast("Treinador removido", "success");
   closeSheet();
   removeUsersFromLocalLists(id);
@@ -4846,6 +4848,35 @@ function adminUserDeployMessage(msg) {
     return "Função admin-user desatualizada no Supabase. Rode o deploy das funções e tente novamente.";
   }
   return msg;
+}
+
+function isAdminUserFunctionOutdated(msg) {
+  return /Ação desconhecida:\s*(update_trainer|remove_trainer)/i.test(msg) || /non-2xx status code/i.test(msg);
+}
+
+async function runAdminTrainerAction(action, body) {
+  const { data, error } = await sb.functions.invoke("admin-user", { body: { action, ...body } });
+  if (!error && !data?.error) return data;
+
+  const msg = await getFunctionErrorMessage(error || new Error(data?.error || ""));
+  if (!isAdminUserFunctionOutdated(msg)) throw new Error(msg);
+
+  const rpc = action === "remove_trainer"
+    ? await sb.rpc("admin_remove_trainer", { p_user_id: body.user_id })
+    : await sb.rpc("admin_update_trainer", {
+        p_user_id: body.user_id,
+        p_email: body.email,
+        p_full_name: body.full_name,
+        p_phone: body.phone || null,
+        p_avatar_emoji: body.avatar_emoji || null,
+        p_status: body.status || "approved",
+        p_role: body.role || "coach",
+        p_password: body.password || null,
+      });
+
+  if (rpc.error) throw new Error(rpc.error.message || msg);
+  if (rpc.data?.error) throw new Error(rpc.data.error);
+  return rpc.data || { ok: true, action };
 }
 
 async function getPushErrorMessage(error) {
@@ -5526,21 +5557,16 @@ window.submitEditTrainer = async function(id) {
   if (!name || !email) { showToast("Preencha nome e email", "error"); return; }
   if (password && password.length < 6) { showToast("Senha temporária precisa ter 6+ caracteres", "error"); return; }
   try {
-    const { data, error } = await sb.functions.invoke("admin-user", {
-      body: {
-        action: "update_trainer",
-        user_id: id,
-        full_name: name,
-        email,
-        phone,
-        avatar_emoji: emoji,
-        status,
-        role,
-        password: password || undefined,
-      }
+    await runAdminTrainerAction("update_trainer", {
+      user_id: id,
+      full_name: name,
+      email,
+      phone,
+      avatar_emoji: emoji,
+      status,
+      role,
+      password: password || undefined,
     });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
     showToast("Treinador atualizado", "success");
     closeSheet();
     await loadTrainers();
