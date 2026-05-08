@@ -3793,7 +3793,7 @@ function finishTimer() {
   STATE.timer.status = "finished";
   _releaseWakeLock();
   cancelBackgroundRestNotification();
-  cancelServerRestPush(STATE.timer.id);
+  if (isAppForegroundActive()) cancelServerRestPush(STATE.timer.id);
   notifyRestFinished(STATE.timer.exerciseName || STATE.timer.label).catch(()=>{});
   clearPersistedTimer();
   document.getElementById("timer-bar")?.classList.add("done");
@@ -3899,6 +3899,9 @@ function setTimerIcon(paused) {
 }
 function openFsTimer() { document.getElementById("timer-fs")?.classList.add("active"); }
 function closeFsTimer() { document.getElementById("timer-fs")?.classList.remove("active"); }
+function isAppForegroundActive() {
+  return document.visibilityState === "visible" && document.hasFocus();
+}
 function bindRestTimerLifecycle() {
   const persistBeforeBackground = () => {
     if (STATE.timer && (STATE.timer.running || STATE.timer.paused)) {
@@ -9492,11 +9495,11 @@ async function postLoginInit() {
     // [UX-06] iOS não suporta beforeinstallprompt — exibir instrução manual
     showIOSInstallHintIfNeeded();
 	}
+}
 
 async function ensureUserPushSubscription() {
   if (!("Notification" in window) || Notification.permission !== "granted") return null;
   return subscribePushNotifications({ throwOnError: false });
-}
 }
 
 // [A-02] Tela fullscreen de troca obrigatória de senha

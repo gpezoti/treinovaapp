@@ -52,6 +52,19 @@ const checks = [
       html.includes("?view=workout&restTimer=1"),
   },
   {
+    name: "timer nao cancela push remoto quando finaliza em background",
+    pass: html.includes("function isAppForegroundActive()") &&
+      html.includes('if (isAppForegroundActive()) cancelServerRestPush(STATE.timer.id);'),
+  },
+  {
+    name: "modal de notificacoes consegue renovar assinatura com helper global",
+    pass: html.includes("window.openNotificationsSheet = function()") &&
+      html.includes("function renderPushSubscriptionCardHTML()") &&
+      html.includes("async function ensureUserPushSubscription()") &&
+      html.indexOf("async function ensureUserPushSubscription()") > html.indexOf("async function postLoginInit()") &&
+      html.indexOf("async function ensureUserPushSubscription()") < html.indexOf("function showForcePasswordReset()"),
+  },
+  {
     name: "falha de push remoto nao mostra erro tecnico para aluno",
     pass: !html.includes("Verifique push/cron no Supabase") &&
       html.includes("O descanso local continua ativo."),
@@ -61,17 +74,21 @@ const checks = [
     pass: html.includes("async function subscribePushNotifications(opts = {})") &&
       html.includes("throwOnError") &&
       html.includes("isWebPushRuntimeSupported") &&
+      html.includes("upsertRestTimerPushJobDirect") &&
       html.includes("last_seen_at: new Date().toISOString()") &&
       html.includes('return Boolean(await subscribePushNotifications({ throwOnError: true }))'),
   },
   {
-    name: "timer expoe teste e diagnostico de push remoto",
-    pass: html.includes("testRestTimerPushNow") &&
-      html.includes("diagnoseRestTimerPush") &&
-      html.includes('action: "test"') &&
-      html.includes('action: "diagnose"') &&
-      html.includes("Testar push agora") &&
-      html.includes("Diagnóstico push"),
+    name: "modal de notificacoes nao expoe controles de teste push",
+    pass: html.includes("renderPushSubscriptionCardHTML") &&
+      !html.slice(
+        html.indexOf("window.openNotificationsSheet"),
+        html.indexOf("function renderPushSubscriptionCardHTML")
+      ).includes("Teste bloqueado 15s") &&
+      !html.slice(
+        html.indexOf("window.openNotificationsSheet"),
+        html.indexOf("function renderPushSubscriptionCardHTML")
+      ).includes("Diagnóstico push"),
   },
   {
     name: "onboarding nao marca push como ativo quando subscription falha",
@@ -119,6 +136,11 @@ checks.push(
       edge.includes("processDueJobs") &&
       edge.includes("processSingleDueJob") &&
       edge.includes("testPush") &&
+      edge.includes("testDelayedPush") &&
+      edge.includes('urgency: "high"') &&
+      edge.includes("TTL: 60 * 60") &&
+      edge.includes("formatWebPushError") &&
+      edge.includes("edge_vapid_public_key") &&
       edge.includes("diagnosePush") &&
       edge.includes("EdgeRuntime") &&
       edge.includes("DIRECT_SEND_MAX_DELAY_MS") &&
