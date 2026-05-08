@@ -11830,7 +11830,7 @@ function renderTodayBlocksCard() {
             ${hasRepRange ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px">${p.rep_min}-${p.rep_max} reps · pausa ${Math.floor((p.pause_seconds||0)/60)}:${String((p.pause_seconds||0)%60).padStart(2,'0')}</div>` : ''}
             ${W && W.focus ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px">${escape(W.focus)}</div>` : ''}
           </div>
-          ${b.workout_code && p.is_workout && W ? `
+          ${b.workout_code && W ? `
             <button class="btn-primary" style="padding:9px 14px;font-size:12px;width:auto;flex-shrink:0" onclick="openWorkoutWithPreset('${today}','${b.workout_code}','${b.preset_code}')">
               Iniciar
             </button>
