@@ -9367,8 +9367,9 @@ async function requestPushPermission() {
 window.testRestTimerPushNow = async function() {
   try {
     ensureRestNotificationPermission().catch((e) => console.warn("[rest push test permission]", e));
+    const subscription = await getCurrentPushSubscriptionPayload();
     const { data, error } = await sb.functions.invoke("rest-timer-push", {
-      body: { action: "test" }
+      body: { action: "test", subscription, user_agent: navigator.userAgent }
     });
     if (error) throw error;
     if (data?.error) throw new Error(data.error);
@@ -9382,6 +9383,7 @@ window.testRestTimerPushNow = async function() {
 window.testRestTimerPushDelayed = async function() {
   try {
     ensureRestNotificationPermission().catch((e) => console.warn("[rest push delayed permission]", e));
+    const subscription = await getCurrentPushSubscriptionPayload();
     const timerId = `manual-test-${Date.now()}`;
     const fireAt = new Date(Date.now() + 15_000).toISOString();
     const { data, error } = await sb.functions.invoke("rest-timer-push", {
@@ -9389,7 +9391,9 @@ window.testRestTimerPushDelayed = async function() {
         action: "schedule",
         timer_id: timerId,
         fire_at: fireAt,
-        exercise_name: "Teste bloqueado"
+        exercise_name: "Teste bloqueado",
+        subscription,
+        user_agent: navigator.userAgent
       }
     });
     if (error) console.warn("[rest push delayed invoke]", error);
