@@ -4,7 +4,7 @@
    - Cache-first com revalidação para assets estáticos (CDN, imagens)
    - Push notifications nativos
 */
-const VERSION = "v8";
+const VERSION = "v9";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
 const REST_TIMER_HANDLES = new Map();
@@ -89,6 +89,8 @@ self.addEventListener("push", (event) => {
     tag: data.tag || undefined,
     data: data.url ? { url: data.url } : {},
     vibrate: [80, 40, 80],
+    silent: data.silent === true ? true : false,
+    renotify: data.renotify !== false,
   };
   event.waitUntil(self.registration.showNotification(title, opts));
 });
@@ -123,6 +125,7 @@ self.addEventListener("message", (e) => {
         tag: "treinova-rest-timer",
         renotify: true,
         vibrate: [160, 80, 160],
+        silent: false,
         data: { url: data.url || "/?view=workout&restTimer=1" },
       }).catch(()=>{});
     }, delay);
@@ -147,6 +150,7 @@ self.addEventListener("message", (e) => {
       tag: data.tag || "treinova-local",
       renotify: data.renotify !== false,
       vibrate: data.vibrate || [80, 40, 80],
+      silent: data.silent === true ? true : false,
       data: data.url ? { url: data.url } : {},
     }));
   }

@@ -1226,12 +1226,53 @@ function getExThumb(ex) {
 }
 
 const REP_SCHEMES = {
-  yellow: { label: "12 a 15 reps máx.", reps: "12–15", pause: "1'00\"", pauseSec: 60 },
-  white:  { label: "8 a 10 reps máx.",  reps: "8–10",  pause: "1'30\"", pauseSec: 90 },
-  red:    { label: "4 a 6 reps máx.",   reps: "4–6",   pause: "2'30\"–3'", pauseSec: 165 },
-  flex:   { label: "Mobilidade",        reps: "—",     pause: "—",     pauseSec: 30 },
-  off:    { label: "Descanso",          reps: "—",     pause: "—",     pauseSec: 0 }
+  yellow: { label: "12 a 15 reps máx.", reps: "12–15", pause: "1'00\"", pauseSec: 60, sets: 3 },
+  white:  { label: "8 a 10 reps máx.",  reps: "8–10",  pause: "1'30\"", pauseSec: 90, sets: 4 },
+  red:    { label: "4 a 6 reps máx.",   reps: "4–6",   pause: "2'30\"–3'", pauseSec: 165, sets: 4 },
+  flex:   { label: "Mobilidade",        reps: "—",     pause: "—",     pauseSec: 30, sets: 1 },
+  off:    { label: "Descanso",          reps: "—",     pause: "—",     pauseSec: 0, sets: 0 }
 };
+
+function formatPauseLabel(seconds) {
+  const sec = Math.max(0, Number(seconds) || 0);
+  if (!sec) return "—";
+  const min = Math.floor(sec / 60);
+  const rest = sec % 60;
+  if (!min) return `${rest}s`;
+  return rest ? `${min}'${String(rest).padStart(2, "0")}"` : `${min}'00"`;
+}
+
+function getTrainingScheme(presetCode, fallbackIntensity) {
+  const fallback = REP_SCHEMES[fallbackIntensity || "yellow"] || REP_SCHEMES.yellow;
+  const preset = presetCode && typeof getPreset === "function" ? getPreset(presetCode) : null;
+  if (!preset) return { ...fallback, code: fallbackIntensity || "yellow" };
+  const pauseSec = Number.isFinite(Number(preset.pause_seconds)) ? Number(preset.pause_seconds) : fallback.pauseSec;
+  const repMin = Number(preset.rep_min);
+  const repMax = Number(preset.rep_max);
+  const reps = repMin && repMax ? `${repMin}–${repMax}` : fallback.reps;
+  const sets = Number(preset.sets_count) || fallback.sets || 1;
+  return {
+    ...fallback,
+    code: preset.code,
+    label: preset.label || fallback.label,
+    reps,
+    pauseSec,
+    pause: formatPauseLabel(pauseSec),
+    sets: preset.code === "off" ? 0 : Math.max(1, sets),
+    color: preset.color,
+    is_workout: preset.is_workout
+  };
+}
+
+function getCurrentTrainingScheme(intensity = STATE.selectedIntensity) {
+  return getTrainingScheme(STATE.selectedPresetCode, intensity);
+}
+
+function getExerciseTargetSets(ex, scheme = getCurrentTrainingScheme()) {
+  if (!ex) return 0;
+  if (scheme && scheme.code === "off") return 0;
+  return Math.max(1, Number(scheme && scheme.sets) || Number(ex.sets_count) || 1);
+}
 
 const WEEKDAY_LABELS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const WEEKDAY_FULL = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
@@ -1261,6 +1302,7 @@ const STATE = {
   selectedDate: null,
   selectedWorkout: null,
   selectedIntensity: "yellow",
+  selectedPresetCode: null,
   expandedEx: null,
   currentSession: null,  // active session row
   setLogs: [],           // current session set_logs
@@ -2202,7 +2244,7 @@ async function ensureSetLog(exercise, position, setNum) {
     exercise_position: position,
     exercise_cat: exercise.cat,
     set_number: setNum,
-    target_reps: exercise.reps,
+    target_reps: getCurrentTrainingScheme().reps,
     load_kg: lastLoad || null,
     done: false
   }).select().single();
@@ -2229,15 +2271,11 @@ async function toggleSetDone(exercise, position, setIdx) {
   await updateSetLog(log.id, patch);
 
   if (newDone) {
-    const target = exercise.sets_count || 1;
+    const scheme = getCurrentTrainingScheme();
+    const target = getExerciseTargetSets(exercise, scheme);
     const isMobility = exercise.cat === "mobility";
     if (!isMobility) {
-      const scheme = REP_SCHEMES[STATE.selectedIntensity] || REP_SCHEMES.yellow;
-      let pauseSec = scheme.pauseSec;
-      if (exercise.pause && exercise.pause !== "Seguir período" && exercise.pause !== "—") {
-        const parsed = parsePauseToSeconds(exercise.pause);
-        if (parsed) pauseSec = parsed;
-      }
+      const pauseSec = scheme.pauseSec || 0;
       const isLast = setIdx + 1 >= target;
       const label = isLast ? "Próximo exercício" : `Série ${setIdx + 2} de ${target}`;
       // Mostrar modal de conclusão de série com input de carga e auto-timer
@@ -2392,7 +2430,7 @@ window.confirmSerieDone = async function(skipTimer) {
 };
 
 async function toggleMobilityDone(exercise, position) {
-  const target = exercise.sets_count || 1;
+  const target = getExerciseTargetSets(exercise);
   const allDone = STATE.setLogs.filter(s => s.exercise_position === position).every(s => s.done) &&
                   STATE.setLogs.filter(s => s.exercise_position === position).length >= target;
   // garante logs
@@ -4484,9 +4522,11 @@ function renderHome() {
     const W = STATE.workouts[info.workout_code];
     if (!W) {
       todayCardHTML = `<div class="today-card intensity-off"><div class="today-title">Treino ${info.workout_code} não encontrado</div></div>`;
-    } else {
-      const [pillCls, pillTxt] = intensityPill(info.intensity);
-      todayCardHTML = `
+	    } else {
+	      const [pillCls, pillTxt] = intensityPill(info.intensity);
+	      const scheme = getTrainingScheme(null, info.intensity);
+	      const totalSets = W.exercises ? W.exercises.reduce((a,e)=>a+getExerciseTargetSets(e, scheme),0) : 0;
+	      todayCardHTML = `
         <div class="today-card ${intensityClass(info.intensity)}">
           <div class="today-eyebrow">Hoje · ${WEEKDAY_FULL[new Date(today+"T00:00:00").getDay()]} · ${fmtDateBR(today)}</div>
           <div class="today-title">${escape(W.name)}</div>
@@ -4505,11 +4545,11 @@ function renderHome() {
                 <div style="font-size:11px;opacity:.75">exercícios</div>
               </div>
               <div style="flex:1;background:rgba(0,0,0,.15);border-radius:10px;padding:10px;text-align:center">
-                <div style="font-size:18px;font-weight:800;color:var(--brand-on)">${W.exercises ? W.exercises.reduce((a,e)=>a+(e.sets_count||0),0) : 0}</div>
+	                <div style="font-size:18px;font-weight:800;color:var(--brand-on)">${totalSets}</div>
                 <div style="font-size:11px;opacity:.75">séries</div>
               </div>
               <div style="flex:1;background:rgba(0,0,0,.15);border-radius:10px;padding:10px;text-align:center">
-                <div style="font-size:18px;font-weight:800;color:var(--brand-on)">~${W.exercises ? Math.round(W.exercises.reduce((a,e)=>a+(e.sets_count||0),0)*2.5) : 45}'</div>
+	                <div style="font-size:18px;font-weight:800;color:var(--brand-on)">~${Math.max(15, Math.round(totalSets*2.5))}'</div>
                 <div style="font-size:11px;opacity:.75">estimado</div>
               </div>
             </div>
@@ -4611,6 +4651,7 @@ window.openWorkout = function(iso, code, intensity) {
   STATE.selectedDate = iso;
   STATE.selectedWorkout = code;
   STATE.selectedIntensity = intensity || "yellow";
+  STATE.selectedPresetCode = null;
   STATE.expandedEx = null;
   navTo("workout");
 };
@@ -5858,7 +5899,7 @@ async function renderWorkout() {
     const info = findDayInfo(date);
     if (info && info.workout_code !== "OFF") {
       code = info.workout_code; intensity = info.intensity;
-      STATE.selectedDate = date; STATE.selectedWorkout = code; STATE.selectedIntensity = intensity;
+      STATE.selectedDate = date; STATE.selectedWorkout = code; STATE.selectedIntensity = intensity; STATE.selectedPresetCode = null;
     }
   }
 
@@ -5894,10 +5935,10 @@ async function renderWorkout() {
   const completed = session && session.status === "completed";
 
   const [pillCls, pillTxt] = intensityPill(intensity);
-  const scheme = REP_SCHEMES[intensity] || REP_SCHEMES.yellow;
+  const scheme = getCurrentTrainingScheme(intensity);
 
   // Stats
-  const totalTarget = W.exercises.reduce((s,e) => s + (e.sets_count || 0), 0);
+  const totalTarget = W.exercises.reduce((s,e) => s + getExerciseTargetSets(e, scheme), 0);
   const doneCount = STATE.setLogs.filter(s => s.done).length;
   const allDone = totalTarget > 0 && doneCount >= totalTarget;
   const canRecoverCompletedToday = completed && canManageCompletedWorkoutSession();
@@ -5923,7 +5964,7 @@ async function renderWorkout() {
 
     <div class="intensity-banner ib-${intensity === 'red' ? 'red' : (intensity === 'white' ? 'white' : (intensity === 'flex' ? 'green' : 'yellow'))}">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <div><b>${scheme.label}</b>${scheme.pause !== "—" ? ` · pausa entre séries: <b>${scheme.pause}</b>` : ""}</div>
+	      <div><b>${scheme.label}</b>${scheme.sets ? ` · <b>${scheme.sets}</b> séries` : ""}${scheme.reps !== "—" ? ` · <b>${scheme.reps}</b> reps` : ""}${scheme.pause !== "—" ? ` · pausa <b>${scheme.pause}</b>` : ""}</div>
     </div>
 
     ${completed ? `<div class="complete-banner show"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Treino concluído! Bom trabalho.</div>` : ""}
@@ -6016,16 +6057,16 @@ async function renderWorkout() {
 function renderExerciseList(W, intensity, completed) {
   const list = document.getElementById("exercise-list");
   if (!list) return;
-  const scheme = REP_SCHEMES[intensity] || REP_SCHEMES.yellow;
+  const scheme = getCurrentTrainingScheme(intensity);
   list.innerHTML = W.exercises.map(ex => {
     const isMobility = ex.cat === "mobility";
-    const target = ex.sets_count || 0;
+    const target = getExerciseTargetSets(ex, scheme);
     const exLogs = STATE.setLogs.filter(s => s.exercise_position === ex.position).sort((a,b) => a.set_number - b.set_number);
     const doneN = exLogs.filter(s => s.done).length;
     const allDone = doneN >= target && target > 0;
     const expanded = STATE.expandedEx === ex.position;
-    const repsTxt = ex.reps === "Seguir período" ? scheme.reps : ex.reps;
-    const pauseTxt = ex.pause === "Seguir período" ? scheme.pause : ex.pause;
+    const repsTxt = scheme.reps;
+    const pauseTxt = scheme.pause;
 
     const thumbInner = getExThumb(ex);
     const illustInner = getExThumb(ex);
@@ -6035,7 +6076,7 @@ function renderExerciseList(W, intensity, completed) {
         <div class="ex-info">
           <div class="ex-name">${escape(ex.name)}</div>
           <div class="ex-quick">
-            <span><b>${ex.sets_count}×${repsTxt || ""}</b></span>
+            <span><b>${target}×${repsTxt || ""}</b></span>
             ${pauseTxt && pauseTxt !== "—" ? `<span>· pausa <b>${pauseTxt}</b></span>` : ""}
             ${ex.cadence && ex.cadence !== "—" ? `<span>· cad. <b>${ex.cadence}</b></span>` : ""}
             ${ex.video_url ? `<span style="color:var(--brand)">· <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="2" y1="17" x2="7" y2="17"/></svg> vídeo</span>` : ""}
@@ -6057,7 +6098,7 @@ function renderExerciseList(W, intensity, completed) {
         </div>
         <div class="ex-detail-grid">
           <div class="detail-item"><div class="detail-label">Repetições</div><div class="detail-value">${repsTxt || "—"}</div></div>
-          <div class="detail-item"><div class="detail-label">Séries</div><div class="detail-value">${ex.sets_count}</div></div>
+          <div class="detail-item"><div class="detail-label">Séries</div><div class="detail-value">${target}</div></div>
           <div class="detail-item"><div class="detail-label">Pausa</div><div class="detail-value">${pauseTxt || "—"}</div></div>
           <div class="detail-item"><div class="detail-label">Cadência</div><div class="detail-value">${ex.cadence || "—"}</div></div>
         </div>
@@ -6090,7 +6131,7 @@ function renderMobBtn(ex, allDone, completed) {
   </button>`;
 }
 function renderSetsTable(ex, logs, scheme, completed) {
-  const target = ex.sets_count || 0;
+  const target = getExerciseTargetSets(ex, scheme);
   const lastLoad = STATE.lastLoads[ex.name];
   let rows = "";
   for (let i = 0; i < target; i++) {
@@ -6099,7 +6140,7 @@ function renderSetsTable(ex, logs, scheme, completed) {
     const loadVal = log && log.load_kg != null ? log.load_kg : "";
     rows += `<div class="set-row ${isDone ? "done" : ""}">
       <div class="set-num">${i+1}</div>
-      <div class="set-target">${ex.reps === "Seguir período" ? scheme.reps : ex.reps} reps</div>
+      <div class="set-target">${scheme.reps} reps</div>
       <div class="set-load">
         <input type="number" inputmode="decimal" placeholder="${lastLoad || "0"}" value="${escape(loadVal)}"
                ${completed ? "disabled" : ""}
@@ -7641,7 +7682,7 @@ window.editPeriodDay = async function(dayId, studentId) {
     </div>
     <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">+ Adicionar bloco</div>
     <div class="preset-chip-grid">
-      ${_PRESETS.map(p => `
+      ${_PRESETS.filter(p => p.active !== false).map(p => `
         <button class="mini-btn" style="background:${p.color}22;color:${p.color};border:1px solid ${p.color}55;font-size:11px" onclick="addBlockToDay('${dayId}','${studentId}','${p.code}',${p.is_workout})">${p.label}</button>
       `).join("")}
     </div>
@@ -7675,7 +7716,7 @@ window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0) {
           `).join("")}
           <button class="mini-btn ${!b.workout_code?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','')">—</button>
         </div>
-        ${preset.rep_min || preset.pause_seconds ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${preset.rep_min}-${preset.rep_max} reps · pausa ${Math.floor((preset.pause_seconds||0)/60)}:${String((preset.pause_seconds||0)%60).padStart(2,'0')}</div>` : ''}
+	        ${preset.rep_min || preset.pause_seconds || preset.sets_count ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${preset.sets_count || 3} séries · ${preset.rep_min || "—"}-${preset.rep_max || "—"} reps · pausa ${formatPauseLabel(preset.pause_seconds || 0)}</div>` : ''}
       ` : isAero ? `
         <div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Modalidade aeróbia</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
@@ -7701,7 +7742,7 @@ window.addBlockToDay = async function(dayId, studentId, presetCode, isWorkout) {
   const { data: existing } = await sb.from("periodization_blocks").select("position").eq("day_id", dayId).order("position", { ascending: false }).limit(1);
   const pos = existing && existing.length ? (existing[0].position + 1) : 0;
   const insert = { day_id: dayId, position: pos, preset_code: presetCode };
-  if (isWorkout) insert.workout_code = "A";
+  if (isWorkout) insert.workout_code = Object.keys(STATE.workouts || {}).sort((a,b) => a.localeCompare(b, "pt-BR", { numeric: true }))[0] || "A";
   const { error } = await sb.from("periodization_blocks").insert(insert);
   if (error) { showToast(error.message, "error"); return; }
   await syncDayLegacy(dayId);
@@ -7769,22 +7810,43 @@ window.openPresetEditor = async function() {
   const html = `
     <h3><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Tipos de treino</h3>
     <p style="font-size:13px;color:var(--text-2);margin:0 0 14px">Personalize repetições e tempo de pausa de cada tipo. ${myCoachId ? 'Suas alterações afetam apenas seus alunos.' : 'Você está editando os defaults globais (admin).'}</p>
-    ${_PRESETS.map(p => renderPresetItem(p)).join("")}
+    ${renderPresetManagerHTML()}
     <button class="btn-ghost" style="margin-top:14px" onclick="closeSheet()">Fechar</button>
   `;
   openSheet(html);
 };
 
+function renderPresetManagerHTML() {
+  const visible = (_PRESETS || []).filter(p => p.active !== false);
+  return `
+    ${visible.length ? visible.map(p => renderPresetItem(p)).join("") : `<div class="empty"><p>Nenhum tipo de periodização ativo.</p></div>`}
+    <div class="card" style="margin-top:12px">
+      <div class="fw-700 text-sm" style="margin-bottom:4px">Novo tipo de periodização</div>
+      <div class="text-xs muted" style="margin-bottom:10px">Todo tipo criado aqui fica disponível para montar a periodização dos alunos.</div>
+      <button class="btn-ghost" onclick="openNewPresetSheet()">Criar novo tipo</button>
+    </div>`;
+}
+window.renderPresetManagerHTML = renderPresetManagerHTML;
+
 window.renderPresetItem = function(p) {
   const isWorkout = p.is_workout;
+  const setsCount = Number(p.sets_count) || (REP_SCHEMES[p.code] && REP_SCHEMES[p.code].sets) || 3;
   return `
     <div data-code="${p.code}" style="background:var(--bg-card);border:1px solid var(--line);border-left:4px solid ${p.color};border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-weight:700;color:${p.color}">${p.label}</div>
+        <div style="font-weight:700;color:${p.color}">${escape(p.label)}</div>
         <div style="font-size:11px;color:var(--text-3)">${isWorkout ? 'com treino' : 'standalone'}</div>
       </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Nome</div>
+        <input class="input" id="pr-label-${p.code}" value="${escape(p.label || "")}" maxlength="40">
+      </div>
       ${isWorkout ? `
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Séries</div>
+            <input type="number" id="pr-sets-${p.code}" value="${setsCount}" min="1" max="20" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
+          </div>
           <div>
             <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px">Reps min</div>
             <input type="number" id="pr-min-${p.code}" value="${p.rep_min||''}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
@@ -7798,7 +7860,10 @@ window.renderPresetItem = function(p) {
             <input type="number" id="pr-pause-${p.code}" value="${p.pause_seconds||''}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
           </div>
         </div>
-        <button class="mini-btn mini-btn-primary" style="margin-top:8px;width:100%" onclick="savePreset('${p.code}')">Salvar</button>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="mini-btn mini-btn-primary" style="flex:1" onclick="savePreset('${p.code}')">Salvar</button>
+          <button class="mini-btn mini-btn-danger" style="flex:1" onclick="deletePresetType('${p.code}')">Excluir</button>
+        </div>
       ` : `
         <div style="margin-top:4px">
           <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;margin-bottom:4px">Duração padrão (min)</div>
@@ -7807,7 +7872,10 @@ window.renderPresetItem = function(p) {
               style="width:100px;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--text)">
             <span style="font-size:12px;color:var(--text-3)">min · ex: 30 min de esteira</span>
           </div>
-          <button class="mini-btn mini-btn-primary" style="margin-top:8px;width:100%" onclick="savePresetDuration('${p.code}')">Salvar</button>
+	          <div style="display:flex;gap:8px;margin-top:8px">
+	            <button class="mini-btn mini-btn-primary" style="flex:1" onclick="savePresetDuration('${p.code}')">Salvar</button>
+	            <button class="mini-btn mini-btn-danger" style="flex:1" onclick="deletePresetType('${p.code}')">Excluir</button>
+	          </div>
         </div>`}
     </div>`;
 };
@@ -7838,12 +7906,16 @@ async function loadTodayBlocks() {
 window.loadTodayBlocks = loadTodayBlocks;
 
 window.savePreset = async function(code) {
+  const label = document.getElementById(`pr-label-${code}`)?.value?.trim();
+  const sets = document.getElementById(`pr-sets-${code}`)?.value;
   const min = document.getElementById(`pr-min-${code}`).value;
   const max = document.getElementById(`pr-max-${code}`).value;
   const pause = document.getElementById(`pr-pause-${code}`).value;
   const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
   const existing = _PRESETS.find(p => p.code === code);
   const patch = {
+    label: label || existing.label,
+    sets_count: sets ? Math.max(1, Number(sets)) : 3,
     rep_min: min ? Number(min) : null,
     rep_max: max ? Number(max) : null,
     pause_seconds: pause ? Number(pause) : null
@@ -7857,6 +7929,7 @@ window.savePreset = async function(code) {
       color: existing.color,
       is_workout: existing.is_workout,
       position: existing.position,
+      active: true,
       ...patch
     });
     if (error) { showToast(error.message, "error"); return; }
@@ -7866,9 +7939,11 @@ window.savePreset = async function(code) {
   }
   showToast("Salvo ✓", "success");
   await reloadPresets();
+  if (STATE.adminWorkoutTab === "periodization") renderAdminWorkouts();
 };
 
 window.savePresetDuration = async function(code) {
+  const label = document.getElementById(`pr-label-${code}`)?.value?.trim();
   const durEl = document.getElementById(`pr-dur-${code}`);
   if (!durEl) return;
   const dur = Number(durEl.value);
@@ -7876,7 +7951,7 @@ window.savePresetDuration = async function(code) {
   const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
   const existing = _PRESETS.find(p => p.code === code);
   if (!existing) return;
-  const patch = { duration_minutes: dur };
+  const patch = { label: label || existing.label, duration_minutes: dur };
   if (myCoachId && (!existing.coach_id)) {
     const { error } = await sb.from("intensity_presets").insert({
       coach_id: myCoachId,
@@ -7885,6 +7960,7 @@ window.savePresetDuration = async function(code) {
       color: existing.color,
       is_workout: existing.is_workout,
       position: existing.position,
+      active: true,
       ...patch
     });
     if (error) { showToast(error.message, "error"); return; }
@@ -7894,6 +7970,87 @@ window.savePresetDuration = async function(code) {
   }
   showToast("Duração salva ✓", "success");
   await reloadPresets();
+  if (STATE.adminWorkoutTab === "periodization") renderAdminWorkouts();
+};
+
+window.openNewPresetSheet = function() {
+  openSheet(`
+    <h3>Novo tipo de periodização</h3>
+    <p style="font-size:13px;color:var(--text-2);margin-top:0">Será exibido para montar a periodização dos alunos.</p>
+    <div class="form-group"><label class="form-label">Código curto</label><input class="input" id="np-code" maxlength="20" placeholder="Ex.: hipertrofia_2" style="text-transform:lowercase"></div>
+    <div class="form-group"><label class="form-label">Nome</label><input class="input" id="np-label" maxlength="40" placeholder="Ex.: Hipertrofia"></div>
+    <label class="row-flex" style="margin-bottom:12px"><input type="checkbox" id="np-is-workout" checked><span class="text-sm">Usa treino com exercícios</span></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group"><label class="form-label">Séries</label><input class="input" id="np-sets" type="number" min="1" max="20" value="3"></div>
+      <div class="form-group"><label class="form-label">Reps mín.</label><input class="input" id="np-min" type="number" value="8"></div>
+      <div class="form-group"><label class="form-label">Reps máx.</label><input class="input" id="np-max" type="number" value="12"></div>
+      <div class="form-group"><label class="form-label">Descanso (s)</label><input class="input" id="np-pause" type="number" value="90"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Cor</label><input class="input" id="np-color" value="#00b4ff"></div>
+    <button class="btn-primary" onclick="createPresetType()">Criar tipo</button>
+    <button class="btn-ghost" onclick="${STATE.adminWorkoutTab === "periodization" ? "closeSheet();renderAdminWorkouts()" : "openPresetEditor()"}" style="margin-top:8px">Cancelar</button>
+  `);
+};
+
+window.createPresetType = async function() {
+  const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
+  const code = String(document.getElementById("np-code")?.value || "").trim().toLowerCase().replace(/\s+/g, "_");
+  const label = String(document.getElementById("np-label")?.value || "").trim();
+  if (!/^[a-z0-9_-]{2,20}$/.test(code)) { showToast("Código curto inválido", "error"); return; }
+  if (!label) { showToast("Informe o nome do tipo", "error"); return; }
+  const isWorkout = !!document.getElementById("np-is-workout")?.checked;
+  const nextPosition = ((_PRESETS || []).reduce((max, p) => Math.max(max, Number(p.position) || 0), 0) || 0) + 1;
+  const payload = {
+    coach_id: myCoachId,
+    code,
+    label,
+    color: document.getElementById("np-color")?.value?.trim() || "#00b4ff",
+    is_workout: isWorkout,
+    position: nextPosition,
+    active: true,
+    sets_count: isWorkout ? Math.max(1, Number(document.getElementById("np-sets")?.value) || 3) : null,
+    rep_min: isWorkout ? (Number(document.getElementById("np-min")?.value) || null) : null,
+    rep_max: isWorkout ? (Number(document.getElementById("np-max")?.value) || null) : null,
+    pause_seconds: isWorkout ? (Number(document.getElementById("np-pause")?.value) || null) : null,
+    duration_minutes: isWorkout ? null : 30
+  };
+  const { error } = await sb.from("intensity_presets").insert(payload);
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast("Tipo criado", "success");
+  await reloadPresets();
+  closeSheet();
+  if (STATE.adminWorkoutTab === "periodization") renderAdminWorkouts();
+};
+
+window.deletePresetType = async function(code) {
+  const existing = _PRESETS.find(p => p.code === code);
+  if (!existing) return;
+  if (!await showConfirm({ title: "Excluir tipo?", msg: "Ele deixa de aparecer para novas periodizações. Dias já configurados continuam no histórico.", confirm: "Excluir", danger: true })) return;
+  const myCoachId = STATE.profile && STATE.profile.role === "coach" ? STATE.profile.id : null;
+  if (myCoachId && !existing.coach_id) {
+    const { error } = await sb.from("intensity_presets").insert({
+      coach_id: myCoachId,
+      code: existing.code,
+      label: existing.label,
+      color: existing.color,
+      is_workout: existing.is_workout,
+      position: existing.position,
+      sets_count: existing.sets_count,
+      rep_min: existing.rep_min,
+      rep_max: existing.rep_max,
+      pause_seconds: existing.pause_seconds,
+      duration_minutes: existing.duration_minutes || null,
+      active: false
+    });
+    if (error) { showToast("Erro: " + error.message, "error"); return; }
+  } else {
+    const { error } = await sb.from("intensity_presets").update({ active: false }).eq("id", existing.id);
+    if (error) { showToast("Erro: " + error.message, "error"); return; }
+  }
+  showToast("Tipo removido", "success");
+  await reloadPresets();
+  if (STATE.adminWorkoutTab === "periodization") renderAdminWorkouts();
+  else openPresetEditor();
 };
 
 window.onApprove = async (id) => {
@@ -8149,16 +8306,21 @@ window.deleteCustomWorkout = async function(workoutId, studentId) {
    ============================================================================= */
 function renderAdminWorkouts() {
   const el = document.getElementById("view-admin-workouts");
+  const tab = STATE.adminWorkoutTab || "workouts";
   const workouts = Object.values(STATE.workouts || {})
     .filter(Boolean)
     .sort((a,b) => String(a.code || "").localeCompare(String(b.code || ""), "pt-BR", { numeric: true }));
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Treinos</h1>
-      <button class="mini-btn mini-btn-primary" onclick="openCreateWorkoutTypeSheet()">Novo tipo</button>
+      ${tab === "workouts" ? `<button class="mini-btn mini-btn-primary" onclick="openCreateWorkoutTypeSheet()">Novo treino</button>` : `<button class="mini-btn mini-btn-primary" onclick="openNewPresetSheet()">Novo período</button>`}
     </div>
-    <p class="view-subtitle">Crie e edite modelos de treino para os alunos. Ex.: A, B, C, D, FLEX ou um nome personalizado.</p>
-    ${workouts.length ? workouts.map(w => {
+    <p class="view-subtitle">Configure modelos de treino e tipos de periodização usados nos alunos.</p>
+    <div class="segmented" style="margin:10px 0 14px">
+      <button class="${tab === "workouts" ? "active" : ""}" onclick="setAdminWorkoutTab('workouts')">Treinos</button>
+      <button class="${tab === "periodization" ? "active" : ""}" onclick="setAdminWorkoutTab('periodization')">Periodização</button>
+    </div>
+    ${tab === "periodization" ? renderPresetManagerHTML() : (workouts.length ? workouts.map(w => {
       const code = w.code;
       const canDelete = ["admin","coach"].includes(STATE.profile?.role);
       return `<div class="card mb-14">
@@ -8172,11 +8334,17 @@ function renderAdminWorkouts() {
             ${canDelete ? `<button class="mini-btn mini-btn-danger" title="Excluir tipo de treino" onclick="deleteWorkoutType('${w.id || ''}','${escapeAttr(code)}','${escapeAttr(w.name || code)}')">×</button>` : ""}
           </div>
         </div>
-        <div class="text-xs muted">${(w.exercises || []).length} exercícios</div>
+        <div class="text-xs muted">${(w.exercises || []).length} exercícios · disponível na periodização</div>
       </div>`;
-    }).join("") : `<div class="empty"><p>Nenhum tipo de treino cadastrado.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openCreateWorkoutTypeSheet()">Criar primeiro tipo</button></div></div>`}
+    }).join("") : `<div class="empty"><p>Nenhum tipo de treino cadastrado.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openCreateWorkoutTypeSheet()">Criar primeiro tipo</button></div></div>`)}
   `;
 }
+
+window.setAdminWorkoutTab = async function(tab) {
+  STATE.adminWorkoutTab = tab === "periodization" ? "periodization" : "workouts";
+  if (STATE.adminWorkoutTab === "periodization") await reloadPresets();
+  renderAdminWorkouts();
+};
 
 window.openCreateWorkoutTypeSheet = function() {
   if (!["admin", "coach"].includes(STATE.profile?.role)) {
@@ -8318,7 +8486,7 @@ window.openWorkoutEditor = async function(code, workoutId) {
           <div class="ex-thumb" style="width:36px; height:36px; flex:0 0 36px; overflow:hidden;">${getExThumb(ex)}</div>
           <div style="flex:1; min-width:0;">
             <div class="fw-700 text-sm">${i+1}. ${escape(ex.name)}</div>
-            <div class="text-xs muted">${ex.sets_count}× ${escape(ex.reps || "")}</div>
+	            <div class="text-xs muted">${escape(ex.muscle_group || ex.cat || "")}${ex.cadence ? " · cad. " + escape(ex.cadence) : ""}</div>
           </div>
           <button class="mini-btn mini-btn-ghost" ${i === 0 ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''} onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',-1)">↑</button>
           <button class="mini-btn mini-btn-ghost" ${i === (w.exercises || []).length - 1 ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''} onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',1)">↓</button>
@@ -8380,7 +8548,7 @@ window.openExercisePicker = async function(workoutCode, studentId, workoutId) {
   if (!STATE.library || STATE.library.length === 0) await loadExerciseLibrary();
   // Resolve o ID real do workout: prioriza parâmetro explícito, depois STATE._editingWorkout, depois STATE.workouts
   const resolvedId = workoutId || (STATE._editingWorkout && STATE._editingWorkout.id) || (STATE.workouts[workoutCode] && STATE.workouts[workoutCode].id);
-  STATE._pickerCtx = { workoutCode, studentId, query: "", group: "todos", workoutId: resolvedId };
+  STATE._pickerCtx = { workoutCode, studentId, query: "", group: "todos", workoutId: resolvedId, selected: new Set() };
   _renderPickerFull();
 };
 
@@ -8399,6 +8567,7 @@ function _renderPickerFull() {
       ${groups.map(g => `<button class="mini-btn ${ctx.group === g ? 'mini-btn-primary' : 'mini-btn-ghost'}" onclick="onPickerGroup('${g}')">${g}</button>`).join("")}
     </div>
     <div id="ep-results" style="max-height:46vh; overflow-y:auto;"></div>
+    <button class="btn-primary" id="ep-add-selected" style="margin-top:10px" onclick="addSelectedExercisesToWorkout()" disabled>Adicionar selecionados</button>
     <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);display:flex;gap:8px">
       <button class="btn-ghost" style="flex:1" onclick="onPickerCreateNew()">+ Criar novo</button>
       <button class="btn-ghost" style="flex:1" onclick="openWorkoutEditor('${ctx.workoutCode}','${ctx.workoutId||''}')">← Voltar</button>
@@ -8421,14 +8590,24 @@ function _renderPickerResults() {
   if (!el) return;
   el.innerHTML = filter.length === 0
     ? `<div class="empty" style="padding:16px 0"><p>Nenhum exercício encontrado.</p></div>`
-    : filter.map(e => `
-        <div class="list-row" onclick="onPickerPick('${e.id}')" style="cursor:pointer;">
+    : filter.map(e => {
+      const selected = ctx.selected && ctx.selected.has(e.id);
+      return `
+        <div class="list-row ${selected ? 'selected' : ''}" onclick="toggleExercisePick('${e.id}')" style="cursor:pointer;border-color:${selected ? 'var(--brand)' : 'var(--line)'};">
           <div class="lr-avatar" style="overflow:hidden;">${getExThumb(e)}</div>
           <div class="lr-info">
             <div class="lr-name">${escape(e.name)}</div>
-            <div class="lr-sub">${escape(e.muscle_group || "")} · ${e.sets_count}× ${escape(e.reps || "")}</div>
+            <div class="lr-sub">${escape(e.muscle_group || "")}${e.method ? " · " + escape(e.method) : ""}</div>
           </div>
-        </div>`).join("");
+          <div style="width:28px;height:28px;border-radius:999px;border:1px solid ${selected ? 'var(--brand)' : 'var(--line)'};display:grid;place-items:center;color:${selected ? 'var(--brand)' : 'var(--text-3)'}">${selected ? '✓' : '+'}</div>
+        </div>`;
+    }).join("");
+  const addBtn = document.getElementById("ep-add-selected");
+  if (addBtn) {
+    const count = ctx.selected ? ctx.selected.size : 0;
+    addBtn.disabled = count === 0;
+    addBtn.textContent = count ? `Adicionar ${count} exercício${count > 1 ? "s" : ""}` : "Adicionar selecionados";
+  }
 }
 
 // Bug #20 fix: search atualiza só os resultados, sem recriar o input
@@ -8450,10 +8629,40 @@ window.onPickerGroup = function(g) {
   _renderPickerResults();
 };
 
-window.onPickerPick = async function(libExId) {
+window.toggleExercisePick = function(libExId) {
   const ctx = STATE._pickerCtx;
-  const lib = STATE.library.find(e => e.id === libExId);
-  if (!lib) return;
+  if (!ctx) return;
+  if (!ctx.selected) ctx.selected = new Set();
+  if (ctx.selected.has(libExId)) ctx.selected.delete(libExId);
+  else ctx.selected.add(libExId);
+  _renderPickerResults();
+};
+
+function buildWorkoutExerciseFromLibrary(lib, ctx, position) {
+  return {
+    workout_id: ctx.workoutId,
+    student_id: ctx.studentId || null,
+    position,
+    name: lib.name,
+    cat: lib.cat,
+    muscle_group: lib.muscle_group,
+    is_library: false,
+    sets_count: 1,
+    reps: "Seguir período",
+    pause: "Seguir período",
+    cadence: lib.cadence || "",
+    method: lib.method || "Séries múltiplas",
+    observations: lib.observations || "",
+    image_url: hasCustomExerciseImage(lib) ? lib.image_url : null,
+    video_url: lib.video_url
+  };
+}
+
+window.addSelectedExercisesToWorkout = async function() {
+  const ctx = STATE._pickerCtx;
+  const selectedIds = [...(ctx?.selected || [])];
+  const selected = selectedIds.map(id => STATE.library.find(e => e.id === id)).filter(Boolean);
+  if (!selected.length) { showToast("Selecione pelo menos um exercício", "error"); return; }
   if (STATE._addingExercise) return;
 
   // Bug #21 fix: usar workoutId explícito (correto para workouts de aluno)
@@ -8465,27 +8674,11 @@ window.onPickerPick = async function(libExId) {
   try {
     const { data: existingEx, error: posError } = await sb.from("exercises").select("position").eq("workout_id", wId).order("position", { ascending: false }).limit(1);
     if (posError) throw posError;
-    const nextPos = (existingEx && existingEx.length > 0 ? existingEx[0].position : 0) + 1;
-
-    const { error } = await sb.from("exercises").insert({
-      workout_id: wId,
-      student_id: ctx.studentId || null,
-      position: nextPos,
-      name: lib.name,
-      cat: lib.cat,
-      muscle_group: lib.muscle_group,
-      is_library: false,
-      sets_count: Math.max(1, parseInt(lib.sets_count) || 1),
-      reps: lib.reps || "Seguir período",
-      pause: lib.pause || "Seguir período",
-      cadence: lib.cadence || "",
-      method: lib.method || "Séries múltiplas",
-      observations: lib.observations || "",
-      image_url: hasCustomExerciseImage(lib) ? lib.image_url : null,
-      video_url: lib.video_url
-    });
+    const startPos = (existingEx && existingEx.length > 0 ? existingEx[0].position : 0) + 1;
+    const rows = selected.map((lib, idx) => buildWorkoutExerciseFromLibrary(lib, ctx, startPos + idx));
+    const { error } = await sb.from("exercises").insert(rows);
     if (error) throw error;
-    showToast("Exercício adicionado", "success");
+    showToast(`${selected.length} exercício${selected.length > 1 ? "s" : ""} adicionado${selected.length > 1 ? "s" : ""}`, "success");
     await loadWorkouts();
     // Bug #22 fix: volta para o editor do workout correto (não fecha o sheet)
     window.openWorkoutEditor(ctx.workoutCode, ctx.workoutId);
@@ -8494,6 +8687,12 @@ window.onPickerPick = async function(libExId) {
   } finally {
     STATE._addingExercise = false;
   }
+};
+
+window.onPickerPick = async function(libExId) {
+  if (!STATE._pickerCtx) return;
+  STATE._pickerCtx.selected = new Set([libExId]);
+  await addSelectedExercisesToWorkout();
 };
 
 window.onPickerCreateNew = function() {
@@ -8506,14 +8705,7 @@ window.onPickerCreateNew = function() {
         ${["peito","costas","quadriceps","posterior","gluteo","panturrilha","ombro","biceps","triceps","abdomen","mobilidade"].map(g => `<option value="${g}">${g}</option>`).join("")}
       </select>
     </div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-      <div class="form-group"><label class="form-label">Séries</label><input class="input" id="ne-sets" type="number" value="3" /></div>
-      <div class="form-group"><label class="form-label">Repetições</label><input class="input" id="ne-reps" value="Seguir período" /></div>
-    </div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-      <div class="form-group"><label class="form-label">Pausa</label><input class="input" id="ne-pause" value="Seguir período" /></div>
-      <div class="form-group"><label class="form-label">Cadência</label><input class="input" id="ne-cadence" value="20-2-0" /></div>
-    </div>
+    <div class="form-group"><label class="form-label">Cadência</label><input class="input" id="ne-cadence" value="20-2-0" /></div>
     <div class="form-group"><label class="form-label">Método</label><input class="input" id="ne-method" value="Séries múltiplas" /></div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="input textarea" id="ne-obs"></textarea></div>
     <label class="row-flex" style="margin-bottom:10px;">
@@ -8533,8 +8725,6 @@ window.submitNewExercise = async function() {
   const btn = document.querySelector('#sheet-content .btn-primary');
   if (!name) { showToast("Preencha o nome", "error"); return; }
   const muscle = get("ne-group").value;
-  const setsCount = parseInt(get("ne-sets").value) || 0;
-  if (setsCount < 1 || setsCount > 20) { showToast("Informe entre 1 e 20 séries", "error"); return; }
   if (name.length > 80) { showToast("Nome do exercício muito longo", "error"); return; }
   if (STATE._addingExercise) return;
   const catMap = { peito:'chest', costas:'back', quadriceps:'quad', posterior:'hamstring', gluteo:'glute',
@@ -8544,9 +8734,9 @@ window.submitNewExercise = async function() {
     name,
     cat: catMap[muscle] || 'core',
     muscle_group: muscle,
-    sets_count: setsCount,
-    reps: get("ne-reps").value.trim() || "Seguir período",
-    pause: get("ne-pause").value.trim() || "Seguir período",
+    sets_count: 1,
+    reps: "Seguir período",
+    pause: "Seguir período",
     cadence: get("ne-cadence").value.trim(),
     method: get("ne-method").value.trim() || "Séries múltiplas",
     observations: get("ne-obs").value.trim(),
@@ -8630,17 +8820,10 @@ window.editExercise = async function(exId) {
       </div>
     </div>
 
-    <div class="section-title">Configuração</div>
+    <div class="section-title">Exercício</div>
     <div class="form-group"><label class="form-label">Nome</label><input class="input" id="ex-name" value="${escape(ex.name)}" /></div>
     <div class="form-group"><label class="form-label">Categoria</label><input class="input" id="ex-cat" value="${escape(ex.cat || '')}" placeholder="mobility, back, chest, shoulder, biceps, triceps, quad, hamstring, glute, calf, core, rotator, hipflex, adductor" /></div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-      <div class="form-group"><label class="form-label">Séries</label><input class="input" id="ex-sets" type="number" value="${ex.sets_count}" /></div>
-      <div class="form-group"><label class="form-label">Repetições</label><input class="input" id="ex-reps" value="${escape(ex.reps || '')}" /></div>
-    </div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-      <div class="form-group"><label class="form-label">Pausa</label><input class="input" id="ex-pause" value="${escape(ex.pause || '')}" /></div>
-      <div class="form-group"><label class="form-label">Cadência</label><input class="input" id="ex-cadence" value="${escape(ex.cadence || '')}" /></div>
-    </div>
+    <div class="form-group"><label class="form-label">Cadência</label><input class="input" id="ex-cadence" value="${escape(ex.cadence || '')}" /></div>
     <div class="form-group"><label class="form-label">Método</label><input class="input" id="ex-method" value="${escape(ex.method || '')}" /></div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="input textarea" id="ex-obs">${escape(ex.observations || '')}</textarea></div>
     <button class="btn-primary" onclick="saveExercise('${exId}')">Salvar</button>
@@ -8694,12 +8877,12 @@ window.clearExerciseMedia = async function(exId, kind) {
 };
 
 window.saveExercise = async function(id) {
-  const patch = {
-    name: document.getElementById("ex-name").value.trim(),
-    cat: document.getElementById("ex-cat").value.trim(),
-    sets_count: parseInt(document.getElementById("ex-sets").value) || 1,
-    reps: document.getElementById("ex-reps").value.trim(),
-    pause: document.getElementById("ex-pause").value.trim(),
+	  const patch = {
+	    name: document.getElementById("ex-name").value.trim(),
+	    cat: document.getElementById("ex-cat").value.trim(),
+	    sets_count: 1,
+	    reps: "Seguir período",
+	    pause: "Seguir período",
     cadence: document.getElementById("ex-cadence").value.trim(),
     method: document.getElementById("ex-method").value.trim(),
     observations: document.getElementById("ex-obs").value.trim()
@@ -11824,14 +12007,15 @@ function renderTodayBlocksCard() {
   const blocksHTML = blocks.map(b => {
     const p = (typeof getPreset === "function" && getPreset(b.preset_code)) || { label: b.preset_code, color: '#9aa6c0', is_workout: !!b.workout_code };
     const W = b.workout_code ? STATE.workouts[b.workout_code] : null;
-    const hasRepRange = p.rep_min && p.rep_max;
+	    const scheme = getTrainingScheme(b.preset_code, "yellow");
+	    const hasRepRange = p.rep_min && p.rep_max;
     return `
       <div style="background:var(--bg-2);border:1px solid var(--line);border-left:4px solid ${p.color};border-radius:12px;padding:14px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
           <div style="flex:1;min-width:0">
             <div style="font-weight:800;color:${p.color};font-size:11px;text-transform:uppercase;letter-spacing:.6px">${escape(p.label)}</div>
             <div style="font-size:16px;color:var(--text);font-weight:700;margin-top:3px">${W ? escape(W.name) : (p.is_workout ? '— sem treino atribuído —' : escape(p.label))}</div>
-            ${hasRepRange ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px">${p.rep_min}-${p.rep_max} reps · pausa ${Math.floor((p.pause_seconds||0)/60)}:${String((p.pause_seconds||0)%60).padStart(2,'0')}</div>` : ''}
+	            ${hasRepRange || p.sets_count ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px">${scheme.sets} séries · ${scheme.reps} reps · pausa ${scheme.pause}</div>` : ''}
             ${W && W.focus ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px">${escape(W.focus)}</div>` : ''}
           </div>
           ${b.workout_code && W ? `
@@ -11875,13 +12059,14 @@ if (_origRenderWorkout) {
     setTimeout(() => {
       if (!STATE.selectedPresetCode) return;
       const p = (typeof getPreset === "function") ? getPreset(STATE.selectedPresetCode) : null;
-      if (!p || !(p.rep_min || p.pause_seconds)) return;
+	      if (!p || !(p.rep_min || p.pause_seconds || p.sets_count)) return;
       const banner = document.querySelector("#view-workout .intensity-banner");
       if (banner && !banner.dataset.presetEnhanced) {
         banner.dataset.presetEnhanced = "1";
         const extra = document.createElement("div");
         extra.style.cssText = "margin-top:6px;font-size:11px;color:var(--text-2)";
-        extra.textContent = `${p.rep_min}-${p.rep_max} reps · pausa ${Math.floor((p.pause_seconds||0)/60)}:${String((p.pause_seconds||0)%60).padStart(2,'0')}`;
+	        const scheme = getTrainingScheme(STATE.selectedPresetCode, STATE.selectedIntensity);
+	        extra.textContent = `${scheme.sets} séries · ${scheme.reps} reps · pausa ${scheme.pause}`;
         banner.appendChild(extra);
       }
     }, 50);
