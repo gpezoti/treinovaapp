@@ -2512,24 +2512,55 @@ async function mutateCompletedWorkoutSession(action) {
       p_action: action
     });
     if (error) throw error;
-    if (action === "delete") {
-      STATE.currentSession = null;
-      STATE.setLogs = [];
-      await loadPeriodization();
-      showToast("Treino de hoje apagado", "success");
-      navTo("home");
-      return true;
-    }
-    await loadOrCreateSession(STATE.selectedDate || todayISO(), STATE.selectedWorkout, STATE.selectedIntensity);
-    if (action === "restart") STATE.setLogs = [];
-    showToast(action === "restart" ? "Treino reiniciado" : "Treino reaberto para continuar", "success");
-    renderWorkout();
+    await afterCompletedWorkoutMutation(action);
     return true;
   } catch(e) {
-    console.error(`[${labels[action] || "ajustar treino"}]`, e);
-    showToast("Erro: aplique a migration student_workout_session_recovery_2026_05_06.sql no Supabase.", "error");
-    return false;
+    console.warn(`[${labels[action] || "ajustar treino"} rpc]`, e);
+    try {
+      await mutateCompletedWorkoutSessionDirect(action);
+      await afterCompletedWorkoutMutation(action);
+      return true;
+    } catch(directErr) {
+      console.error(`[${labels[action] || "ajustar treino"}]`, directErr);
+      showToast("Erro ao ajustar treino. Recarregue o app e tente novamente.", "error");
+      return false;
+    }
   }
+}
+
+async function mutateCompletedWorkoutSessionDirect(action) {
+  const sessionId = STATE.currentSession.id;
+  if (action === "delete" || action === "restart") {
+    const { error: logsErr } = await sb.from("set_logs").delete().eq("session_id", sessionId).eq("student_id", STATE.profile.id);
+    if (logsErr) throw logsErr;
+  }
+  if (action === "delete") {
+    const { error: sessionErr } = await sb.from("sessions").delete().eq("id", sessionId).eq("student_id", STATE.profile.id);
+    if (sessionErr) throw sessionErr;
+    return;
+  }
+  const { error: sessionErr } = await sb.from("sessions").update({
+    status: "in_progress",
+    completed_at: null,
+    duration_seconds: null,
+    total_volume_kg: null
+  }).eq("id", sessionId).eq("student_id", STATE.profile.id);
+  if (sessionErr) throw sessionErr;
+}
+
+async function afterCompletedWorkoutMutation(action) {
+  if (action === "delete") {
+    STATE.currentSession = null;
+    STATE.setLogs = [];
+    await loadPeriodization();
+    showToast("Treino de hoje apagado", "success");
+    navTo("home");
+    return true;
+  }
+  await loadOrCreateSession(STATE.selectedDate || todayISO(), STATE.selectedWorkout, STATE.selectedIntensity);
+  if (action === "restart") STATE.setLogs = [];
+  showToast(action === "restart" ? "Treino reiniciado" : "Treino reaberto para continuar", "success");
+  renderWorkout();
 }
 
 window.reopenCompletedWorkout = async function() {
@@ -3281,6 +3312,17 @@ async function ensureRestNotificationPermission() {
   } catch(e) {}
   return false;
 }
+
+async function getCurrentPushSubscriptionPayload() {
+  try {
+    const sub = await subscribePushNotifications({ throwOnError: true });
+    return sub ? sub.toJSON() : null;
+  } catch(e) {
+    console.warn("[push subscription payload]", e);
+    return null;
+  }
+}
+
 async function notifyRestFinished(exerciseName) {
   if (!("Notification" in window) || Notification.permission !== "granted") return false;
   const title = "Descanso finalizado";
@@ -3389,13 +3431,15 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       return false;
     }
     const fireAt = new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString();
+    const subscription = await getCurrentPushSubscriptionPayload();
     const { error } = await sb.functions.invoke("rest-timer-push", {
       body: {
         action: "schedule",
         timer_id: STATE.timer.id,
         fire_at: fireAt,
         exercise_name: exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
-        url: `${location.pathname || "/"}?view=workout&restTimer=1`
+        url: `${location.pathname || "/"}?view=workout&restTimer=1`,
+        subscription
       }
     });
     if (error) console.warn("[rest timer server schedule invoke]", error);
@@ -3818,12 +3862,70 @@ async function loadAdminPayments() {
     console.error("[payments] Falha ao carregar financeiro admin", error);
     showToast("Erro ao carregar financeiro ADM: " + error.message, "error");
   }
-  STATE.adminPayments = data || [];
+  const rows = data || [];
+  STATE.adminPayments = await mergeAdminPaymentProfiles(rows);
 }
 async function loadCoachPayments() {
-  const { data } = await sb.from("v_coach_payments")
+  const { data, error } = await sb.from("v_coach_payments")
     .select("*").eq("coach_id", STATE.profile.id).order("full_name");
-  STATE.coachPayments = data || [];
+  if (error) console.error("[payments] Falha ao carregar financeiro coach", error);
+  STATE.coachPayments = await mergeCoachPaymentProfiles(data || []);
+}
+
+function emptyPaymentPerson(p, idKey) {
+  return {
+    [idKey]: p.id,
+    full_name: p.full_name,
+    email: p.email,
+    avatar_emoji: p.avatar_emoji,
+    avatar_url: p.avatar_url,
+    phone: p.phone,
+    coach_id: p.coach_id,
+    is_overdue: false,
+    overdue_count: 0,
+    open_count: 0,
+    paid_count: 0,
+    open_amount: 0,
+    paid_amount_month: 0,
+    paid_amount_total: 0,
+    last_paid_at: null,
+    next_due: null
+  };
+}
+
+async function mergeAdminPaymentProfiles(rows) {
+  if (STATE.profile?.role !== "admin") return rows;
+  const byId = new Map((rows || []).map(r => [r.coach_id, r]));
+  const { data, error } = await sb.from("profiles")
+    .select("id,email,full_name,avatar_emoji,avatar_url,phone,coach_id")
+    .eq("role", "coach")
+    .order("full_name");
+  if (error) {
+    console.warn("[payments] fallback professores", error);
+    return rows;
+  }
+  (data || []).forEach(p => {
+    if (!byId.has(p.id)) byId.set(p.id, emptyPaymentPerson(p, "coach_id"));
+  });
+  return [...byId.values()].sort((a, b) => String(a.full_name || a.email || "").localeCompare(String(b.full_name || b.email || "")));
+}
+
+async function mergeCoachPaymentProfiles(rows) {
+  if (STATE.profile?.role !== "coach") return rows;
+  const byId = new Map((rows || []).map(r => [r.student_id, r]));
+  const { data, error } = await sb.from("profiles")
+    .select("id,email,full_name,avatar_emoji,avatar_url,phone,coach_id")
+    .eq("role", "student")
+    .eq("coach_id", STATE.profile.id)
+    .order("full_name");
+  if (error) {
+    console.warn("[payments] fallback alunos", error);
+    return rows;
+  }
+  (data || []).forEach(p => {
+    if (!byId.has(p.id)) byId.set(p.id, emptyPaymentPerson(p, "student_id"));
+  });
+  return [...byId.values()].sort((a, b) => String(a.full_name || a.email || "").localeCompare(String(b.full_name || b.email || "")));
 }
 async function loadPaymentsForUser(userId, opts = {}) {
   const { data, error } = await sb.from("payments")
