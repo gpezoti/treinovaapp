@@ -9106,9 +9106,12 @@ window.diagnoseRestTimerPush = async function() {
     const subs = data?.subscriptions || [];
     const jobs = data?.jobs || [];
     const lastJob = jobs[0];
+    const appKey = VAPID_PUBLIC_KEY ? `${VAPID_PUBLIC_KEY.slice(0,10)}...${VAPID_PUBLIC_KEY.slice(-6)}` : "vazia";
     const detail = [
       `Assinaturas: ${subs.length}`,
       subs[0]?.endpoint_host ? `Endpoint: ${subs[0].endpoint_host}` : "Endpoint: nenhum",
+      `Chave app: ${appKey}`,
+      data?.edge_vapid_public_key ? `Chave edge: ${data.edge_vapid_public_key}` : "Chave edge: indisponível",
       lastJob ? `Último job: ${lastJob.status}${lastJob.last_error ? " - " + lastJob.last_error : ""}` : "Último job: nenhum",
       `iOS instalado: ${isIOSDevice() ? (isStandaloneApp() ? "sim" : "não") : "não é iOS"}`
     ].join("\n");
