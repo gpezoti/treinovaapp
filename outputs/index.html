@@ -2380,16 +2380,11 @@ async function toggleSetDone(exercise, position, setIdx) {
   if (newDone) {
     const scheme = getCurrentTrainingScheme();
     const target = getExerciseTargetSets(exercise, scheme);
-    const isMobility = exercise.cat === "mobility";
-    if (!isMobility) {
-      const pauseSec = scheme.pauseSec || 0;
-      const isLast = setIdx + 1 >= target;
-      const label = isLast ? "Próximo exercício" : `Série ${setIdx + 2} de ${target}`;
-      // Mostrar modal de conclusão de série com input de carga e auto-timer
-      onSerieCompleted(exercise, log, setIdx, target, pauseSec, label, isLast);
-    } else {
-      showToast(`Série ${setIdx+1} concluída ✓`, "success");
-    }
+    const pauseSec = scheme.pauseSec || 0;
+    const isLast = setIdx + 1 >= target;
+    const label = isLast ? "Próximo exercício" : `Série ${setIdx + 2} de ${target}`;
+    // Mostrar modal de conclusão de série com input de carga e auto-timer
+    onSerieCompleted(exercise, log, setIdx, target, pauseSec, label, isLast);
     if (STATE.lastLoads[exercise.name] !== log.load_kg && log.load_kg) {
       STATE.lastLoads[exercise.name] = log.load_kg;
     }
@@ -6291,7 +6286,7 @@ function renderExerciseList(W, intensity, completed) {
           <div class="ex-obs-label"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Observação do treinador</div>
           ${escape(ex.observations)}
         </div>` : ""}
-        ${isMobility ? renderMobBtn(ex, allDone, completed) : renderSetsTable(ex, exLogs, scheme, completed)}
+        ${renderSetsTable(ex, exLogs, scheme, completed)}
         <button class="btn-link" onclick="openHistorySheet('${escape(ex.name).replace(/'/g,"\\'")}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg> Ver histórico de cargas</button>
       </div>
     </div>`;

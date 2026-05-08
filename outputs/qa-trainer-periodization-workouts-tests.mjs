@@ -18,6 +18,12 @@ assert.match(html, /resolvePresetForWorkoutDate/, "Workout open flow must recove
 assert.match(html, /target_reps:\s*getCurrentTrainingScheme\(\)\.reps/, "Set logs must store target reps from the periodization type");
 assert.match(html, /const target = getExerciseTargetSets\(ex, scheme\)/, "Exercise cards must use periodization sets");
 assert.match(html, /const target = getExerciseTargetSets\(ex, scheme\);[\s\S]*for \(let i = 0; i < target; i\+\+\)/, "Set table must render the periodization set count");
+assert.doesNotMatch(html, /isMobility\s*\?\s*renderMobBtn/, "Mobility exercises must render the period-driven set table");
+assert.doesNotMatch(
+  html.slice(html.indexOf("async function toggleSetDone"), html.indexOf("function onSerieCompleted")),
+  /if \(!isMobility\)/,
+  "Mobility exercises must use the same rest flow as other exercises"
+);
 assert.match(html, /STATE\.adminWorkoutTab/, "Trainer workouts page must support tabs");
 assert.match(html, /setAdminWorkoutTab\('periodization'\)/, "Trainer workouts page must expose periodization tab");
 assert.match(html, /coach-finance-tabs[\s\S]*aria-label="Treinos do professor"/, "Trainer workouts tabs must reuse the finance tab component");
