@@ -8160,13 +8160,17 @@ function renderAdminWorkouts() {
     <p class="view-subtitle">Crie e edite modelos de treino para os alunos. Ex.: A, B, C, D, FLEX ou um nome personalizado.</p>
     ${workouts.length ? workouts.map(w => {
       const code = w.code;
+      const isOwn = (STATE.profile?.role === "admin") || (w.coach_id && STATE.profile?.id && w.coach_id === STATE.profile.id) || (!w.coach_id && !w.is_global);
       return `<div class="card mb-14">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-          <div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+          <div style="min-width:0;flex:1">
             <div class="fw-700">${escape(w.name || code)}</div>
             <div class="text-xs muted">${escape(code)}${w.focus ? " · " + escape(w.focus) : ""}</div>
           </div>
-          <button class="mini-btn mini-btn-primary" onclick="openWorkoutEditor('${escapeAttr(code)}')">Editar</button>
+          <div class="row-flex" style="gap:6px;flex:0 0 auto;">
+            <button class="mini-btn mini-btn-primary" onclick="openWorkoutEditor('${escapeAttr(code)}','${w.id || ''}')">Editar</button>
+            ${isOwn ? `<button class="mini-btn mini-btn-danger" title="Excluir tipo de treino" onclick="deleteWorkoutType('${w.id || ''}','${escapeAttr(code)}','${escapeAttr(w.name || code)}')">×</button>` : ""}
+          </div>
         </div>
         <div class="text-xs muted">${(w.exercises || []).length} exercícios</div>
       </div>`;
@@ -8238,6 +8242,49 @@ window.createWorkoutType = async function() {
     showToast("Erro ao criar tipo: " + (e.message || "verifique permissões"), "error");
   } finally {
     STATE._creatingWorkoutType = false;
+  }
+};
+
+window.deleteWorkoutType = async function(workoutId, code, name) {
+  if (!["admin","coach"].includes(STATE.profile?.role)) {
+    showToast("Sem permissão para excluir treinos.", "error");
+    return;
+  }
+  if (STATE._deletingWorkout) return;
+  // Aviso forte se houver alunos com sessoes desse codigo
+  const ok = await showConfirm({
+    title: `Excluir ${name || code}?`,
+    msg: "O tipo de treino e seus exercícios serão removidos. Sessões já concluídas dos alunos continuam no histórico.",
+    confirm: "Excluir",
+    cancel: "Cancelar",
+    danger: true
+  });
+  if (!ok) return;
+  STATE._deletingWorkout = true;
+  try {
+    let wid = workoutId;
+    if (!wid && code && STATE.workouts && STATE.workouts[code]) wid = STATE.workouts[code].id;
+    if (!wid) {
+      // ultima tentativa: buscar pelo codigo
+      const { data } = await sb.from("workouts").select("id").eq("code", code).limit(1).maybeSingle();
+      wid = data?.id;
+    }
+    if (!wid) {
+      showToast("Treino não encontrado para excluir.", "error");
+      return;
+    }
+    // apaga exercicios primeiro (defesa caso FK seja RESTRICT)
+    await sb.from("exercises").delete().eq("workout_id", wid);
+    const { error } = await sb.from("workouts").delete().eq("id", wid);
+    if (error) throw error;
+    showToast("Treino excluído", "success");
+    await loadWorkouts();
+    renderAdminWorkouts();
+  } catch (e) {
+    console.error("[deleteWorkoutType]", e);
+    showToast("Erro ao excluir: " + (e.message || "verifique permissões"), "error");
+  } finally {
+    STATE._deletingWorkout = false;
   }
 };
 
@@ -8539,12 +8586,20 @@ window.submitNewExercise = async function() {
 };
 
 window.editExercise = async function(exId) {
-  let ex;
+  let ex, exWorkoutCode = "", exWorkoutId = "";
   for (const code in STATE.workouts) {
-    const f = STATE.workouts[code].exercises.find(e => e.id === exId);
-    if (f) { ex = f; break; }
+    const w = STATE.workouts[code];
+    const f = (w.exercises || []).find(e => e.id === exId);
+    if (f) { ex = f; exWorkoutCode = w.code || code; exWorkoutId = w.id || ""; break; }
+  }
+  if (!ex) {
+    // fallback: buscar diretamente no banco
+    const { data: row } = await sb.from("exercises").select("*").eq("id", exId).single();
+    if (row) { ex = row; exWorkoutCode = ""; exWorkoutId = row.workout_id || ""; }
   }
   if (!ex) return;
+  // contexto preservado para Salvar/Cancelar voltarem corretamente
+  STATE._editingExerciseCtx = { exId, code: exWorkoutCode, workoutId: exWorkoutId };
   const html = `
     <h3>Editar exercício</h3>
     <p style="font-size:13px;color:var(--text-2)">${escape(ex.name)}</p>
@@ -8589,7 +8644,7 @@ window.editExercise = async function(exId) {
     <div class="form-group"><label class="form-label">Método</label><input class="input" id="ex-method" value="${escape(ex.method || '')}" /></div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="input textarea" id="ex-obs">${escape(ex.observations || '')}</textarea></div>
     <button class="btn-primary" onclick="saveExercise('${exId}')">Salvar</button>
-    <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Cancelar</button>
+    <button class="btn-ghost" onclick="returnFromExerciseEditor()" style="margin-top:8px">Cancelar</button>
   `;
   openSheet(html);
 };
@@ -8652,9 +8707,27 @@ window.saveExercise = async function(id) {
   const { error } = await sb.from("exercises").update(patch).eq("id", id);
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Exercício salvo", "success");
-  closeSheet();
   await loadWorkouts();
-  renderAdminWorkouts();
+  await returnFromExerciseEditor();
+};
+
+// Volta para a lista de exercicios do treino que estavamos editando.
+// Se nao houver contexto, fecha o sheet e renderiza a lista de treinos.
+window.returnFromExerciseEditor = async function() {
+  const ctx = STATE._editingExerciseCtx;
+  STATE._editingExerciseCtx = null;
+  if (ctx && (ctx.workoutId || ctx.code)) {
+    try {
+      await window.openWorkoutEditor(ctx.code || "", ctx.workoutId || "");
+      return;
+    } catch (e) {
+      console.warn("[returnFromExerciseEditor]", e);
+    }
+  }
+  closeSheet();
+  if (STATE.profile?.role === "coach" || STATE.profile?.role === "admin") {
+    renderAdminWorkouts();
+  }
 };
 
 /* =============================================================================
