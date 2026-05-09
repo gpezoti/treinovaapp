@@ -34,6 +34,15 @@ const checks = [
       html.includes("cancelTimer()"),
   },
   {
+    name: "ajuste e pausa do timer sincronizam push remoto",
+    pass: html.includes("async function rescheduleServerRestPushFromTimer") &&
+      html.includes('rescheduleServerRestPushFromTimer("adjust")') &&
+      html.includes('rescheduleServerRestPushFromTimer("resume")') &&
+      html.includes("cancelServerRestPush(STATE.timer.id)") &&
+      html.indexOf('rescheduleServerRestPushFromTimer("adjust")') > html.indexOf("function adjustTimer(delta)") &&
+      html.indexOf('rescheduleServerRestPushFromTimer("resume")') > html.indexOf("function pauseToggle()"),
+  },
+  {
     name: "notificacao de descanso finalizado usa Notification API e Service Worker",
     pass: html.includes("ensureRestNotificationPermission") &&
       html.includes("notifyRestFinished") &&

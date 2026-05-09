@@ -4068,6 +4068,28 @@ async function cancelServerRestPush(timerId) {
     console.warn("[rest timer server cancel]", e);
   }
 }
+async function rescheduleServerRestPushFromTimer(reason = "adjust") {
+  try {
+    if (!STATE.timer?.id || (!STATE.timer.running && !STATE.timer.paused)) return false;
+    const remaining = STATE.timer.paused
+      ? Number(STATE.timer.pausedRemaining || STATE.timer.secondsLeft || 0)
+      : getTimerRemainingSeconds({
+          startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+          duration: STATE.timer.secondsTotal,
+          status: "running"
+        });
+    if (remaining <= 0) {
+      cancelServerRestPush(STATE.timer.id);
+      return false;
+    }
+    const ok = await scheduleServerRestPush(remaining, STATE.timer.exerciseName || STATE.timer.label || "Próxima série");
+    if (!ok) console.warn("[rest timer server reschedule]", reason);
+    return ok;
+  } catch(e) {
+    console.warn("[rest timer server reschedule]", reason, e);
+    return false;
+  }
+}
 function scheduleTimerChromeCleanup(delay = 800) {
   if (_TIMER_CLEANUP_HANDLE) clearTimeout(_TIMER_CLEANUP_HANDLE);
   _TIMER_CLEANUP_HANDLE = setTimeout(() => {
@@ -4307,6 +4329,7 @@ function closeTimer() {
 }
 function adjustTimer(delta) {
   if (!STATE.timer.running && !STATE.timer.paused) return;
+  const wasPaused = STATE.timer.paused;
   STATE.timer.secondsTotal = Math.max(5, STATE.timer.secondsTotal + delta);
   if (STATE.timer.paused) {
     STATE.timer.secondsLeft = Math.max(5, STATE.timer.secondsLeft + delta);
@@ -4320,6 +4343,15 @@ function adjustTimer(delta) {
   }
   persistTimerState();
   updateTimerUI();
+  if (STATE.timer.secondsLeft <= 0) {
+    finishTimer();
+    return;
+  }
+  if (wasPaused) {
+    cancelServerRestPush(STATE.timer.id);
+  } else {
+    rescheduleServerRestPushFromTimer("adjust");
+  }
 }
 function pauseToggle() {
   if (!STATE.timer.running && !STATE.timer.paused) return;
@@ -4337,6 +4369,7 @@ function pauseToggle() {
     if (STATE.timer.raf) { clearTimeout(STATE.timer.raf); STATE.timer.raf = null; }
     persistTimerState();
     setTimerIcon(true);
+    cancelServerRestPush(STATE.timer.id);
   } else {
     const elapsedBeforePause = STATE.timer.secondsTotal - (STATE.timer.pausedRemaining || STATE.timer.secondsLeft || 0);
     const newStart = Date.now() - elapsedBeforePause * 1000;
@@ -4350,6 +4383,7 @@ function pauseToggle() {
     persistTimerState();
     setTimerIcon(false);
     tickTimer();
+    rescheduleServerRestPushFromTimer("resume");
   }
 }
 function setTimerIcon(paused) {
