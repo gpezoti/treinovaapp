@@ -2868,6 +2868,7 @@ window.confirmSerieDone = async function(skipTimer) {
   const modal = window._sdmModal;
   if (!modal) return;
   const inp = document.getElementById("sdm-load-input");
+  const confirmBtn = document.getElementById("sdm-confirm-btn");
   const loadVal = inp ? parseFloat(inp.value) : null;
   const logId = modal._logId;
   const exName = modal._exerciseName;
@@ -2887,9 +2888,11 @@ window.confirmSerieDone = async function(skipTimer) {
   const isLastEx = modal._isLast;
   const exPos    = modal._exercisePos;
 
-  modal.style.opacity = "0";
-  setTimeout(() => modal.remove(), 200);
-  window._sdmModal = null;
+  const closeSerieModal = () => {
+    modal.style.opacity = "0";
+    setTimeout(() => modal.remove(), 200);
+    window._sdmModal = null;
+  };
 
   function autoAdvanceExercise() {
     const W = STATE.workouts[STATE.selectedWorkout];
@@ -2917,11 +2920,17 @@ window.confirmSerieDone = async function(skipTimer) {
   const timerLabel = timerNextEx && isLastEx ? timerNextEx.name : nextLabel;
 
   if (!skipTimer) {
-    startTimer(pauseSec, timerLabel, () => {
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "Agendando descanso...";
+    }
+    await startTimer(pauseSec, timerLabel, () => {
       if (navigator.vibrate) navigator.vibrate([200,100,200]);
       if (isLastEx) setTimeout(autoAdvanceExercise, 600);
     });
+    closeSerieModal();
   } else {
+    closeSerieModal();
     showToast("Timer pulado", null);
     if (isLastEx) setTimeout(autoAdvanceExercise, 200);
   }
@@ -4088,7 +4097,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-function startTimer(sec, label, onDone) {
+async function startTimer(sec, label, onDone) {
   cancelTimer();
   _acquireWakeLock();
   const exerciseName = label || "Próxima série";
@@ -4113,11 +4122,11 @@ function startTimer(sec, label, onDone) {
   setTimerIcon(false);
   tickTimer();
   openFsTimer();
-  scheduleServerRestPush(sec, exerciseName).then((ok) => {
-    if (!ok) {
-      console.warn("[rest timer] Notificação fora do app não foi agendada. O descanso local continua ativo.");
-    }
-  });
+  const ok = await scheduleServerRestPush(sec, exerciseName);
+  if (!ok) {
+    console.warn("[rest timer] Notificação fora do app não foi agendada. O descanso local continua ativo.");
+  }
+  return ok;
 }
 
 function restoreTimerIfActive() {

@@ -43,6 +43,10 @@ const checks = [
   {
     name: "timer agenda web push real no backend",
     pass: html.includes("scheduleServerRestPush") &&
+      html.includes("async function startTimer") &&
+      html.includes("await startTimer(pauseSec, timerLabel") &&
+      html.includes("Agendando descanso...") &&
+      html.includes("const ok = await scheduleServerRestPush(sec, exerciseName)") &&
       html.includes("const pushReady = await ensureRestNotificationPermission()") &&
       html.includes('sb.functions.invoke("rest-timer-push"') &&
       html.includes("verifyRestTimerPushJob") &&
