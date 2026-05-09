@@ -2585,6 +2585,21 @@ async function loadFeed() {
 async function loadFollows() {
   if (!STATE.profile) return;
   const me = STATE.profile.id;
+  try {
+    const { data, error } = await sb.functions.invoke("social-people", {
+      body: { action: "follows" }
+    });
+    if (!error && data?.ok) {
+      STATE.follows = {
+        following: data.following || [],
+        followers: data.followers || []
+      };
+      return;
+    }
+    if (error || data?.error) console.warn("[follows edge]", error || data.error);
+  } catch(e) {
+    console.warn("[follows edge]", e);
+  }
   const [followingRes, followersRes] = await Promise.all([
     sb.from("follows").select("following_id").eq("follower_id", me),
     sb.from("follows").select("follower_id").eq("following_id", me)
@@ -2613,6 +2628,19 @@ async function ensureCoachStudentFollows() {
 }
 
 async function followUser(userId) {
+  try {
+    const { data, error } = await sb.functions.invoke("social-people", {
+      body: { action: "follow", user_id: userId }
+    });
+    if (!error && data?.ok) {
+      await loadFollows();
+      await loadFeed();
+      return true;
+    }
+    if (error || data?.error) console.warn("[follow edge]", error || data.error);
+  } catch(e) {
+    console.warn("[follow edge]", e);
+  }
   const { error } = await sb.from("follows").upsert(
     { follower_id: STATE.profile.id, following_id: userId },
     { onConflict: "follower_id,following_id", ignoreDuplicates: true }
@@ -2625,7 +2653,15 @@ async function followUser(userId) {
   return true;
 }
 async function unfollowUser(userId) {
-  await sb.from("follows").delete().eq("follower_id", STATE.profile.id).eq("following_id", userId);
+  try {
+    const { data, error } = await sb.functions.invoke("social-people", {
+      body: { action: "unfollow", user_id: userId }
+    });
+    if (error || data?.error) console.warn("[unfollow edge]", error || data.error);
+  } catch(e) {
+    console.warn("[unfollow edge]", e);
+    await sb.from("follows").delete().eq("follower_id", STATE.profile.id).eq("following_id", userId);
+  }
   await loadFollows();
   await loadFeed();
 }
@@ -2637,19 +2673,30 @@ async function searchPeople(query) {
   if (!query || query.length < 2) return [];
   const term = String(query).replace(/[%,()]/g, " ").replace(/\s+/g, " ").trim();
   if (term.length < 2) return [];
-  const { data, error } = await sb.from("profiles")
-    .select("id, email, full_name, avatar_emoji, avatar_url, role")
-    .neq("id", STATE.profile.id)
-    .eq("status", "approved")
-    .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
-    .order("full_name", { ascending: true })
-    .limit(30);
-  if (error) {
-    console.warn("[people-search]", error);
-    showToast("Não foi possível buscar pessoas agora.", "error");
-    return [];
+  try {
+    const { data, error } = await sb.functions.invoke("social-people", {
+      body: { action: "search", query: term }
+    });
+    if (!error && data?.ok) return data.people || [];
+    if (error || data?.error) console.warn("[people-search edge]", error || data.error);
+  } catch(e) {
+    console.warn("[people-search edge]", e);
   }
-  return data || [];
+  try {
+    const { data, error } = await sb.from("profiles")
+      .select("id, email, full_name, avatar_emoji, avatar_url, role")
+      .neq("id", STATE.profile.id)
+      .eq("status", "approved")
+      .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
+      .order("full_name", { ascending: true })
+      .limit(30);
+    if (!error) return data || [];
+    console.warn("[people-search fallback]", error);
+  } catch(e) {
+    console.warn("[people-search fallback]", e);
+  }
+  showToast("Não foi possível buscar pessoas agora.", "error");
+  return [];
 }
 
 async function loadStudents() {
@@ -6928,9 +6975,9 @@ function renderFeed() {
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
       <h1 class="view-title" style="margin:0">Feed</h1>
-      <button onclick="openPeopleSearch()" style="background:var(--bg-card);border:1px solid var(--line);color:var(--text-2);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px">
+      <button onclick="openPeopleSearch()" style="background:var(--bg-card);border:1px solid var(--line);color:var(--text-2);border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:5px;white-space:nowrap;flex:0 0 auto;min-height:34px">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        Descobrir
+        Buscar
       </button>
     </div>
     <p class="view-subtitle">Quem você segue · ${feed.length} post${feed.length!==1?'s':''}</p>
@@ -6950,7 +6997,7 @@ function renderFeed() {
           <div style="font-size:13px;font-weight:800;color:var(--text)">Encontrar pessoas</div>
           <div style="font-size:11px;color:var(--text-3)">Busque qualquer aluno, professor ou admin cadastrado.</div>
         </div>
-        <button class="mini-btn mini-btn-ghost" onclick="openPeopleSearch()">Abrir</button>
+        <button class="mini-btn mini-btn-ghost" style="flex:0 0 auto;min-width:70px;white-space:nowrap" onclick="openPeopleSearch()">Abrir</button>
       </div>
       <input class="input" id="feed-people-search" placeholder="Nome ou email" oninput="onFeedPeopleSearch(this.value)" />
       <div id="feed-people-results" style="margin-top:10px"></div>
@@ -10727,13 +10774,33 @@ window.diagnoseRestTimerPush = async function() {
     const jobs = data?.jobs || [];
     const lastJob = jobs[0];
     const appKey = VAPID_PUBLIC_KEY ? `${VAPID_PUBLIC_KEY.slice(0,10)}...${VAPID_PUBLIC_KEY.slice(-6)}` : "vazia";
+    let globalAudit = "";
+    if (STATE.profile?.role === "admin") {
+      try {
+        const { data: audit, error: auditError } = await sb.functions.invoke("social-people", {
+          body: { action: "push_audit" }
+        });
+        if (!auditError && audit?.ok) {
+          globalAudit = [
+            "",
+            "Global:",
+            `Usuários aprovados: ${audit.approved_users}`,
+            `Com push: ${audit.users_with_subscription}`,
+            `Sem push: ${audit.users_without_subscription}`
+          ].join("\n");
+        }
+      } catch(e) {
+        console.warn("[push audit]", e);
+      }
+    }
     const detail = [
       `Assinaturas: ${subs.length}`,
       subs[0]?.endpoint_host ? `Endpoint: ${subs[0].endpoint_host}` : "Endpoint: nenhum",
       `Chave app: ${appKey}`,
       data?.edge_vapid_public_key ? `Chave edge: ${data.edge_vapid_public_key}` : "Chave edge: indisponível",
       lastJob ? `Último job: ${lastJob.status}${lastJob.last_error ? " - " + lastJob.last_error : ""}` : "Último job: nenhum",
-      `iOS instalado: ${isIOSDevice() ? (isStandaloneApp() ? "sim" : "não") : "não é iOS"}`
+      `iOS instalado: ${isIOSDevice() ? (isStandaloneApp() ? "sim" : "não") : "não é iOS"}`,
+      globalAudit
     ].join("\n");
     showPushDiagnosticsModal(detail);
   } catch(e) {

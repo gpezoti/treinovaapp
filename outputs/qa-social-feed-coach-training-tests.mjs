@@ -2,6 +2,7 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 
 const html = fs.readFileSync("index.html", "utf8");
+const socialPeopleEdge = fs.readFileSync("supabase/functions/social-people/index.ts", "utf8");
 const sql = fs.readFileSync("sql/social_feed_coach_training_2026_05_08.sql", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20260508223000_social_feed_coach_training.sql", "utf8");
 
@@ -13,6 +14,7 @@ assert.match(html, /window\.openSocialList = async function\(type\)/);
 assert.match(html, /window\.openPeopleSearch = function\(\)/);
 assert.match(html, /window\.onFeedPeopleSearch = function\(q\)/);
 assert.match(html, /Encontrar pessoas/);
+assert.match(html, /sb\.functions\.invoke\("social-people"/);
 assert.match(html, /select\("id, email, full_name, avatar_emoji, avatar_url, role"\)/);
 assert.match(html, /function peopleRow\(p, context = "sheet"\)/);
 assert.match(html, /window\.onFollowToggle = async function\(id, currentlyFollowing = null\)/);
@@ -32,5 +34,15 @@ assert.match(sql, /create policy "feed social read"/);
 assert.match(sql, /create policy "periodization days self manage"/);
 assert.match(sql, /create policy "sessions self manage"/);
 assert.match(sql, /create policy "setlogs self manage"/);
+
+assert.match(socialPeopleEdge, /body\.action === "search"/);
+assert.match(socialPeopleEdge, /body\.action === "follows"/);
+assert.match(socialPeopleEdge, /body\.action === "follow"/);
+assert.match(socialPeopleEdge, /body\.action === "unfollow"/);
+assert.match(socialPeopleEdge, /body\.action === "push_audit"/);
+assert.match(socialPeopleEdge, /neq\("id", user\.id\)/);
+assert.match(socialPeopleEdge, /eq\("status", "approved"\)/);
+assert.match(socialPeopleEdge, /onConflict: "follower_id,following_id"/);
+assert.match(socialPeopleEdge, /Apenas ADM MASTER/);
 
 console.log("qa-social-feed-coach-training ok");
