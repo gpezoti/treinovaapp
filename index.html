@@ -2635,15 +2635,20 @@ function isFollowing(userId) {
 
 async function searchPeople(query) {
   if (!query || query.length < 2) return [];
-  const term = String(query).replace(/[%,()]/g, " ").trim();
+  const term = String(query).replace(/[%,()]/g, " ").replace(/\s+/g, " ").trim();
   if (term.length < 2) return [];
-  let q = sb.from("profiles")
-    .select("id, full_name, avatar_emoji, avatar_url, role")
+  const { data, error } = await sb.from("profiles")
+    .select("id, email, full_name, avatar_emoji, avatar_url, role")
     .neq("id", STATE.profile.id)
     .eq("status", "approved")
     .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
-    .limit(20);
-  const { data } = await q;
+    .order("full_name", { ascending: true })
+    .limit(30);
+  if (error) {
+    console.warn("[people-search]", error);
+    showToast("Não foi possível buscar pessoas agora.", "error");
+    return [];
+  }
   return data || [];
 }
 
@@ -6930,6 +6935,17 @@ function renderFeed() {
         <div class="stat-label">Seguidores</div>
       </button>
     </div>
+    <div class="card" style="margin:0 0 14px;padding:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;font-weight:800;color:var(--text)">Encontrar pessoas</div>
+          <div style="font-size:11px;color:var(--text-3)">Busque qualquer aluno, professor ou admin cadastrado.</div>
+        </div>
+        <button class="mini-btn mini-btn-ghost" onclick="openPeopleSearch()">Abrir</button>
+      </div>
+      <input class="input" id="feed-people-search" placeholder="Nome ou email" oninput="onFeedPeopleSearch(this.value)" />
+      <div id="feed-people-results" style="margin-top:10px"></div>
+    </div>
     <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:14px;-webkit-overflow-scrolling:touch">
       ${codes.map(c => `
         <button onclick="setFeedFilter('${c}')" style="flex-shrink:0;padding:7px 14px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid ${filter===c?'var(--brand)':'var(--line)'};background:${filter===c?'var(--brand-soft)':'var(--bg-card)'};color:${filter===c?'var(--brand)':'var(--text-2)'};cursor:pointer">
@@ -7336,7 +7352,7 @@ window.openSocialList = async function(type) {
   let people = [];
   if (ids.length) {
     const { data } = await sb.from("profiles")
-      .select("id, full_name, avatar_emoji, avatar_url, role")
+      .select("id, email, full_name, avatar_emoji, avatar_url, role")
       .in("id", ids)
       .order("full_name");
     people = data || [];
@@ -7357,41 +7373,78 @@ window.openSocialList = async function(type) {
 let _peopleSearchTimer = null;
 window.onPeopleSearch = function(q) {
   clearTimeout(_peopleSearchTimer);
+  const box = document.getElementById("ps-results");
+  if (!box) return;
   if (!q || q.length < 2) {
-    document.getElementById("ps-results").innerHTML = `<div class="empty"><p>Digite ao menos 2 letras</p></div>`;
+    box.innerHTML = `<div class="empty"><p>Digite ao menos 2 letras</p></div>`;
     return;
   }
+  box.innerHTML = `<div class="loading"><div class="spinner"></div>Buscando...</div>`;
   _peopleSearchTimer = setTimeout(async () => {
     const res = await searchPeople(q);
-    document.getElementById("ps-results").innerHTML = res.length === 0
+    const latestBox = document.getElementById("ps-results");
+    if (!latestBox) return;
+    STATE._peopleResults = res;
+    latestBox.innerHTML = res.length === 0
       ? `<div class="empty"><p>Ninguém encontrado</p></div>`
-      : res.map(p => peopleRow(p)).join("");
+      : res.map(p => peopleRow(p, "sheet")).join("");
   }, 300);
 };
 
-function peopleRow(p) {
+let _feedPeopleSearchTimer = null;
+window.onFeedPeopleSearch = function(q) {
+  clearTimeout(_feedPeopleSearchTimer);
+  const box = document.getElementById("feed-people-results");
+  if (!box) return;
+  if (!q || q.length < 2) {
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML = `<div class="loading" style="padding:8px 0"><div class="spinner"></div>Buscando...</div>`;
+  _feedPeopleSearchTimer = setTimeout(async () => {
+    const res = await searchPeople(q);
+    const latestBox = document.getElementById("feed-people-results");
+    if (!latestBox) return;
+    STATE._feedPeopleQuery = q;
+    STATE._feedPeopleResults = res;
+    latestBox.innerHTML = res.length === 0
+      ? `<div class="empty" style="padding:10px"><p>Nenhuma pessoa encontrada.</p></div>`
+      : `<div style="display:grid;gap:8px">${res.map(p => peopleRow(p, "feed")).join("")}</div>`;
+  }, 300);
+};
+
+function peopleRow(p, context = "sheet") {
   const following = isFollowing(p.id);
   const roleLabel = p.role === "coach" ? "Professor" : p.role === "admin" ? "Admin" : "Aluno";
-  return `<div class="list-row">
+  const sub = [roleLabel, p.email].filter(Boolean).join(" · ");
+  const rowStyle = context === "feed" ? ' style="padding:9px;border:1px solid var(--line);border-radius:12px;background:var(--bg-2,var(--bg-card))"' : "";
+  return `<div class="list-row"${rowStyle}>
     <div class="lr-avatar" style="overflow:hidden;">${p.avatar_url ? `<img src="${escape(p.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"/>` : escape(p.avatar_emoji || '💪')}</div>
     <div class="lr-info">
       <div class="lr-name">${escape(p.full_name || p.email)}</div>
-      <div class="lr-sub">${roleLabel}</div>
+      <div class="lr-sub">${escape(sub)}</div>
     </div>
     <div class="lr-actions">
-      <button class="mini-btn ${following ? 'mini-btn-ghost' : 'mini-btn-primary'}" onclick="onFollowToggle('${p.id}', ${following})">
+      <button class="mini-btn ${following ? 'mini-btn-ghost' : 'mini-btn-primary'}" onclick="onFollowToggle('${p.id}')">
         ${following ? "Seguindo ✓" : "Seguir"}
       </button>
     </div>
   </div>`;
 }
 
-window.onFollowToggle = async function(id, currentlyFollowing) {
+window.onFollowToggle = async function(id, currentlyFollowing = null) {
+  currentlyFollowing = typeof currentlyFollowing === "boolean" ? currentlyFollowing : isFollowing(id);
   if (currentlyFollowing) await unfollowUser(id);
-  else await followUser(id);
-  // re-renderiza a busca atual
-  const q = document.getElementById("ps-search").value;
+  else {
+    const ok = await followUser(id);
+    if (!ok) return;
+  }
+  showToast(currentlyFollowing ? "Você deixou de seguir." : "Agora você segue essa pessoa.", "success");
+  const q = document.getElementById("ps-search")?.value;
   if (q) onPeopleSearch(q);
+  const feedQ = document.getElementById("feed-people-search")?.value;
+  if (feedQ) onFeedPeopleSearch(feedQ);
+  if (!q && !feedQ && STATE.view === "feed") renderFeed();
 };
 
 function renderBrandingPanel() {
