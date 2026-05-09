@@ -2393,6 +2393,13 @@ async function signOut() {
    DATA LOADING
    ============================================================================= */
 async function loadWorkouts() {
+  // Coach pode ter ocultado treinos globais/de outros coaches da PROPRIA lista
+  let hiddenSet = new Set();
+  if (STATE.profile && STATE.profile.role === "coach") {
+    const { data: hidden } = await sb.from("coach_hidden_workouts")
+      .select("workout_id").eq("coach_id", STATE.profile.id);
+    (hidden || []).forEach(h => hiddenSet.add(h.workout_id));
+  }
   let q = sb.from("workouts").select("*").order("code");
   const role = STATE.profile && STATE.profile.role;
   const myId = STATE.profile && STATE.profile.id;
@@ -2417,6 +2424,7 @@ async function loadWorkouts() {
   const isStudent = STATE.profile && STATE.profile.role === "student";
   const grouped = {};
   (workouts || []).forEach(w => {
+    if (hiddenSet.has(w.id)) return; // ocultos por este coach
     if (!grouped[w.code]) grouped[w.code] = [];
     grouped[w.code].push(w);
   });
@@ -9376,42 +9384,55 @@ window.createWorkoutType = async function() {
 
 window.deleteWorkoutType = async function(workoutId, code, name) {
   if (!["admin","coach"].includes(STATE.profile?.role)) {
-    showToast("Sem permissão para excluir treinos.", "error");
+    showToast("Sem permissão para remover treinos.", "error");
     return;
   }
   if (STATE._deletingWorkout) return;
-  // Aviso forte se houver alunos com sessoes desse codigo
-  const ok = await showConfirm({
-    title: `Excluir ${name || code}?`,
-    msg: "O tipo de treino e seus exercícios serão removidos. Sessões já concluídas dos alunos continuam no histórico.",
-    confirm: "Excluir",
-    cancel: "Cancelar",
-    danger: true
-  });
-  if (!ok) return;
   STATE._deletingWorkout = true;
   try {
     let wid = workoutId;
     if (!wid && code && STATE.workouts && STATE.workouts[code]) wid = STATE.workouts[code].id;
     if (!wid) {
-      // ultima tentativa: buscar pelo codigo
-      const { data } = await sb.from("workouts").select("id").eq("code", code).limit(1).maybeSingle();
+      const { data } = await sb.from("workouts").select("id, coach_id, is_global").eq("code", code).limit(1).maybeSingle();
       wid = data?.id;
     }
-    if (!wid) {
-      showToast("Treino não encontrado para excluir.", "error");
-      return;
+    if (!wid) { showToast("Treino não encontrado.", "error"); return; }
+
+    // Carrega metadata do workout para decidir entre HIDE e DELETE real
+    const { data: meta } = await sb.from("workouts").select("id, coach_id, is_global, name").eq("id", wid).maybeSingle();
+    const isAdmin = STATE.profile?.role === "admin";
+    const isOwner = meta && meta.coach_id && meta.coach_id === STATE.profile?.id;
+    const willHide = !isAdmin && !isOwner;  // coach removendo treino que nao eh dele
+
+    const ok = await showConfirm({
+      title: willHide ? `Remover ${name || code} da sua lista?` : `Excluir ${name || code}?`,
+      msg: willHide
+        ? "Este treino é global ou de outro professor — vamos esconder ele apenas da sua lista. Outros professores e o admin continuam vendo."
+        : "O tipo de treino e seus exercícios serão removidos. Sessões já concluídas dos alunos continuam no histórico.",
+      confirm: willHide ? "Remover" : "Excluir",
+      cancel: "Cancelar",
+      danger: true
+    });
+    if (!ok) return;
+
+    if (willHide) {
+      const { error } = await sb.from("coach_hidden_workouts").upsert({
+        coach_id: STATE.profile.id, workout_id: wid
+      }, { onConflict: "coach_id,workout_id" });
+      if (error) throw error;
+      showToast("Removido da sua lista", "success");
+    } else {
+      // delete real (admin ou dono): apaga exercises e o workout
+      await sb.from("exercises").delete().eq("workout_id", wid);
+      const { error } = await sb.from("workouts").delete().eq("id", wid);
+      if (error) throw error;
+      showToast("Treino excluído", "success");
     }
-    // apaga exercicios primeiro (defesa caso FK seja RESTRICT)
-    await sb.from("exercises").delete().eq("workout_id", wid);
-    const { error } = await sb.from("workouts").delete().eq("id", wid);
-    if (error) throw error;
-    showToast("Treino excluído", "success");
     await loadWorkouts();
     renderAdminWorkouts();
   } catch (e) {
     console.error("[deleteWorkoutType]", e);
-    showToast("Erro ao excluir: " + (e.message || "verifique permissões"), "error");
+    showToast("Erro: " + (e.message || "tente novamente"), "error");
   } finally {
     STATE._deletingWorkout = false;
   }
