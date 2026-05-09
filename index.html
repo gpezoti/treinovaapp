@@ -8259,6 +8259,141 @@ async function loadBlocksForDays(dayIds) {
   return map;
 }
 
+
+// ============== TEMPLATES DE PERIODIZACAO ==============
+
+window.openSavePeriodAsTemplateSheet = function(studentId) {
+  if (!STATE.profile || !["coach","admin"].includes(STATE.profile.role)) return;
+  openSheet(`
+    <h3>Salvar como template</h3>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 12px">Salva o ciclo atual deste aluno como um template reutilizável. Dá pra aplicar em outros alunos depois com 1 toque.</p>
+    <div class="form-group">
+      <label class="form-label">Nome do template</label>
+      <input class="input" id="tmpl-name" maxlength="60" placeholder="Ex.: Hipertrofia 12 semanas" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrição (opcional)</label>
+      <textarea class="input textarea" id="tmpl-desc" maxlength="200" placeholder="Ex.: ABCD com semana de deload na 4 e 8" style="min-height:60px"></textarea>
+    </div>
+    <button class="btn-primary" onclick="savePeriodAsTemplate('${studentId}')">Salvar template</button>
+    <button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')" style="margin-top:8px">Cancelar</button>
+  `);
+  setTimeout(() => document.getElementById("tmpl-name")?.focus(), 60);
+};
+
+window.savePeriodAsTemplate = async function(studentId) {
+  const nameEl = document.getElementById("tmpl-name");
+  const descEl = document.getElementById("tmpl-desc");
+  const name = (nameEl?.value || "").trim();
+  const desc = (descEl?.value || "").trim() || null;
+  if (!name) { showToast("Informe um nome para o template", "error"); nameEl?.focus(); return; }
+  if (STATE._savingTemplate) return;
+  STATE._savingTemplate = true;
+  try {
+    const { data, error } = await sb.rpc("save_period_as_template", {
+      p_student: studentId,
+      p_name: name,
+      p_description: desc
+    });
+    if (error) throw error;
+    showToast("Template salvo ✓", "success");
+    closeSheet();
+    openStudentPeriodSheet(studentId);
+  } catch(e) {
+    console.error("[savePeriodAsTemplate]", e);
+    showToast("Erro: " + (e.message || "tente novamente"), "error");
+  } finally {
+    STATE._savingTemplate = false;
+  }
+};
+
+window.openApplyTemplateSheet = async function(studentId) {
+  if (!STATE.profile || !["coach","admin"].includes(STATE.profile.role)) return;
+  openSheet(`<h3>Carregando templates…</h3><div class="loading"><div class="spinner"></div></div>`);
+  const myCoachId = STATE.profile.role === "coach" ? STATE.profile.id : null;
+  let q = sb.from("periodization_templates").select("*").order("created_at", { ascending: false });
+  if (myCoachId) q = q.eq("coach_id", myCoachId);
+  const { data: templates, error } = await q;
+  if (error) {
+    openSheet(`<h3>Templates</h3><div class="empty"><p>Erro: ${escape(error.message)}</p></div><button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')">Voltar</button>`);
+    return;
+  }
+  const list = (templates || []);
+  const today = todayISO();
+  const html = `
+    <h3>Aplicar template</h3>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 14px">Selecione um template e a data de início. As datas atuais a partir do início serão substituídas.</p>
+    ${list.length === 0 ? `
+      <div class="empty"><p>Você ainda não tem templates. Salve a periodização de um aluno como template para começar.</p></div>
+    ` : `
+      <div class="form-group">
+        <label class="form-label">Data de início</label>
+        <input class="input" id="apply-tmpl-date" type="date" value="${today}" />
+      </div>
+      <label class="row-flex" style="margin-bottom:12px;gap:8px"><input type="checkbox" id="apply-tmpl-replace" checked><span class="text-sm">Substituir periodização existente a partir desta data</span></label>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${list.map(t => `
+          <div class="card" style="padding:12px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+              <div style="min-width:0;flex:1">
+                <div class="fw-700 text-sm">${escape(t.name)}</div>
+                <div class="text-xs muted" style="margin-top:3px">${t.weeks_count} semana(s) · ${t.total_days} dias${t.description ? ' · ' + escape(t.description) : ''}</div>
+              </div>
+              <button class="mini-btn mini-btn-primary" onclick="applyTemplateToStudent('${t.id}','${studentId}','${escape(t.name).replace(/'/g, "&#39;")}')">Aplicar</button>
+              <button class="mini-btn mini-btn-danger" onclick="deletePeriodTemplate('${t.id}','${studentId}')" title="Excluir template">×</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `}
+    <button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')" style="margin-top:14px">Voltar</button>
+  `;
+  openSheet(html);
+};
+
+window.applyTemplateToStudent = async function(templateId, studentId, templateName) {
+  const dateEl = document.getElementById("apply-tmpl-date");
+  const replaceEl = document.getElementById("apply-tmpl-replace");
+  const startDate = dateEl?.value || todayISO();
+  const replace = replaceEl?.checked !== false;
+  const ok = await showConfirm({
+    title: `Aplicar "${templateName}"?`,
+    msg: replace
+      ? `O template será aplicado a partir de ${fmtDateBR(startDate)}, substituindo o que existir desta data em diante.`
+      : `O template será mesclado com o que já existe na periodização do aluno.`,
+    confirm: "Aplicar",
+    danger: replace
+  });
+  if (!ok) return;
+  if (STATE._applyingTemplate) return;
+  STATE._applyingTemplate = true;
+  try {
+    const { data, error } = await sb.rpc("apply_period_template", {
+      p_template: templateId,
+      p_student: studentId,
+      p_start_date: startDate,
+      p_replace: replace
+    });
+    if (error) throw error;
+    showToast(`Template aplicado · ${data || 0} dias gerados`, "success");
+    closeSheet();
+    openStudentPeriodSheet(studentId);
+  } catch(e) {
+    console.error("[applyTemplateToStudent]", e);
+    showToast("Erro: " + (e.message || "tente novamente"), "error");
+  } finally {
+    STATE._applyingTemplate = false;
+  }
+};
+
+window.deletePeriodTemplate = async function(templateId, studentId) {
+  if (!await showConfirm({ title: "Excluir template?", msg: "Esta ação não pode ser desfeita. As periodizações já aplicadas em alunos não são afetadas.", confirm: "Excluir", danger: true })) return;
+  const { error } = await sb.from("periodization_templates").delete().eq("id", templateId);
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast("Template removido", "success");
+  openApplyTemplateSheet(studentId);
+};
+
 window.openStudentPeriodSheet = async function(id) {
   openSheet(`<h3>Periodização</h3><div class="loading"><div class="spinner"></div></div>`);
   if (!_PRESETS.length) await loadPresets();
@@ -8276,6 +8411,8 @@ window.openStudentPeriodSheet = async function(id) {
     <div class="period-toolbar">
       <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ Semana</button>
       <button class="mini-btn" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line)" onclick="removePeriodWeek('${id}')">− Semana</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openApplyTemplateSheet('${id}')" title="Aplicar template salvo"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V7H4v14h4z"/><path d="M16 21V3h-4v18h4z"/><path d="M22 21V11h-4v10h4z"/></svg> Aplicar template</button>
+      ${(grouped.length > 0) ? `<button class="mini-btn mini-btn-ghost" onclick="openSavePeriodAsTemplateSheet('${id}')" title="Salvar este ciclo como template"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Salvar template</button>` : ''}
       <button class="mini-btn mini-btn-ghost" onclick="openPeriodConfig('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Configurar período</button>
       <button class="mini-btn mini-btn-ghost" onclick="openPresetEditor()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Tipos</button>
     </div>
