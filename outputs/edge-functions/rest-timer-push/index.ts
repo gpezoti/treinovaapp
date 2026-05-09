@@ -293,6 +293,38 @@ async function processDueJobs(req: Request) {
   return json({ ok: true, processed: jobs.length, sent, failed });
 }
 
+async function cronDebug(req: Request) {
+  if (!isCronAuthorized(req)) return json({ error: "Cron não autorizado." }, 401);
+
+  const [
+    subsRes,
+    scheduledRes,
+    sentRes,
+    failedRes,
+    recentJobsRes,
+  ] = await Promise.all([
+    sbAdmin.from("push_subscriptions").select("id", { count: "exact", head: true }),
+    sbAdmin.from("rest_timer_push_jobs").select("id", { count: "exact", head: true }).eq("status", "scheduled"),
+    sbAdmin.from("rest_timer_push_jobs").select("id", { count: "exact", head: true }).eq("status", "sent"),
+    sbAdmin.from("rest_timer_push_jobs").select("id", { count: "exact", head: true }).eq("status", "failed"),
+    sbAdmin.from("rest_timer_push_jobs")
+      .select("id,user_id,timer_id,exercise_name,fire_at,status,attempts,last_error,sent_at,cancelled_at,created_at")
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ]);
+
+  return json({
+    ok: true,
+    subscriptions: subsRes.count || 0,
+    jobs: {
+      scheduled: scheduledRes.count || 0,
+      sent: sentRes.count || 0,
+      failed: failedRes.count || 0,
+    },
+    recent_jobs: recentJobsRes.data || [],
+  });
+}
+
 async function processSingleDueJob(jobId: string, delayMs = 0, requestSubscription: any = null) {
   if (delayMs > 0) await sleep(delayMs);
   const { data: job, error } = await sbAdmin
@@ -339,7 +371,9 @@ async function sendJobNotification(job: any) {
     title: "Descanso finalizado",
     body: `Próximo exercício: ${job.exercise_name || "Próxima série"}`,
     url: "/?view=workout&restTimer=1",
-    tag: "treinova-rest-timer",
+    tag: `treinova-rest-timer-${job.timer_id || job.id || Date.now()}`,
+    icon: "/assets/icon-192.png",
+    badge: "/assets/favicon-32x32.png",
     silent: false,
     renotify: true,
   });
@@ -415,6 +449,7 @@ serve(async (req) => {
   if (body.action === "test_delayed") return testDelayedPush(req, body);
   if (body.action === "diagnose") return diagnosePush(req);
   if (body.action === "process") return processDueJobs(req);
+  if (body.action === "cron_debug") return cronDebug(req);
 
   return json({ error: "Ação inválida." }, 400);
 });

@@ -81,6 +81,7 @@ const checks = [
       html.includes("isWebPushRuntimeSupported") &&
       html.includes("upsertRestTimerPushJobDirect") &&
       html.includes("last_seen_at: new Date().toISOString()") &&
+      !html.includes(".delete()\n      .eq(\"user_id\", userId)\n      .neq(\"endpoint\", json.endpoint)") &&
       html.includes('return Boolean(await subscribePushNotifications({ throwOnError: true }))'),
   },
   {
@@ -147,6 +148,8 @@ checks.push(
       edge.includes("formatWebPushError") &&
       edge.includes("edge_vapid_public_key") &&
       edge.includes("diagnosePush") &&
+      edge.includes("cronDebug") &&
+      edge.includes('body.action === "cron_debug"') &&
       edge.includes("EdgeRuntime") &&
       edge.includes("requestSubscription") &&
       edge.includes("job._request_subscription") &&
@@ -155,6 +158,7 @@ checks.push(
       edge.includes("rest_timer_push_jobs") &&
       edge.includes("push_subscriptions") &&
       edge.includes("Descanso finalizado") &&
+      edge.includes("treinova-rest-timer-${job.timer_id") &&
       edge.includes("silent: false") &&
       edge.includes("/?view=workout&restTimer=1"),
   },

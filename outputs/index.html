@@ -10665,10 +10665,6 @@ async function subscribePushNotifications(opts = {}) {
     } catch (edgeSaveError) {
       console.warn("[push subscription edge save fallback]", edgeSaveError);
     }
-    await sb.from("push_subscriptions")
-      .delete()
-      .eq("user_id", userId)
-      .neq("endpoint", json.endpoint);
     const { error } = await sb.from("push_subscriptions").upsert({
       user_id: userId,
       endpoint: json.endpoint,
