@@ -5388,31 +5388,6 @@ function renderCoachHome(el) {
         <div class="action-sub">Cobranças e inadimplência</div>
       </button>
     </div>
-    <div class="insight-strip">
-      <button class="insight-card ${pending ? 'is-warn' : ''}" onclick="navTo('students'); _studentTab='all'; renderStudents();">
-        <div class="insight-value">${pending}</div><div class="insight-label">pendentes</div>
-      </button>
-      <button class="insight-card ${inactive ? 'is-warn' : ''}" onclick="navTo('students'); setStudentTab('inactive');">
-        <div class="insight-value">${inactive}</div><div class="insight-label">inativos</div>
-      </button>
-      <button class="insight-card ${overdue ? 'is-danger' : ''}" onclick="navTo('students'); setStudentTab('overdue');">
-        <div class="insight-value">${overdue}</div><div class="insight-label">devendo</div>
-      </button>
-    </div>
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-value">${approved}</div>
-        <div class="stat-label">Alunos ativos</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" style="color: ${pending > 0 ? 'var(--orange)' : 'var(--text)'}">${pending}</div>
-        <div class="stat-label">Pendentes</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${totalSessions7d}</div>
-        <div class="stat-label">Treinos 7d</div>
-      </div>
-    </div>
     ${pending > 0 ? `
       <div class="section-title">Aprovações pendentes</div>
       ${STATE.students.filter(s => s.status === "pending").map(s => studentRow(s)).join("")}
