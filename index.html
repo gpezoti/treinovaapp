@@ -5411,13 +5411,11 @@ function renderCoachOnboardingChecklist() {
   const done = steps.filter(s => s.done).length;
   const pct = Math.round((done/total) * 100);
   if (done >= total) {
-    let firstCompleteAt = null;
-    try { firstCompleteAt = localStorage.getItem("treinova_coach_setup_complete_at"); } catch(e) {}
-    if (!firstCompleteAt) {
-      try { localStorage.setItem("treinova_coach_setup_complete_at", new Date().toISOString()); } catch(e) {}
-      firstCompleteAt = new Date().toISOString();
-    }
-    if (Date.now() - new Date(firstCompleteAt).getTime() > 3 * 86400000) return "";
+    try {
+      localStorage.setItem(`treinova_coach_setup_complete_at_${myId}`, new Date().toISOString());
+      localStorage.setItem("treinova_coach_setup_complete_at", new Date().toISOString());
+    } catch(e) {}
+    return "";
   }
   return `
   <div class="card mb-12" style="border-color:rgba(0,180,255,.30);background:linear-gradient(135deg,var(--brand-soft),var(--bg-card))">
