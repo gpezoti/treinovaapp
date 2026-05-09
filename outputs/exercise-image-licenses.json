@@ -1,0 +1,1260 @@
+[
+  {
+    "treinovaName": "Abdominal infra (elevação de pernas)",
+    "assetPath": "assets/exercises/exact/abdominal_infra_elevacao_de_pernas.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/125/Leg-raises-2.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 377,
+    "wgerExerciseUuid": "9e34bc01-9cec-4ee2-a9bb-9c937a471c24",
+    "matchedName": "Leg Raises, Lying",
+    "matchMethod": "exact",
+    "queries": [
+      "leg raises, lying",
+      "decline bench leg raise"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Abdominal Infra na Barra",
+    "assetPath": "assets/exercises/exact/abdominal_infra_na_barra.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/125/Leg-raises-2.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 377,
+    "wgerExerciseUuid": "9e34bc01-9cec-4ee2-a9bb-9c937a471c24",
+    "matchedName": "Leg Raises, Lying",
+    "matchMethod": "exact",
+    "queries": [
+      "leg raises, lying"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Agachamento Livre com Barra",
+    "assetPath": "assets/exercises/exact/agachamento_livre_com_barra.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1801/60043328-1cfb-4289-9865-aaf64d5aaa28.jpg",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1801,
+    "wgerExerciseUuid": "5d0e0a8b-1940-4034-b4ae-b965859f1ff0",
+    "matchedName": "Barbell Full Squat",
+    "matchMethod": "exact",
+    "queries": [
+      "barbell full squat",
+      "front squats"
+    ],
+    "license": "Barbell Squat",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Workout Guru",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Agachamento Frontal",
+    "assetPath": "assets/exercises/exact/agachamento_frontal.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/191/Front-squat-1-857x1024.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 257,
+    "wgerExerciseUuid": "d677de4c-5bd9-412a-91f1-857116a666a2",
+    "matchedName": "Front Squats",
+    "matchMethod": "exact",
+    "queries": [
+      "front squats"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Agachamento Goblet",
+    "assetPath": "assets/exercises/exact/agachamento_goblet.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/203/1c052351-2af0-4227-aeb0-244008e4b0a8.jpeg",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 203,
+    "wgerExerciseUuid": "b7c6a444-90ea-4f5b-9fea-748311606eaa",
+    "matchedName": "Dumbbell Goblet Squat",
+    "matchMethod": "exact",
+    "queries": [
+      "dumbbell goblet squat"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "philip",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Agachamento Goblet com Halter",
+    "assetPath": "assets/exercises/exact/agachamento_goblet_com_halter.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/203/1c052351-2af0-4227-aeb0-244008e4b0a8.jpeg",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 203,
+    "wgerExerciseUuid": "b7c6a444-90ea-4f5b-9fea-748311606eaa",
+    "matchedName": "Dumbbell Goblet Squat",
+    "matchMethod": "exact",
+    "queries": [
+      "dumbbell goblet squat"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "philip",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Agachamento Sumô com Halter",
+    "assetPath": "assets/exercises/exact/agachamento_sumo_com_halter.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1088/9f66b288-ce8f-4154-ba80-78fee267263c.jpg",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1088,
+    "wgerExerciseUuid": "0c30c543-e2cc-499b-bc31-8c28db445ed2",
+    "matchedName": "Dumbbell sumo deadlift",
+    "matchMethod": "exact",
+    "queries": [
+      "dumbbell sumo deadlift",
+      "kettlebell sumo deadlift"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "philip",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Afundo (Lunge)",
+    "assetPath": "assets/exercises/exact/afundo_lunge.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/113/Walking-lunges-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 206,
+    "wgerExerciseUuid": "dcc6e237-a8bb-4eca-bbc5-7fb852636f6a",
+    "matchedName": "Dumbbell Lunges Walking",
+    "matchMethod": "exact",
+    "queries": [
+      "dumbbell lunges walking",
+      "walking lunges"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Afundo Reverso",
+    "assetPath": "assets/exercises/exact/afundo_reverso.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/999/d0931eb3-8db0-4049-bb08-aa4036072056.jfif",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 999,
+    "wgerExerciseUuid": "616f9026-1a1d-4ed8-b068-cfbb81b6a000",
+    "matchedName": "Reverse lunges",
+    "matchMethod": "exact",
+    "queries": [
+      "reverse lunges"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "philip",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Afundo Lateral",
+    "assetPath": "assets/exercises/exact/afundo_lateral.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1604/7695428e-bfed-4021-b987-498d93153995.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1604,
+    "wgerExerciseUuid": "55bb8725-a7c9-48a0-b192-ec6c9db6f9bc",
+    "matchedName": "Sliding Lateral Lunge",
+    "matchMethod": "exact",
+    "queries": [
+      "sliding lateral lunge"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "RiccaBaro",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Agachamento Búlgaro",
+    "assetPath": "assets/exercises/exact/agachamento_bulgaro.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1706/0c5243cc-2539-4005-aee0-d3a8c5d3a32c.jfif",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1706,
+    "wgerExerciseUuid": "60d2c34b-43a1-48a3-b43b-160e4c0157f2",
+    "matchedName": "Bulgarian Squat with Dumbbells",
+    "matchMethod": "exact",
+    "queries": [
+      "bulgarian squat with dumbbells"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "AlucardEvil40",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Bike ergométrica",
+    "assetPath": "assets/exercises/exact/bike_ergometrica.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1618/c18baedc-ff98-4fb2-b4f5-38a05c12f637.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1618,
+    "wgerExerciseUuid": "5da3d393-0c4e-4ac8-96b4-aab51f6ab3d1",
+    "matchedName": "Cardio en bicicleta estática",
+    "matchMethod": "exact",
+    "queries": [
+      "cardio en bicicleta estática"
+    ],
+    "license": "Bicicleta estatica",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Tierrasverdes",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Cadeira Extensora",
+    "assetPath": "assets/exercises/exact/cadeira_extensora.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/369/78c915d1-e46d-4d30-8124-65d68664c3ef.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 369,
+    "wgerExerciseUuid": "62170477-90ec-463c-907e-9e523abc0a15",
+    "matchedName": "Leg Extension",
+    "matchMethod": "exact",
+    "queries": [
+      "leg extension"
+    ],
+    "license": "Creative Commons Public Domain 1.0",
+    "licenseShortName": "CC0",
+    "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+    "licenseAuthor": "Franpol",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Cadeira Flexora",
+    "assetPath": "assets/exercises/exact/cadeira_flexora.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/117/seated-leg-curl-large-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 366,
+    "wgerExerciseUuid": "440a5184-de58-4a86-a7ba-76ddeafaa855",
+    "matchedName": "Leg Curls (sitting)",
+    "matchMethod": "exact",
+    "queries": [
+      "leg curls (sitting)"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Corrida na Esteira",
+    "assetPath": "assets/exercises/exact/corrida_na_esteira.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1615/7792295c-83b6-4ea8-9353-ce02f0ad2559.jpg",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1615,
+    "wgerExerciseUuid": "3f8e5871-4895-48c9-928d-dc1bc134f57b",
+    "matchedName": "Treadmill Cardio",
+    "matchMethod": "exact",
+    "queries": [
+      "treadmill cardio"
+    ],
+    "license": "Treadmill",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Tierrasverdes",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Crossover no Cabo",
+    "assetPath": "assets/exercises/exact/crossover_no_cabo.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/71/Cable-crossover-2.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 323,
+    "wgerExerciseUuid": "b16e3e5d-8401-4d2b-919c-15b536f9ec5e",
+    "matchedName": "Cable Cross-over",
+    "matchMethod": "exact",
+    "queries": [
+      "cable cross-over",
+      "fly with cable"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Crossover Polia Alta",
+    "assetPath": "assets/exercises/exact/crossover_polia_alta.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/71/Cable-crossover-2.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 323,
+    "wgerExerciseUuid": "b16e3e5d-8401-4d2b-919c-15b536f9ec5e",
+    "matchedName": "Cable Cross-over",
+    "matchMethod": "exact",
+    "queries": [
+      "cable cross-over",
+      "high-cable cross tricep extention - nb"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Crucifixo Reto",
+    "assetPath": "assets/exercises/exact/crucifixo_reto.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/238/2fc242d3-5bdd-4f97-99bd-678adb8c96fc.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 238,
+    "wgerExerciseUuid": "95d226ad-3bf7-4cd6-aa64-2f26b526d8b6",
+    "matchedName": "Fly With Dumbbells",
+    "matchMethod": "exact",
+    "queries": [
+      "fly with dumbbells"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "cshep442",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Crunch Abdominal",
+    "assetPath": "assets/exercises/exact/crunch_abdominal.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/91/Crunches-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 167,
+    "wgerExerciseUuid": "b186f1f8-4957-44dc-bf30-d0b00064ce6f",
+    "matchedName": "Abdominal",
+    "matchMethod": "exact",
+    "queries": [
+      "abdominal",
+      "incline crunches"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "wger.de",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Desenvolvimento com Barra",
+    "assetPath": "assets/exercises/exact/desenvolvimento_com_barra.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/119/seated-barbell-shoulder-press-large-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 566,
+    "wgerExerciseUuid": "8b0a0371-c0a9-42a7-aab7-68d520542fb2",
+    "matchedName": "Shoulder Press, Barbell",
+    "matchMethod": "exact",
+    "queries": [
+      "shoulder press, barbell",
+      "overhead barbell press"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Desenvolvimento com Halteres",
+    "assetPath": "assets/exercises/exact/desenvolvimento_com_halteres.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/123/dumbbell-shoulder-press-large-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 567,
+    "wgerExerciseUuid": "87affa4b-395b-437c-9581-2bd20ea5aa7c",
+    "matchedName": "Shoulder Press, Dumbbells",
+    "matchMethod": "exact",
+    "queries": [
+      "shoulder press, dumbbells"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Elevação Frontal com Halteres",
+    "assetPath": "assets/exercises/exact/elevacao_frontal_com_halteres.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/256/b7def5bc-2352-499b-b9e5-fff741003831.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 256,
+    "wgerExerciseUuid": "9c35594c-bbcc-4656-bdcb-376814c90e96",
+    "matchedName": "Front Raises",
+    "matchMethod": "exact",
+    "queries": [
+      "front raises"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "philip",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Elevação Lateral com Halter",
+    "assetPath": "assets/exercises/exact/elevacao_lateral_com_halter.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/148/lateral-dumbbell-raises-large-2.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 348,
+    "wgerExerciseUuid": "63375f5b-2d81-471c-bea4-fc3d207e96cb",
+    "matchedName": "Lateral Raises",
+    "matchMethod": "exact",
+    "queries": [
+      "lateral raises"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Elevação Lateral com Halteres",
+    "assetPath": "assets/exercises/exact/elevacao_lateral_com_halteres.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/148/lateral-dumbbell-raises-large-2.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 348,
+    "wgerExerciseUuid": "63375f5b-2d81-471c-bea4-fc3d207e96cb",
+    "matchedName": "Lateral Raises",
+    "matchMethod": "exact",
+    "queries": [
+      "lateral raises"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Elevação Lateral no Cabo",
+    "assetPath": "assets/exercises/exact/elevacao_lateral_no_cabo.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1378/7c1fcf34-fb7e-45e7-a0c1-51f296235315.jpg",
+    "sourceObjectUrl": "https://commons.wikimedia.org/wiki/File:Girl_doing_one_arm_shoulder_raise.jpg",
+    "wgerExerciseId": 1378,
+    "wgerExerciseUuid": "81942f3d-d92c-431c-b9d0-0da12918d1e4",
+    "matchedName": "Cable Lateral Raises (Single Arm)",
+    "matchMethod": "exact",
+    "queries": [
+      "cable lateral raises (single arm)",
+      "lateral rows on cable, one armed"
+    ],
+    "license": "Girl doing one arm shoulder raise",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "carlos3c",
+    "licenseAuthorUrl": "https://www.flickr.com/photos/ptpioneer/48317524901/",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Extensão de Tríceps Máquina",
+    "assetPath": "assets/exercises/exact/extensao_de_triceps_maquina.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1519/fab7f641-27d4-40b5-8edd-1a0a137bfd94.gif",
+    "sourceObjectUrl": "https://indonesian-recipes.com/download/2030-version.html",
+    "wgerExerciseId": 1519,
+    "wgerExerciseUuid": "c5797bdf-1aa1-4d51-9775-c929ec5a2aaf",
+    "matchedName": "Overhead Triceps Extension",
+    "matchMethod": "exact",
+    "queries": [
+      "overhead triceps extension"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "benjamin.yildiz@proton.me",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Flexão de Braços",
+    "assetPath": "assets/exercises/exact/flexao_de_bracos.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1551/a6a9e561-3965-45c6-9f2b-ee671e1a3a45.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1551,
+    "wgerExerciseUuid": "f5b84269-18af-4464-a61f-b767cbcd81dc",
+    "matchedName": "Push-Up",
+    "matchMethod": "exact",
+    "queries": [
+      "push-up"
+    ],
+    "license": "Push-Up",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Settebello",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Flexão de braços",
+    "assetPath": "assets/exercises/exact/flexao_de_bracos.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1551/a6a9e561-3965-45c6-9f2b-ee671e1a3a45.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1551,
+    "wgerExerciseUuid": "f5b84269-18af-4464-a61f-b767cbcd81dc",
+    "matchedName": "Push-Up",
+    "matchMethod": "exact",
+    "queries": [
+      "push-up"
+    ],
+    "license": "Push-Up",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Settebello",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Flexão de Braços Fechada",
+    "assetPath": "assets/exercises/exact/flexao_de_bracos_fechada.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1086/b2ee8d9b-0480-4992-8494-c223b37c2696.jpg",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1086,
+    "wgerExerciseUuid": "44cfa56c-d8c2-4f2c-8b5a-f29810fd60e7",
+    "matchedName": "Close-grip Press-ups",
+    "matchMethod": "exact",
+    "queries": [
+      "close-grip press-ups"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "philip",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Flexão fechada",
+    "assetPath": "assets/exercises/exact/flexao_fechada.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1086/b2ee8d9b-0480-4992-8494-c223b37c2696.jpg",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1086,
+    "wgerExerciseUuid": "44cfa56c-d8c2-4f2c-8b5a-f29810fd60e7",
+    "matchedName": "Close-grip Press-ups",
+    "matchMethod": "exact",
+    "queries": [
+      "close-grip press-ups"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "philip",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Good Morning",
+    "assetPath": "assets/exercises/exact/good_morning.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/116/Good-mornings-2.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 268,
+    "wgerExerciseUuid": "fb928a58-9e24-4e7b-b714-71a5f759e8d6",
+    "matchedName": "Good Mornings",
+    "matchMethod": "exact",
+    "queries": [
+      "good mornings"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Hip Thrust",
+    "assetPath": "assets/exercises/exact/hip_thrust.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1642/a81ad922-caf5-47f8-99b4-640cb0717436.webp",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1642,
+    "wgerExerciseUuid": "af77220c-098c-47c2-9f8c-92a651998903",
+    "matchedName": "Dumbbell Hip Thrust",
+    "matchMethod": "exact",
+    "queries": [
+      "dumbbell hip thrust"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "AlucardEvil40",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Leg Press 45°",
+    "assetPath": "assets/exercises/exact/leg_press_45_graus.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/371/d2136f96-3a43-4d4c-9944-1919c4ca1ce1.webp",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 371,
+    "wgerExerciseUuid": "66a42396-c207-44da-bc75-758a89d32404",
+    "matchedName": "Leg Press",
+    "matchMethod": "exact",
+    "queries": [
+      "leg press"
+    ],
+    "license": "Creative Commons Public Domain 1.0",
+    "licenseShortName": "CC0",
+    "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+    "licenseAuthor": "BFad07",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Levantamento Terra",
+    "assetPath": "assets/exercises/exact/levantamento_terra.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/184/1709c405-620a-4d07-9658-fade2b66a2df.jpeg",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 184,
+    "wgerExerciseUuid": "ee8e8db4-2d82-49e1-ab7f-891e9a354934",
+    "matchedName": "Deadlifts",
+    "matchMethod": "exact",
+    "queries": [
+      "deadlifts"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "philip",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Levantamento Terra Convencional",
+    "assetPath": "assets/exercises/exact/levantamento_terra_convencional.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/184/1709c405-620a-4d07-9658-fade2b66a2df.jpeg",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 184,
+    "wgerExerciseUuid": "ee8e8db4-2d82-49e1-ab7f-891e9a354934",
+    "matchedName": "Deadlifts",
+    "matchMethod": "exact",
+    "queries": [
+      "deadlifts"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "philip",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Levantamento Terra Sumô",
+    "assetPath": "assets/exercises/exact/levantamento_terra_sumo.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/630/b0f0c7d8-5878-4d9e-b820-21acc013741d.webp",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 630,
+    "wgerExerciseUuid": "0c2d9b74-3d1e-481f-a7bf-3b3532f7d6b0",
+    "matchedName": "Sumo Deadlift",
+    "matchMethod": "exact",
+    "queries": [
+      "sumo deadlift"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "magdy",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Mesa Flexora",
+    "assetPath": "assets/exercises/exact/mesa_flexora.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/154/lying-leg-curl-machine-large-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 365,
+    "wgerExerciseUuid": "3bc8b411-a28d-4e1c-a6d1-769e18fe9881",
+    "matchedName": "Leg Curls (laying)",
+    "matchMethod": "exact",
+    "queries": [
+      "leg curls (laying)",
+      "leg curl"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Panturrilha no Leg Press",
+    "assetPath": "assets/exercises/exact/panturrilha_no_leg_press.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/146/8b284904-d072-4381-a256-4c81d8fd9c1f.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 146,
+    "wgerExerciseUuid": "0d79f259-3b28-4258-8a08-cffec062a710",
+    "matchedName": "Calf Press Using Leg Press Machine",
+    "matchMethod": "exact",
+    "queries": [
+      "calf press using leg press machine"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "nate303303",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Prancha (Plank)",
+    "assetPath": "assets/exercises/exact/prancha_plank.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/458/b7bd9c28-9f1d-4647-bd17-ab6a3adf5770.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 458,
+    "wgerExerciseUuid": "c9e57bbe-e839-44c6-861d-1c8dd2845e36",
+    "matchedName": "Plank",
+    "matchMethod": "exact",
+    "queries": [
+      "plank",
+      "forearm plank"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "utkb",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Pullover com Halter",
+    "assetPath": "assets/exercises/exact/pullover_com_halter.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1634/9a4704d3-1b25-43e3-b244-3885f4d3db87.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1634,
+    "wgerExerciseUuid": "148f2ffc-05e2-486b-874f-2a401337a1c6",
+    "matchedName": "Rope Pullover/row",
+    "matchMethod": "exact",
+    "queries": [
+      "rope pullover/row"
+    ],
+    "license": "cable pullover/row",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Rottekongen",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Pullover no Cabo",
+    "assetPath": "assets/exercises/exact/pullover_no_cabo.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1137/42f22229-c0a0-4bfc-aca6-66fe5e1ab10d.PNG",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1137,
+    "wgerExerciseUuid": "e87b76b8-2960-4225-9146-47f78bf8c630",
+    "matchedName": "PULL OVER POLEA ALTA",
+    "matchMethod": "exact",
+    "queries": [
+      "pull over polea alta",
+      "straight-arm pulldown (cable)"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Franpol",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Puxada frontal com barra (pegada neutra)",
+    "assetPath": "assets/exercises/exact/puxada_frontal_com_barra_pegada_neutra.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1136/5778a8e9-c606-4843-89c8-9d9469eeb6e4.PNG",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1136,
+    "wgerExerciseUuid": "eaa7927e-6ea0-4fd5-bbcd-525fe90a184b",
+    "matchedName": "JALONES PECHO NEUTRO",
+    "matchMethod": "exact",
+    "queries": [
+      "jalones pecho neutro",
+      "close-grip lat pull down"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Franpol",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Puxada Frontal Pegada Aberta",
+    "assetPath": "assets/exercises/exact/puxada_frontal_pegada_aberta.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1635/b8c34e3a-7474-41ea-99e3-8d7fdb1e12d6.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1635,
+    "wgerExerciseUuid": "5851e2b1-3a80-42ff-91da-530e6b143a34",
+    "matchedName": "Modified pulldown",
+    "matchMethod": "exact",
+    "queries": [
+      "lat pull down",
+      "modified pulldown"
+    ],
+    "license": "modified pulldown",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Rottekongen",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Remada Baixa com Triângulo",
+    "assetPath": "assets/exercises/exact/remada_baixa_com_triangulo.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/512/b938437e-ff00-4679-9036-acb41bb28bbd.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 512,
+    "wgerExerciseUuid": "00fcf603-b0d0-48d2-9b5e-c7f0d510d46c",
+    "matchedName": "Rowing seated, narrow grip",
+    "matchMethod": "exact",
+    "queries": [
+      "rowing seated, narrow grip",
+      "remo gironda"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "wger.de",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Remada Curvada com Barra",
+    "assetPath": "assets/exercises/exact/remada_curvada_com_barra.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/109/Barbell-rear-delt-row-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 83,
+    "wgerExerciseUuid": "4af6dbd9-8991-484b-9810-68f117c21edf",
+    "matchedName": "Bent Over Rowing",
+    "matchMethod": "exact",
+    "queries": [
+      "bent over rowing"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Remada Unilateral com Halter",
+    "assetPath": "assets/exercises/exact/remada_unilateral_com_halter.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1637/a1fbe83a-a3e5-49f6-a2c2-5d5b533c2be8.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1637,
+    "wgerExerciseUuid": "81dd44b3-67b3-4198-9e57-c2a80b3c4102",
+    "matchedName": "Single arm row",
+    "matchMethod": "exact",
+    "queries": [
+      "single arm row",
+      "one arm bent row"
+    ],
+    "license": "single arm row",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Rottekongen",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Rosca Alternada com Halteres",
+    "assetPath": "assets/exercises/exact/rosca_alternada_com_halteres.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1012/8270fdb8-28f1-4eff-b410-af8642085b3f.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1012,
+    "wgerExerciseUuid": "a136959c-b0c8-49d3-99b9-0a5f41abf00e",
+    "matchedName": "Alternating bicep curls",
+    "matchMethod": "exact",
+    "queries": [
+      "alternating bicep curls"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Franpol",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Rosca Concentrada",
+    "assetPath": "assets/exercises/exact/rosca_concentrada.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1109/00b0a0bf-c14a-4f13-bb14-62c09030a1aa.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1109,
+    "wgerExerciseUuid": "b1bf02cf-17b2-4bfc-a5b0-4ff7a2768dbb",
+    "matchedName": "Cable Concentration Curl",
+    "matchMethod": "exact",
+    "queries": [
+      "cable concentration curl"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Franpol",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Rosca Direta Barra W",
+    "assetPath": "assets/exercises/exact/rosca_direta_barra_w.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/94/6dee2f60-aea2-4f2d-9bf6-aef50c4f9483.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 94,
+    "wgerExerciseUuid": "42227131-9b1e-4220-b082-c523f0651057",
+    "matchedName": "Biceps Curls With SZ-bar",
+    "matchMethod": "exact",
+    "queries": [
+      "biceps curls with sz-bar"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Franpol",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Rosca Martelo",
+    "assetPath": "assets/exercises/exact/rosca_martelo.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/86/Bicep-hammer-curl-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 272,
+    "wgerExerciseUuid": "c0d9fe98-f4fe-49f3-8037-05e1984e7d2d",
+    "matchedName": "Hammer Curls",
+    "matchMethod": "exact",
+    "queries": [
+      "hammer curls"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Rosca Martelo Alternada",
+    "assetPath": "assets/exercises/exact/rosca_martelo_alternada.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1567/0a8c155c-a48e-47e8-9df3-e39f025c6cad.png",
+    "sourceObjectUrl": "https://www.simplyfitness.com/es/pages/hammer-curl",
+    "wgerExerciseId": 1567,
+    "wgerExerciseUuid": "eb9476ac-2c00-4f49-a40f-f81682161a75",
+    "matchedName": "Alternating dumbbell hammer curl",
+    "matchMethod": "exact",
+    "queries": [
+      "alternating dumbbell hammer curl"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "Mariano_O",
+    "licenseAuthorUrl": "https://www.simplyfitness.com/es/pages/hammer-curl",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Rosca Scott (Preacher Curl)",
+    "assetPath": "assets/exercises/exact/rosca_scott_preacher_curl.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/193/Preacher-curl-3-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 465,
+    "wgerExerciseUuid": "dd52fb99-9426-4a78-b446-20a8e3e4ec47",
+    "matchedName": "Preacher Curls",
+    "matchMethod": "exact",
+    "queries": [
+      "preacher curls"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Rosca scott na máquina",
+    "assetPath": "assets/exercises/exact/rosca_scott_na_maquina.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/193/Preacher-curl-3-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 465,
+    "wgerExerciseUuid": "dd52fb99-9426-4a78-b446-20a8e3e4ec47",
+    "matchedName": "Preacher Curls",
+    "matchMethod": "exact",
+    "queries": [
+      "preacher curls"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Russian Twist",
+    "assetPath": "assets/exercises/exact/russian_twist.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1193/70ca5d80-3847-4a8c-8882-c6e9e485e29e.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1193,
+    "wgerExerciseUuid": "10510fb5-6ebd-4ddc-b03e-423b15deceea",
+    "matchedName": "Russian Twist",
+    "matchMethod": "exact",
+    "queries": [
+      "russian twist"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "lion",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Stiff / Terra Romeno",
+    "assetPath": "assets/exercises/exact/stiff_terra_romeno.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1652/0306c8c0-70cc-45d4-92de-6fa72ceaa834.webp",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1652,
+    "wgerExerciseUuid": "65d12ecf-54b8-466d-a412-e55c396cad69",
+    "matchedName": "Dumbbell Romanian Deadlift",
+    "matchMethod": "exact",
+    "queries": [
+      "dumbbell romanian deadlift"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "AlucardEvil40",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Supino Declinado com Barra",
+    "assetPath": "assets/exercises/exact/supino_declinado_com_barra.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/100/Decline-bench-press-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 185,
+    "wgerExerciseUuid": "bcd801f0-9a38-4615-a91c-900153c8c234",
+    "matchedName": "Decline Bench Press Barbell",
+    "matchMethod": "exact",
+    "queries": [
+      "decline bench press barbell"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Supino Inclinado com Barra",
+    "assetPath": "assets/exercises/exact/supino_inclinado_com_barra.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/41/Incline-bench-press-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 538,
+    "wgerExerciseUuid": "275fb49f-975c-4d6e-9d63-2c86ed740f40",
+    "matchedName": "Incline Bench Press - Barbell",
+    "matchMethod": "exact",
+    "queries": [
+      "incline bench press - barbell"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Supino Inclinado com Halteres",
+    "assetPath": "assets/exercises/exact/supino_inclinado_com_halteres.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/16/Incline-press-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 537,
+    "wgerExerciseUuid": "57e17672-52b9-43cf-8d0d-4b3f06a0c0d0",
+    "matchedName": "Incline Bench Press - Dumbbell",
+    "matchMethod": "exact",
+    "queries": [
+      "incline bench press - dumbbell"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Supino Reto com Barra",
+    "assetPath": "assets/exercises/exact/supino_reto_com_barra.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/192/Bench-press-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 73,
+    "wgerExerciseUuid": "3717d144-7815-4a97-9a56-956fb889c996",
+    "matchedName": "Bench Press",
+    "matchMethod": "exact",
+    "queries": [
+      "bench press"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Supino Reto com Halteres",
+    "assetPath": "assets/exercises/exact/supino_reto_com_halteres.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/97/Dumbbell-bench-press-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 75,
+    "wgerExerciseUuid": "28321cf3-70e6-48a4-ade1-d11382180cb3",
+    "matchedName": "Benchpress Dumbbells",
+    "matchMethod": "exact",
+    "queries": [
+      "benchpress dumbbells"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Supino Fechado",
+    "assetPath": "assets/exercises/exact/supino_fechado.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/88/Narrow-grip-bench-press-1.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 76,
+    "wgerExerciseUuid": "3db63138-a047-4a4d-b616-1a0b7dfca105",
+    "matchedName": "Bench Press Narrow Grip",
+    "matchMethod": "exact",
+    "queries": [
+      "bench press narrow grip",
+      "close-grip bench press"
+    ],
+    "license": " Creative Commons Attribution Share Alike 3",
+    "licenseShortName": "CC-BY-SA 3",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "licenseAuthor": "Everkinetic",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  },
+  {
+    "treinovaName": "Tríceps Corda no Cabo",
+    "assetPath": "assets/exercises/exact/triceps_corda_no_cabo.webp",
+    "source": "wger",
+    "sourceUrl": "https://wger.de/media/exercise-images/1900/a8243245-8f8f-4e2b-93ca-694d416cb11d.png",
+    "sourceObjectUrl": "",
+    "wgerExerciseId": 1900,
+    "wgerExerciseUuid": "fc608f0e-d754-4911-ae59-8856952e7064",
+    "matchedName": "Tricep Rope Pushdowns",
+    "matchMethod": "exact",
+    "queries": [
+      "tricep rope pushdowns",
+      "triceps pushdown"
+    ],
+    "license": "Creative Commons Attribution Share Alike 4",
+    "licenseShortName": "CC-BY-SA 4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "licenseAuthor": "nishant0712",
+    "licenseAuthorUrl": "",
+    "isAiGenerated": false
+  }
+]
