@@ -4014,7 +4014,7 @@ async function verifyRestTimerPushJob(timerId) {
 }
 async function upsertRestTimerPushJobDirect(timerId, seconds, exerciseName) {
   if (!sb || !STATE.user?.id || !timerId) return false;
-  const fireAt = new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString();
+  const fireAt = buildRestPushFireAt(seconds);
   const { error } = await sb.from("rest_timer_push_jobs").upsert({
     user_id: STATE.user.id,
     timer_id: timerId,
@@ -4030,6 +4030,14 @@ async function upsertRestTimerPushJobDirect(timerId, seconds, exerciseName) {
   if (error) throw error;
   return true;
 }
+// Compensa latencia tipica de entrega do push (APNs/FCM ~10-15s).
+const PUSH_LATENCY_COMPENSATION_MS = 12000;
+function buildRestPushFireAt(seconds) {
+  const totalMs = Math.max(1, Number(seconds || 0)) * 1000;
+  const adjustedMs = Math.max(1000, totalMs - PUSH_LATENCY_COMPENSATION_MS);
+  return new Date(Date.now() + adjustedMs).toISOString();
+}
+
 async function scheduleServerRestPush(seconds, exerciseName) {
   try {
     if (!sb || !STATE.user || !STATE.timer?.id) return false;
@@ -4039,7 +4047,7 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       rememberRestPushStatus("subscription_failed", "Permissão/assinatura Web Push não está pronta.");
       return false;
     }
-    const fireAt = new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString();
+    const fireAt = buildRestPushFireAt(seconds);
     const subscription = await getCurrentPushSubscriptionPayload();
     const { error } = await sb.functions.invoke("rest-timer-push", {
       body: {
@@ -4914,10 +4922,7 @@ function renderPushSubscriptionCardHTML() {
     return `<div class="card mb-12">
       <div class="fw-700 text-sm">Notificações ativas</div>
       <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Este dispositivo está autorizado. O app renova a assinatura automaticamente quando você entra.</div>
-      <div class="sheet-action-grid" style="margin-top:12px">
-        <button class="mini-btn mini-btn-primary" onclick="testRestTimerPushDelayed()">Teste bloqueado 15s</button>
-        <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
-      </div>
+
     </div>`;
   }
   if (Notification.permission === "denied") {
@@ -4934,9 +4939,7 @@ function renderPushSubscriptionCardHTML() {
       </div>
       <button class="mini-btn mini-btn-primary" onclick="requestPushPermission()">Ativar</button>
     </div>
-    <div style="margin-top:10px">
-      <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
-    </div>
+
   </div>`;
 }
 
@@ -5384,6 +5387,67 @@ function renderSelfTrainingCard({ emptyCta = true } = {}) {
 /* =============================================================================
    RENDER — COACH HOME
    ============================================================================= */
+
+function renderCoachOnboardingChecklist() {
+  if (!STATE.profile || STATE.profile.role !== "coach") return "";
+  const myId = STATE.profile.id;
+  const branding = STATE.branding || {};
+  const customizedBrand = !!(branding.logo_url || (branding.primary_color && branding.primary_color !== "#00b4ff" && branding.primary_color !== "#13baf2"));
+  const ownPresets = (typeof _PRESETS !== "undefined" ? _PRESETS : []).filter(p => p.coach_id === myId).length;
+  const ownWorkouts = Object.values(STATE.workouts || {}).filter(w => w && w.coach_id === myId).length;
+  const numStudents = (STATE.students || []).length;
+  const hasPeriod = (STATE.students || []).some(s => Number(s.sessions_done || 0) > 0 || s.last_session_at);
+  let sharedOnce = false;
+  try { sharedOnce = localStorage.getItem("treinova_coach_shared_link_v1") === "1"; } catch(e) {}
+  const steps = [
+    { id: "brand",     label: "Personalize sua marca",            done: customizedBrand,        action: "openBrandingSheet()" },
+    { id: "presets",   label: "Configure tipos de periodização",  done: ownPresets > 0,         action: "openPresetEditor()" },
+    { id: "workouts",  label: "Crie seu primeiro tipo de treino", done: ownWorkouts > 0,        action: "navTo('admin-workouts'); setTimeout(openCreateWorkoutTypeSheet, 200)" },
+    { id: "students",  label: "Adicione seu primeiro aluno",      done: numStudents > 0,        action: "navTo('students'); setTimeout(openNewStudentSheet, 200)" },
+    { id: "period",    label: "Monte a periodização do aluno",    done: numStudents > 0 && hasPeriod, action: "navTo('students')" },
+    { id: "share",     label: "Compartilhe o link de cadastro",   done: sharedOnce,             action: "trackCoachSharedLink(); openShareLinkSheet()" }
+  ];
+  const total = steps.length;
+  const done = steps.filter(s => s.done).length;
+  const pct = Math.round((done/total) * 100);
+  if (done >= total) {
+    let firstCompleteAt = null;
+    try { firstCompleteAt = localStorage.getItem("treinova_coach_setup_complete_at"); } catch(e) {}
+    if (!firstCompleteAt) {
+      try { localStorage.setItem("treinova_coach_setup_complete_at", new Date().toISOString()); } catch(e) {}
+      firstCompleteAt = new Date().toISOString();
+    }
+    if (Date.now() - new Date(firstCompleteAt).getTime() > 3 * 86400000) return "";
+  }
+  return `
+  <div class="card mb-12" style="border-color:rgba(0,180,255,.30);background:linear-gradient(135deg,var(--brand-soft),var(--bg-card))">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <div class="fw-700 text-sm" style="color:var(--brand)">Configure seu app</div>
+        <div class="text-xs muted" style="margin-top:2px">${done} de ${total} passos concluídos</div>
+      </div>
+      <div style="font-size:18px;font-weight:900;color:var(--brand)">${pct}%</div>
+    </div>
+    <div style="height:6px;border-radius:999px;background:var(--bg-3);overflow:hidden;margin-bottom:12px">
+      <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--brand),var(--brand-2));border-radius:999px;transition:width .3s ease"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${steps.map(s => `
+        <button onclick="${s.done ? '' : s.action}" ${s.done ? 'disabled' : ''} style="display:flex;align-items:center;gap:10px;padding:9px 4px;background:transparent;border:0;text-align:left;cursor:${s.done ? 'default' : 'pointer'};opacity:${s.done ? '.55' : '1'}">
+          <div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto;${s.done ? 'background:var(--brand);color:var(--brand-on)' : 'background:transparent;border:1.5px solid var(--line-2);color:var(--text-3)'}">
+            ${s.done ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
+          </div>
+          <div style="flex:1;font-size:13px;color:var(--text);${s.done ? 'text-decoration:line-through' : ''}">${s.label}</div>
+          ${s.done ? '' : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>`}
+        </button>
+      `).join("")}
+    </div>
+  </div>`;
+}
+window.trackCoachSharedLink = function() {
+  try { localStorage.setItem("treinova_coach_shared_link_v1", "1"); } catch(e) {}
+};
+
 function renderCoachHome(el) {
   const pending = STATE.students.filter(s => s.status === "pending").length;
   const approved = STATE.students.filter(s => s.status === "approved").length;
@@ -5440,6 +5504,7 @@ function renderCoachHome(el) {
       <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
       <div class="greeting-sub">${approved} aluno(s) ativo(s) · ${pending} aguardando</div>
     </div>
+    ${renderCoachOnboardingChecklist()}
     ${renderSelfTrainingCard()}
     <div class="action-grid">
       <button class="action-card" onclick="navTo('students'); setTimeout(openNewStudentSheet, 120)">
@@ -6665,12 +6730,27 @@ async function renderWorkout() {
         Voltar
       </button>
     </div>
+    ${(() => {
+      const pct = totalTarget > 0 ? Math.min(100, Math.round((doneCount/totalTarget) * 100)) : (completed ? 100 : 0);
+      const remainingSets = Math.max(0, totalTarget - doneCount);
+      const pauseSec = Number.isFinite(Number(scheme.pauseSec)) ? Number(scheme.pauseSec) : 60;
+      const estMinRemain = Math.max(0, Math.round((remainingSets * (pauseSec + 30)) / 60));
+      return `
+      <div class="wp-progress" style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:6px 0 10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--text-2);text-transform:uppercase;margin-bottom:6px">
+          <span>${completed ? "Treino concluído" : `${pct}% · ${doneCount}/${totalTarget} séries`}</span>
+          <span style="color:var(--text-3);font-weight:700">${completed ? "✓" : (estMinRemain ? `~${estMinRemain}min restantes` : "quase lá")}</span>
+        </div>
+        <div style="height:6px;border-radius:999px;background:var(--bg-3);overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--brand),var(--brand-2));border-radius:999px;transition:width .3s ease"></div>
+        </div>
+      </div>`;
+    })()}
     <div class="workout-hero">
       <div class="wh-eyebrow">${fmtFullDateBR(date)} · Semana ${(findDayInfo(date)||{}).week || "—"}</div>
       <div class="wh-title">${escape(W.name)}</div>
       <div class="wh-focus">${escape(W.focus || "")}</div>
       <div class="wh-meta">
-        <span class="meta-chip"><strong>${doneCount}/${totalTarget}</strong> séries</span>
         <span class="meta-chip">${W.exercises.length} exercícios</span>
         <span class="today-pill ${pillCls}">${pillTxt}</span>
         ${completed ? `<span class="today-pill pill-approved">✓ Concluído</span>` : ""}
@@ -10419,6 +10499,7 @@ async function postLoginInit() {
 	  } else {
 	    // Tenta subscrever silenciosamente se já tem permissão
 	    ensureUserPushSubscription().catch((e) => console.warn("[postLogin push subscription]", e));
+	    try { maybeShowPushPromptSheet(); } catch(e) {}
 	    showInstallBannerIfPossible();
     // [UX-06] iOS não suporta beforeinstallprompt — exibir instrução manual
     showIOSInstallHintIfNeeded();
@@ -10830,6 +10911,64 @@ function showPushDiagnosticsModal(detail) {
 }
 
 /* ---------- ONBOARDING ---------- */
+
+window.maybeShowPushPromptSheet = function() {
+  try {
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
+    if (Notification.permission !== "default") return;
+    if (!STATE.profile || STATE.profile.status !== "approved") return;
+    const KEY = "treinova_push_prompt_v1";
+    const saved = localStorage.getItem(KEY);
+    if (saved) {
+      try {
+        const ts = JSON.parse(saved).at;
+        if (Date.now() - new Date(ts).getTime() < 7 * 86400000) return;
+      } catch(e) {}
+    }
+    const remember = (status) => {
+      try { localStorage.setItem(KEY, JSON.stringify({ at: new Date().toISOString(), status })); } catch(e) {}
+    };
+    setTimeout(() => {
+      if (document.querySelector("#push-prompt-overlay")) return;
+      const overlay = document.createElement("div");
+      overlay.id = "push-prompt-overlay";
+      overlay.innerHTML = `
+        <style>
+          #push-prompt-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99980;display:flex;align-items:flex-end;animation:fadeIn .2s}
+          #push-prompt-overlay .pp-card{background:var(--bg-card);border-top-left-radius:22px;border-top-right-radius:22px;padding:24px 22px calc(20px + env(safe-area-inset-bottom,0px));width:100%;max-width:520px;margin:0 auto;animation:slideUp .25s}
+          #push-prompt-overlay .pp-icon{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,var(--brand),var(--brand-2));display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 10px 30px rgba(0,180,255,.25)}
+          #push-prompt-overlay .pp-title{text-align:center;font-size:19px;font-weight:900;color:var(--text);margin-bottom:6px}
+          #push-prompt-overlay .pp-sub{text-align:center;font-size:13px;color:var(--text-2);line-height:1.45;margin-bottom:18px}
+          #push-prompt-overlay .pp-btn{width:100%;padding:14px;border-radius:12px;border:0;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:8px}
+          #push-prompt-overlay .pp-prim{background:var(--brand);color:var(--brand-on)}
+          #push-prompt-overlay .pp-ghost{background:transparent;color:var(--text-2);border:1px solid var(--line)}
+        </style>
+        <div class="pp-card">
+          <div class="pp-icon">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          </div>
+          <div class="pp-title">Quer ser avisado quando o descanso acabar?</div>
+          <div class="pp-sub">Recebe um toque no celular no fim do descanso, mesmo com o app fechado ou tela bloqueada.</div>
+          <button class="pp-btn pp-prim" id="pp-allow">Ativar notificações</button>
+          <button class="pp-btn pp-ghost" id="pp-deny">Agora não</button>
+        </div>`;
+      document.body.appendChild(overlay);
+      document.getElementById("pp-allow").addEventListener("click", async () => {
+        overlay.remove();
+        remember("requested");
+        try { await requestPushPermission(); } catch(e) {}
+      });
+      document.getElementById("pp-deny").addEventListener("click", () => {
+        overlay.remove();
+        remember("denied_soft");
+      });
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) { overlay.remove(); remember("dismissed"); }
+      });
+    }, 1200);
+  } catch(e) { console.warn("[maybeShowPushPromptSheet]", e); }
+};
+
 function showOnboarding() {
   if (document.getElementById("onb-overlay")) return;
   const profile = STATE.profile;
