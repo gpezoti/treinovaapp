@@ -2537,21 +2537,22 @@ async function loadFeed() {
   let q = sb.from("feed_posts")
     .select("*, student:profiles!feed_posts_student_id_fkey(id, full_name, avatar_emoji, avatar_url, role)")
     .order("created_at", { ascending: false }).limit(50);
-  // FILTRO POR ROLE:
-  // - Aluno: posts do próprio + de quem segue
-  // - Coach: só dos próprios alunos (coach_id = me)
+  // Feed social:
   // - Admin: tudo
+  // - Aluno/Professor: próprio + quem segue
+  // - Professor também mantém fallback dos próprios alunos enquanto o auto-follow é sincronizado.
   if (STATE.profile) {
-    if (STATE.profile.role === "student") {
-      const ids = [STATE.profile.id, ...((STATE.follows && STATE.follows.following) || []).map(f => f.following_id)];
-      q = q.in("student_id", ids);
+    if (STATE.profile.role !== "admin") {
+      const ids = new Set([STATE.profile.id, ...((STATE.follows && STATE.follows.following) || []).map(f => f.following_id)]);
+      if (STATE.profile.role === "coach") {
+        (STATE.students || []).forEach(s => ids.add(s.student_id || s.id));
+      }
+      q = q.in("student_id", [...ids]);
     } else if (STATE.profile.role === "coach") {
-      // pega ids dos alunos do coach
       const { data: myStudents } = await sb.from("profiles").select("id").eq("coach_id", STATE.profile.id);
       const ids = [STATE.profile.id, ...((myStudents || []).map(s => s.id))];
       q = q.in("student_id", ids);
     }
-    // admin: sem filtro
   }
   const { data, error } = await q;
   if (error) { console.error(error); return; }
@@ -2586,8 +2587,28 @@ async function loadFollows() {
   };
 }
 
+async function ensureCoachStudentFollows() {
+  if (!STATE.profile || STATE.profile.role !== "coach") return;
+  const ids = (STATE.students || [])
+    .map(s => s.student_id || s.id)
+    .filter(Boolean)
+    .filter(id => id !== STATE.profile.id);
+  if (!ids.length) return;
+  const already = new Set(((STATE.follows && STATE.follows.following) || []).map(f => f.following_id));
+  const rows = ids
+    .filter(id => !already.has(id))
+    .map(id => ({ follower_id: STATE.profile.id, following_id: id }));
+  if (!rows.length) return;
+  const { error } = await sb.from("follows").upsert(rows, { onConflict: "follower_id,following_id", ignoreDuplicates: true });
+  if (error) console.warn("[coach auto-follow]", error);
+  await loadFollows();
+}
+
 async function followUser(userId) {
-  const { error } = await sb.from("follows").insert({ follower_id: STATE.profile.id, following_id: userId });
+  const { error } = await sb.from("follows").upsert(
+    { follower_id: STATE.profile.id, following_id: userId },
+    { onConflict: "follower_id,following_id", ignoreDuplicates: true }
+  );
   if (error && !error.message.includes("duplicate")) {
     showToast("Erro: " + error.message, "error"); return false;
   }
@@ -2605,24 +2626,15 @@ function isFollowing(userId) {
 }
 
 async function searchPeople(query) {
-  // [C-03] Fix: filtrar por coach/escopo + remover email da seleção (LGPD)
   if (!query || query.length < 2) return [];
-  const role = STATE.profile.role;
+  const term = String(query).replace(/[%,()]/g, " ").trim();
+  if (term.length < 2) return [];
   let q = sb.from("profiles")
-    .select("id, full_name, avatar_emoji, avatar_url, role") // sem email — dados pessoais
+    .select("id, full_name, avatar_emoji, avatar_url, role")
     .neq("id", STATE.profile.id)
     .eq("status", "approved")
-    .ilike("full_name", `%${query}%`)
+    .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
     .limit(20);
-  if (role === "student") {
-    // Aluno só encontra pessoas do mesmo coach
-    if (STATE.profile.coach_id) q = q.eq("coach_id", STATE.profile.coach_id);
-    else return []; // sem coach → sem busca
-  } else if (role === "coach") {
-    // Coach só encontra seus próprios alunos
-    q = q.eq("coach_id", STATE.profile.id);
-  }
-  // Admin: sem filtro adicional — vê toda a plataforma
   const { data } = await q;
   return data || [];
 }
@@ -3120,6 +3132,12 @@ async function approveStudent(id, status) {
   if (status === "approved") patch.coach_id = STATE.profile.id;
   const { error } = await sb.from("profiles").update(patch).eq("id", id);
   if (error) { showToast("Erro: " + error.message, "error"); return false; }
+  if (status === "approved") {
+    await sb.from("follows").upsert(
+      { follower_id: STATE.profile.id, following_id: id },
+      { onConflict: "follower_id,following_id", ignoreDuplicates: true }
+    ).catch(e => console.warn("[follow approved student]", e));
+  }
   showToast(status === "approved" ? "Aluno aprovado" : status === "blocked" ? "Aluno bloqueado" : "Atualizado", "success");
   await loadStudents(); renderStudents();
   return true;
@@ -5014,9 +5032,10 @@ function renderBottomNav() {
     bar.classList.add("cols-5");
     items = [
       { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
+      { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/><path d="M9.5 9.5 7 7l3-3 3 3"/>` },
+      { id: "feed", label: "Feed", svg: `<path d="M4 4h16v4H4zM4 11h16v4H4zM4 18h10v4H4z"/>` },
       { id: "students", label: "Alunos", svg: `<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a7 7 0 0 1 14 0v1"/><circle cx="17" cy="9" r="3"/><path d="M22 21v-1a5 5 0 0 0-5-5"/>` },
-      { id: "payments", label: "Financeiro", svg: `<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>` },
-      { id: "admin-workouts", label: "Treinos", svg: `<path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/><path d="M9.5 9.5 7 7l3-3 3 3"/>` },
+      { id: "admin-workouts", label: "Gestão", svg: `<path d="M3 6h18M3 12h18M3 18h18"/><path d="M7 6v12M17 6v12"/>` },
       { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
     ];
   } else {
@@ -5247,6 +5266,47 @@ window.openWorkout = function(iso, code, intensity) {
   navTo("workout");
 };
 
+function renderSelfTrainingCard({ emptyCta = true } = {}) {
+  const today = todayISO();
+  const info = findDayInfo(today);
+  const hasOwnPeriod = STATE.periodization && STATE.periodization.length > 0;
+  if (!hasOwnPeriod || !info) {
+    if (!emptyCta) return "";
+    return `
+      <div class="today-card intensity-flex">
+        <div class="today-eyebrow">Meu treino</div>
+        <div class="today-title">Monte seu próprio ciclo</div>
+        <div class="today-meta">Professor também treina: crie sua periodização e use o app como aluno.</div>
+        <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn-primary" onclick="openStudentPeriodSheet('${STATE.profile.id}')">Configurar ciclo</button>
+          <button class="btn-ghost" onclick="navTo('admin-workouts')">Meus treinos</button>
+        </div>
+      </div>`;
+  }
+  if (info.workout_code === "OFF") {
+    return `
+      <div class="today-card intensity-off">
+        <div class="today-eyebrow">Meu treino hoje · ${WEEKDAY_FULL[new Date(today+"T00:00:00").getDay()]} · ${fmtDateBR(today)}</div>
+        <div class="today-title">Dia OFF</div>
+        <div class="today-meta">Recuperação também faz parte do plano.</div>
+        <span class="today-pill pill-off">Descanso</span>
+      </div>`;
+  }
+  const W = STATE.workouts[info.workout_code];
+  const [pillCls, pillTxt] = intensityPill(info.intensity);
+  return `
+    <div class="today-card ${intensityClass(info.intensity)}">
+      <div class="today-eyebrow">Meu treino hoje · ${WEEKDAY_FULL[new Date(today+"T00:00:00").getDay()]} · ${fmtDateBR(today)}</div>
+      <div class="today-title">${escape(W ? W.name : "Treino " + info.workout_code)}</div>
+      <div class="today-meta">${escape(W ? W.focus || "" : "Seu treino pessoal")}</div>
+      <span class="today-pill ${pillCls}">${pillTxt}</span>
+      <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn-primary" onclick="openWorkout('${today}','${info.workout_code}','${info.intensity}')">Iniciar treino</button>
+        <button class="btn-ghost" onclick="navTo('calendar')">Periodização</button>
+      </div>
+    </div>`;
+}
+
 /* =============================================================================
    RENDER — COACH HOME
    ============================================================================= */
@@ -5268,6 +5328,7 @@ function renderCoachHome(el) {
         <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
         <div class="greeting-sub">Vamos começar! <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg></div>
       </div>
+      ${renderSelfTrainingCard()}
       <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:16px;padding:24px;text-align:center;margin-bottom:12px">
         <div style="margin-bottom:12px"><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11M6.5 17.5h11"/><path d="M3 8.5V15.5a1 1 0 0 0 1 1h1V7.5H4a1 1 0 0 0-1 1z"/><path d="M21 8.5a1 1 0 0 0-1-1h-1v9h1a1 1 0 0 0 1-1v-7z"/><path d="M6.5 7.5v9a1 1 0 0 0 1 1h1v-11h-1a1 1 0 0 0-1 1z"/><path d="M17.5 7.5a1 1 0 0 0-1-1h-1v11h1a1 1 0 0 0 1-1v-9z"/></svg></div>
         <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px">Nenhum aluno ainda</div>
@@ -5305,6 +5366,7 @@ function renderCoachHome(el) {
       <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
       <div class="greeting-sub">${approved} aluno(s) ativo(s) · ${pending} aguardando</div>
     </div>
+    ${renderSelfTrainingCard()}
     <div class="action-grid">
       <button class="action-card" onclick="navTo('students'); setTimeout(openNewStudentSheet, 120)">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
@@ -5315,6 +5377,16 @@ function renderCoachHome(el) {
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         <div class="action-title">Planejar treinos</div>
         <div class="action-sub">Abra um aluno para ajustar periodização e treinos</div>
+      </button>
+      <button class="action-card" onclick="navTo('feed')">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v4H4zM4 11h16v4H4zM4 18h10v4H4z"/></svg>
+        <div class="action-title">Feed social</div>
+        <div class="action-sub">Veja alunos, seguidores e pessoas que você segue</div>
+      </button>
+      <button class="action-card" onclick="navTo('payments')">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <div class="action-title">Financeiro</div>
+        <div class="action-sub">Cobranças e inadimplência</div>
       </button>
     </div>
     <div class="insight-strip">
@@ -6849,6 +6921,8 @@ function renderFeed() {
   const history    = feed.filter(p => !pinned.includes(p) && !todayPosts.includes(p));
 
   const codes = ["ALL","A","B","C","D","FLEX"];
+  const followingCount = (STATE.follows && STATE.follows.following || []).length;
+  const followersCount = (STATE.follows && STATE.follows.followers || []).length;
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
       <h1 class="view-title" style="margin:0">Feed</h1>
@@ -6857,7 +6931,17 @@ function renderFeed() {
         Descobrir
       </button>
     </div>
-    <p class="view-subtitle">Treinos da turma · ${feed.length} post${feed.length!==1?'s':''}</p>
+    <p class="view-subtitle">Quem você segue · ${feed.length} post${feed.length!==1?'s':''}</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 14px">
+      <button class="stat-card" style="text-align:left;cursor:pointer" onclick="openSocialList('following')">
+        <div class="stat-value">${followingCount}</div>
+        <div class="stat-label">Seguindo</div>
+      </button>
+      <button class="stat-card" style="text-align:left;cursor:pointer" onclick="openSocialList('followers')">
+        <div class="stat-value">${followersCount}</div>
+        <div class="stat-label">Seguidores</div>
+      </button>
+    </div>
     <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:14px;-webkit-overflow-scrolling:touch">
       ${codes.map(c => `
         <button onclick="setFeedFilter('${c}')" style="flex-shrink:0;padding:7px 14px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid ${filter===c?'var(--brand)':'var(--line)'};background:${filter===c?'var(--brand-soft)':'var(--bg-card)'};color:${filter===c?'var(--brand)':'var(--text-2)'};cursor:pointer">
@@ -7239,7 +7323,11 @@ window.openPeopleSearch = function() {
   STATE._peopleResults = [];
   openSheet(`
     <h3>Buscar pessoas</h3>
-    <p>Encontre alunos e professores para seguir. Você verá os treinos deles no seu feed.</p>
+    <p>Busque qualquer pessoa cadastrada no app. Ao seguir, os treinos dela entram no seu feed.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <button class="btn-ghost" onclick="openSocialList('following')">Seguindo</button>
+      <button class="btn-ghost" onclick="openSocialList('followers')">Seguidores</button>
+    </div>
     <div class="form-group">
       <input class="input" id="ps-search" placeholder="Buscar por nome ou email" oninput="onPeopleSearch(this.value)" />
     </div>
@@ -7249,6 +7337,33 @@ window.openPeopleSearch = function() {
     <div style="margin-top:14px"><button class="btn-ghost" onclick="closeSheet()">Fechar</button></div>
   `);
   setTimeout(() => document.getElementById("ps-search") && document.getElementById("ps-search").focus(), 200);
+};
+
+window.openSocialList = async function(type) {
+  const isFollowers = type === "followers";
+  const ids = ((STATE.follows && STATE.follows[type]) || [])
+    .map(f => isFollowers ? f.follower_id : f.following_id)
+    .filter(Boolean);
+  openSheet(`<h3>${isFollowers ? "Seguidores" : "Seguindo"}</h3><div class="loading"><div class="spinner"></div>Carregando...</div>`);
+  let people = [];
+  if (ids.length) {
+    const { data } = await sb.from("profiles")
+      .select("id, full_name, avatar_emoji, avatar_url, role")
+      .in("id", ids)
+      .order("full_name");
+    people = data || [];
+  }
+  openSheet(`
+    <h3>${isFollowers ? "Seguidores" : "Seguindo"}</h3>
+    <p>${people.length} pessoa${people.length !== 1 ? "s" : ""}</p>
+    <div style="max-height:58vh;overflow-y:auto">
+      ${people.length ? people.map(p => peopleRow(p)).join("") : `<div class="empty"><p>${isFollowers ? "Ninguém segue você ainda." : "Você ainda não segue ninguém."}</p></div>`}
+    </div>
+    <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="btn-primary" onclick="openPeopleSearch()">Buscar pessoas</button>
+      <button class="btn-ghost" onclick="closeSheet()">Fechar</button>
+    </div>
+  `);
 };
 
 let _peopleSearchTimer = null;
@@ -7859,6 +7974,10 @@ window.submitNewStudent = async function() {
       const { error: seedErr } = await sb.rpc("seed_periodization_for_student", { p_student: studentId });
       if (seedErr) console.warn("seed periodização falhou:", seedErr);
     }
+    await sb.from("follows").upsert(
+      { follower_id: STATE.profile.id, following_id: studentId },
+      { onConflict: "follower_id,following_id", ignoreDuplicates: true }
+    ).catch(e => console.warn("[follow new student]", e));
 
     showToast("Aluno criado", "success");
     closeSheet();
@@ -7966,6 +8085,7 @@ async function loadBlocksForDays(dayIds) {
 window.openStudentPeriodSheet = async function(id) {
   openSheet(`<h3>Periodização</h3><div class="loading"><div class="spinner"></div></div>`);
   if (!_PRESETS.length) await loadPresets();
+  const isSelfPeriod = STATE.profile && id === STATE.profile.id;
   const { data: days } = await sb.from("periodization_days")
     .select("*").eq("student_id", id).order("date");
   const dayIds = (days||[]).map(d => d.id);
@@ -7974,7 +8094,7 @@ window.openStudentPeriodSheet = async function(id) {
   for (let i = 0; i < (days||[]).length; i += 7) grouped.push((days||[]).slice(i, i+7));
 
   const html = `
-    <h3>Periodização do aluno</h3>
+    <h3>${isSelfPeriod ? "Minha periodização" : "Periodização do aluno"}</h3>
     <p style="font-size:13px;color:var(--text-2);margin:0 0 10px">Toque em um dia para editar os blocos. Você pode ter <b>vários blocos por dia</b> (ex: aeróbio + hipertrofia).</p>
     <div class="period-toolbar">
       <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ Semana</button>
@@ -8016,7 +8136,7 @@ window.openStudentPeriodSheet = async function(id) {
         </div>
       </div>
     `).join("")}
-    <button class="btn-ghost" onclick="onStudentDetail('${id}')">Voltar</button>
+    <button class="btn-ghost" onclick="${isSelfPeriod ? "closeSheet();loadPeriodization().then(()=>{renderHome();})" : `onStudentDetail('${id}')`}">Voltar</button>
   `;
   openSheet(html);
 };
@@ -10055,10 +10175,13 @@ async function postSignIn() {
   } else if (profile.role === "admin") {
     _roleLoads.push(safeLoad("trainers", loadTrainers), safeLoad("students", loadStudents), safeLoad("admin payments", loadAdminPayments));
   }
+  await Promise.all(_roleLoads);
+  if (profile.role === "coach") {
+    await safeLoad("coach auto-follow", ensureCoachStudentFollows);
+  }
   await Promise.all([
-    safeLoad("feed", loadFeed),            // usa STATE.follows (pronto do grupo 1)
+    safeLoad("feed", loadFeed),
     safeLoad("payment status", checkMyPaymentStatus),
-    ..._roleLoads,
   ]);
 
   // === GRUPO 3: notificações (rápidas, sem dependências críticas) ===
@@ -10089,7 +10212,7 @@ async function postSignIn() {
   } catch(e) { /* analytics nunca deve quebrar o app */ }
 
   // Pré-seleciona treino do dia se for aluno
-  if (profile.role === "student") {
+  if (profile.role === "student" || profile.role === "coach") {
     const today = todayISO();
     const info = findDayInfo(today);
     if (info && info.workout_code !== "OFF") {
