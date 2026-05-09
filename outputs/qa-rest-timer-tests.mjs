@@ -78,11 +78,21 @@ const checks = [
     name: "timer garante subscription antes de agendar backend",
     pass: html.includes("async function subscribePushNotifications(opts = {})") &&
       html.includes("throwOnError") &&
+      html.includes("forceRenew") &&
+      html.includes("await sub.unsubscribe();") &&
       html.includes("isWebPushRuntimeSupported") &&
       html.includes("upsertRestTimerPushJobDirect") &&
       html.includes("last_seen_at: new Date().toISOString()") &&
       !html.includes(".delete()\n      .eq(\"user_id\", userId)\n      .neq(\"endpoint\", json.endpoint)") &&
       html.includes('return Boolean(await subscribePushNotifications({ throwOnError: true }))'),
+  },
+  {
+    name: "modal de notificacoes permite renovar push do aparelho atual",
+    pass: html.includes("window.forceRenewPushSubscription = async function()") &&
+      html.includes('subscribePushNotifications({ throwOnError: true, forceRenew: true })') &&
+      html.includes("Renovar push") &&
+      html.includes("Teste bloqueado 15s") &&
+      html.includes("No iPhone, push fora do app só funciona com o app instalado na Tela de Início."),
   },
   {
     name: "modal de notificacoes nao expoe controles de teste push",
@@ -152,6 +162,7 @@ checks.push(
       edge.includes('body.action === "cron_debug"') &&
       edge.includes("EdgeRuntime") &&
       edge.includes("requestSubscription") &&
+      edge.includes("processSingleDueJob(job.id, 15_000, requestSubscription)") &&
       edge.includes("job._request_subscription") &&
       edge.includes("allSubs.unshift(requestSub)") &&
       edge.includes("DIRECT_SEND_MAX_DELAY_MS") &&

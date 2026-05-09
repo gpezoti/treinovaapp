@@ -4906,9 +4906,10 @@ function renderPushSubscriptionCardHTML() {
     return `<div class="card mb-12">
       <div class="fw-700 text-sm">Notificações ativas</div>
       <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Este dispositivo está autorizado. O app renova a assinatura automaticamente quando você entra.</div>
+      ${isIOSDevice() && !isStandaloneApp() ? `<div class="text-xs" style="margin-top:8px;color:var(--red);line-height:1.4">No iPhone, push fora do app só funciona com o app instalado na Tela de Início.</div>` : ""}
       <div class="sheet-action-grid" style="margin-top:12px">
-        <button class="mini-btn mini-btn-primary" onclick="testRestTimerPushDelayed()">Teste bloqueado 15s</button>
-        <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
+        <button class="mini-btn mini-btn-primary" onclick="forceRenewPushSubscription()">Renovar push</button>
+        <button class="mini-btn mini-btn-ghost" onclick="testRestTimerPushDelayed()">Teste bloqueado 15s</button>
       </div>
     </div>`;
   }
@@ -4925,9 +4926,6 @@ function renderPushSubscriptionCardHTML() {
         <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Necessário para descanso, mensagens e lembretes aparecerem fora do app.</div>
       </div>
       <button class="mini-btn mini-btn-primary" onclick="requestPushPermission()">Ativar</button>
-    </div>
-    <div style="margin-top:10px">
-      <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
     </div>
   </div>`;
 }
@@ -10616,6 +10614,7 @@ function subscriptionUsesCurrentVapidKey(sub) {
 
 async function subscribePushNotifications(opts = {}) {
   const throwOnError = opts.throwOnError === true;
+  const forceRenew = opts.forceRenew === true;
   if (!isWebPushRuntimeSupported()) {
     const err = new Error(getWebPushUnsupportedMessage());
     if (throwOnError) throw err;
@@ -10641,6 +10640,11 @@ async function subscribePushNotifications(opts = {}) {
   }
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
+  if (sub && forceRenew) {
+    await sub.unsubscribe();
+    sub = null;
+    try { localStorage.removeItem(PUSH_VAPID_KEY_STORAGE); } catch(e) {}
+  }
   const previousVapidKey = localStorage.getItem(PUSH_VAPID_KEY_STORAGE);
   if (sub && (!previousVapidKey || previousVapidKey !== VAPID_PUBLIC_KEY || !subscriptionUsesCurrentVapidKey(sub))) {
     await sub.unsubscribe();
@@ -10680,6 +10684,18 @@ async function subscribePushNotifications(opts = {}) {
   }
   return sub;
 }
+
+window.forceRenewPushSubscription = async function() {
+  try {
+    const sub = await subscribePushNotifications({ throwOnError: true, forceRenew: true });
+    if (!sub) throw new Error("Não foi possível renovar a assinatura deste aparelho.");
+    showToast("Push renovado neste aparelho. Faça o teste bloqueado.", "success");
+    openNotificationsSheet();
+  } catch(e) {
+    console.warn("[force renew push]", e);
+    showToast(await getPushErrorMessage(e), "error");
+  }
+};
 
 function isIOSDevice() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;

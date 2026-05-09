@@ -215,7 +215,12 @@ async function testPush(req: Request, body: any) {
 async function testDelayedPush(req: Request, body: any) {
   const user = await getAuthenticatedUser(req);
   if (!user) return json({ error: "Não autenticado." }, 401);
-  await saveRequestSubscription(user.id, body);
+  const requestSubscription = normalizePushSubscription(body?.subscription);
+  try {
+    await saveRequestSubscription(user.id, body);
+  } catch (e) {
+    console.error("[rest-timer-push delayed save subscription]", e);
+  }
 
   const fireAt = new Date(Date.now() + 15_000);
   const timerId = `test-delayed-${Date.now()}`;
@@ -230,7 +235,7 @@ async function testDelayedPush(req: Request, body: any) {
   }).select("id,user_id,timer_id,exercise_name,fire_at,attempts").single();
 
   if (error) return json({ error: error.message }, 500);
-  if (job?.id) runAfterResponse(processSingleDueJob(job.id, 15_000));
+  if (job?.id) runAfterResponse(processSingleDueJob(job.id, 15_000, requestSubscription));
   return json({ ok: true, timer_id: timerId, fire_at: fireAt.toISOString() });
 }
 
