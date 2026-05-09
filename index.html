@@ -12282,27 +12282,102 @@ async function renderAero() {
 }
 
 let AERO_SECS = 0;
+// Cronometro do aerobio agora usa timestamp como fonte de verdade — garante
+// continuidade quando o app vai para background (iOS/Android suspendem
+// setInterval). Persiste em localStorage para sobreviver a reload.
+const AERO_KEY = "treinova_aero_timer_v1";
+let AERO_START_TS = 0;       // epoch ms quando iniciou
+let AERO_PAUSED_AT = 0;      // epoch ms quando pausou (0 = rodando)
+let AERO_PAUSED_ACCUM = 0;   // total ms acumulado em pausas
+function aeroPersist() {
+  try {
+    if (!AERO_START_TS) { localStorage.removeItem(AERO_KEY); return; }
+    localStorage.setItem(AERO_KEY, JSON.stringify({
+      startTs: AERO_START_TS,
+      pausedAt: AERO_PAUSED_AT,
+      pausedAccum: AERO_PAUSED_ACCUM
+    }));
+  } catch(e) {}
+}
+function aeroRestore() {
+  try {
+    const raw = localStorage.getItem(AERO_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    AERO_START_TS = Number(s.startTs) || 0;
+    AERO_PAUSED_AT = Number(s.pausedAt) || 0;
+    AERO_PAUSED_ACCUM = Number(s.pausedAccum) || 0;
+  } catch(e) {}
+}
+function aeroComputeSecs() {
+  if (!AERO_START_TS) return 0;
+  const now = AERO_PAUSED_AT || Date.now();
+  const ms = now - AERO_START_TS - AERO_PAUSED_ACCUM;
+  return Math.max(0, Math.floor(ms / 1000));
+}
 function aeroDisplay() {
+  AERO_SECS = aeroComputeSecs();
   const m = Math.floor(AERO_SECS/60), s = AERO_SECS%60;
   const el = document.getElementById("aero-display");
   if (el) el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  // Atualiza visibilidade dos botoes
+  const startBtn = document.getElementById("aero-start");
+  const pauseBtn = document.getElementById("aero-pause");
+  const isRunning = AERO_START_TS && !AERO_PAUSED_AT;
+  if (startBtn) startBtn.style.display = isRunning ? "none" : "block";
+  if (pauseBtn) pauseBtn.style.display = isRunning ? "block" : "none";
+  if (startBtn && AERO_START_TS && AERO_PAUSED_AT) startBtn.textContent = "Continuar";
+  else if (startBtn) startBtn.textContent = "Iniciar";
 }
 function aeroStart() {
-  if (AERO_TIMER) return;
-  AERO_TIMER = setInterval(()=>{ AERO_SECS++; aeroDisplay(); }, 1000);
-  document.getElementById("aero-start").style.display = "none";
-  document.getElementById("aero-pause").style.display = "block";
-}
-function aeroPause() {
-  if (AERO_TIMER) { clearInterval(AERO_TIMER); AERO_TIMER = null; }
-  document.getElementById("aero-start").style.display = "block";
-  document.getElementById("aero-pause").style.display = "none";
-}
-function aeroReset() {
-  aeroPause();
-  AERO_SECS = 0;
+  if (AERO_START_TS && !AERO_PAUSED_AT) return; // ja rodando
+  if (AERO_PAUSED_AT) {
+    // retomar
+    AERO_PAUSED_ACCUM += Date.now() - AERO_PAUSED_AT;
+    AERO_PAUSED_AT = 0;
+  } else {
+    // iniciar do zero
+    AERO_START_TS = Date.now();
+    AERO_PAUSED_AT = 0;
+    AERO_PAUSED_ACCUM = 0;
+  }
+  aeroPersist();
+  if (AERO_TIMER) clearInterval(AERO_TIMER);
+  AERO_TIMER = setInterval(aeroDisplay, 1000);
   aeroDisplay();
 }
+function aeroPause() {
+  if (!AERO_START_TS || AERO_PAUSED_AT) return; // ja pausado / nao iniciado
+  AERO_PAUSED_AT = Date.now();
+  if (AERO_TIMER) { clearInterval(AERO_TIMER); AERO_TIMER = null; }
+  aeroPersist();
+  aeroDisplay();
+}
+function aeroReset() {
+  if (AERO_TIMER) { clearInterval(AERO_TIMER); AERO_TIMER = null; }
+  AERO_START_TS = 0;
+  AERO_PAUSED_AT = 0;
+  AERO_PAUSED_ACCUM = 0;
+  AERO_SECS = 0;
+  aeroPersist();
+  aeroDisplay();
+}
+// Restaura estado ao abrir a pagina e re-sincroniza display ao voltar do background
+aeroRestore();
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    if (AERO_START_TS && !AERO_PAUSED_AT) {
+      if (!AERO_TIMER) AERO_TIMER = setInterval(aeroDisplay, 1000);
+      aeroDisplay();
+    }
+  }
+});
+window.addEventListener("pageshow", () => {
+  if (AERO_START_TS && !AERO_PAUSED_AT && !AERO_TIMER) {
+    AERO_TIMER = setInterval(aeroDisplay, 1000);
+  }
+  aeroDisplay();
+});
 function fmtSec(s){ const m=Math.floor(s/60), ss=s%60; const h=Math.floor(m/60), mm=m%60; return h?`${h}h${String(mm).padStart(2,'0')}`:`${mm}min ${String(ss).padStart(2,'0')}s`; }
 window.aeroStart = aeroStart; window.aeroPause = aeroPause; window.aeroReset = aeroReset;
 
