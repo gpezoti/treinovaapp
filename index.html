@@ -4201,7 +4201,6 @@ function finishTimer() {
   STATE.timer.status = "finished";
   _releaseWakeLock();
   cancelBackgroundRestNotification();
-  if (isAppForegroundActive()) cancelServerRestPush(STATE.timer.id);
   notifyRestFinished(STATE.timer.exerciseName || STATE.timer.label).catch(()=>{});
   clearPersistedTimer();
   document.getElementById("timer-bar")?.classList.add("done");
@@ -4854,6 +4853,10 @@ function renderPushSubscriptionCardHTML() {
     return `<div class="card mb-12">
       <div class="fw-700 text-sm">Notificações ativas</div>
       <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Este dispositivo está autorizado. O app renova a assinatura automaticamente quando você entra.</div>
+      <div class="sheet-action-grid" style="margin-top:12px">
+        <button class="mini-btn mini-btn-primary" onclick="testRestTimerPushDelayed()">Teste bloqueado 15s</button>
+        <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
+      </div>
     </div>`;
   }
   if (Notification.permission === "denied") {
@@ -4869,6 +4872,9 @@ function renderPushSubscriptionCardHTML() {
         <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Necessário para descanso, mensagens e lembretes aparecerem fora do app.</div>
       </div>
       <button class="mini-btn mini-btn-primary" onclick="requestPushPermission()">Ativar</button>
+    </div>
+    <div style="margin-top:10px">
+      <button class="mini-btn mini-btn-ghost" onclick="diagnoseRestTimerPush()">Diagnóstico push</button>
     </div>
   </div>`;
 }

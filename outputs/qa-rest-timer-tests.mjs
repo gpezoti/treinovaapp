@@ -52,9 +52,10 @@ const checks = [
       html.includes("?view=workout&restTimer=1"),
   },
   {
-    name: "timer nao cancela push remoto quando finaliza em background",
+    name: "timer preserva push remoto ao finalizar localmente",
     pass: html.includes("function isAppForegroundActive()") &&
-      html.includes('if (isAppForegroundActive()) cancelServerRestPush(STATE.timer.id);'),
+      !html.includes('if (isAppForegroundActive()) cancelServerRestPush(STATE.timer.id);') &&
+      html.includes("cancelServerRestPush(timerId);"),
   },
   {
     name: "modal de notificacoes consegue renovar assinatura com helper global",
