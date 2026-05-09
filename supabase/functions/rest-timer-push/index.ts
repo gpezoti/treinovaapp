@@ -121,7 +121,12 @@ async function requestSubscription(req: Request, body: any) {
 async function scheduleJob(req: Request, body: any) {
   const user = await getAuthenticatedUser(req);
   if (!user) return json({ error: "Não autenticado." }, 401);
-  await saveRequestSubscription(user.id, body);
+  const requestSubscription = normalizePushSubscription(body?.subscription);
+  try {
+    await saveRequestSubscription(user.id, body);
+  } catch (e) {
+    console.error("[rest-timer-push save subscription]", e);
+  }
 
   const timerId = String(body.timer_id || "");
   const exerciseName = String(body.exercise_name || "Próxima série").slice(0, 160);
@@ -161,7 +166,7 @@ async function scheduleJob(req: Request, body: any) {
   if (error) return json({ error: error.message }, 500);
   const delayMs = Math.max(0, fireMs - Date.now());
   if (job?.id && delayMs <= DIRECT_SEND_MAX_DELAY_MS) {
-    runAfterResponse(processSingleDueJob(job.id, delayMs));
+    runAfterResponse(processSingleDueJob(job.id, delayMs, requestSubscription));
   }
   return json({ ok: true, direct_send: Boolean(job?.id && delayMs <= DIRECT_SEND_MAX_DELAY_MS) });
 }
@@ -288,7 +293,7 @@ async function processDueJobs(req: Request) {
   return json({ ok: true, processed: jobs.length, sent, failed });
 }
 
-async function processSingleDueJob(jobId: string, delayMs = 0) {
+async function processSingleDueJob(jobId: string, delayMs = 0, requestSubscription: any = null) {
   if (delayMs > 0) await sleep(delayMs);
   const { data: job, error } = await sbAdmin
     .from("rest_timer_push_jobs")
@@ -300,6 +305,7 @@ async function processSingleDueJob(jobId: string, delayMs = 0) {
   if (error) throw error;
   if (!job) return;
   if (new Date(job.fire_at).getTime() > Date.now() + 1000) return;
+  if (requestSubscription) job._request_subscription = requestSubscription;
   await sendJobNotification(job);
 }
 
@@ -309,7 +315,13 @@ async function sendJobNotification(job: any) {
     .select("*")
     .eq("user_id", job.user_id);
 
-  if (!subs?.length) {
+  const allSubs = [...(subs || [])];
+  const requestSub = normalizePushSubscription(job._request_subscription);
+  if (requestSub && !allSubs.some((s: any) => s.endpoint === requestSub.endpoint)) {
+    allSubs.unshift(requestSub);
+  }
+
+  if (!allSubs.length) {
     if (!job._ephemeral) {
       await sbAdmin.from("rest_timer_push_jobs").update({
         status: "failed",
@@ -332,7 +344,7 @@ async function sendJobNotification(job: any) {
     renotify: true,
   });
 
-  for (const s of subs) {
+  for (const s of allSubs) {
     try {
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
@@ -360,7 +372,7 @@ async function sendJobNotification(job: any) {
         updated_at: new Date().toISOString(),
       }).eq("id", job.id).eq("status", "scheduled");
     }
-    return { ok: true, sent: jobSent, subscriptions: subs.length };
+    return { ok: true, sent: jobSent, subscriptions: allSubs.length };
   }
 
   if (!job._ephemeral) {
@@ -371,7 +383,7 @@ async function sendJobNotification(job: any) {
       updated_at: new Date().toISOString(),
     }).eq("id", job.id).eq("status", "scheduled");
   }
-  return { ok: false, sent: 0, subscriptions: subs.length, error: lastError || "Falha ao enviar Web Push." };
+  return { ok: false, sent: 0, subscriptions: allSubs.length, error: lastError || "Falha ao enviar Web Push." };
 }
 
 function safeEndpointHost(endpoint: string) {

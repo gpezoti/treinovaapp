@@ -148,6 +148,9 @@ checks.push(
       edge.includes("edge_vapid_public_key") &&
       edge.includes("diagnosePush") &&
       edge.includes("EdgeRuntime") &&
+      edge.includes("requestSubscription") &&
+      edge.includes("job._request_subscription") &&
+      edge.includes("allSubs.unshift(requestSub)") &&
       edge.includes("DIRECT_SEND_MAX_DELAY_MS") &&
       edge.includes("rest_timer_push_jobs") &&
       edge.includes("push_subscriptions") &&
