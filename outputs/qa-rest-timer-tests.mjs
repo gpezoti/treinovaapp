@@ -139,6 +139,24 @@ const checks = [
       html.includes("timer-fs.done .timer-fs-next"),
   },
   {
+    name: "professor pode continuar reiniciar e apagar proprio treino concluido",
+    pass: html.includes('["student", "coach"].includes(STATE.profile?.role)') &&
+      html.includes("reopenCompletedWorkout") &&
+      html.includes("restartCompletedWorkout") &&
+      html.includes("deleteTodayCompletedWorkout") &&
+      html.includes("Continuar treino") &&
+      html.includes("Apagar"),
+  },
+  {
+    name: "concluir treino exige gesto de slide para evitar toque acidental",
+    pass: html.includes("function initWorkoutFinishSlider") &&
+      html.includes('id="finish-slide"') &&
+      html.includes("Deslize para concluir treino") &&
+      html.includes("pointerdown") &&
+      html.includes("currentX >= maxX() * 0.82") &&
+      !html.includes('id="btn-complete-session"'),
+  },
+  {
     name: "service worker aceita notificacao local",
     pass: sw.includes('VERSION = "v9"') &&
       sw.includes('type === "SHOW_NOTIFICATION"') &&

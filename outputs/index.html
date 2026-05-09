@@ -3081,7 +3081,7 @@ function calculateWorkoutDurationSeconds() {
 
 function canManageCompletedWorkoutSession() {
   return Boolean(
-    STATE.profile?.role === "student" &&
+    ["student", "coach"].includes(STATE.profile?.role) &&
     STATE.currentSession &&
     STATE.currentSession.student_id === STATE.profile.id &&
     STATE.currentSession.date === todayISO() &&
@@ -6780,13 +6780,16 @@ async function renderWorkout() {
         #workout-fixed-bar .wfb-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px}
         #workout-fixed-bar .wfb-pct{font-size:10px;color:${allDone ? 'var(--green)' : 'var(--brand)'};font-weight:800}
         #workout-fixed-bar .wfb-hint{font-size:10px;color:var(--text-3);white-space:nowrap}
-        #workout-fixed-bar #btn-complete-session{
-          flex:0 0 auto;padding:13px 18px;border-radius:14px;font-size:14px;font-weight:800;
-          border:0;cursor:pointer;white-space:nowrap;transition:all .2s;
-          background:${allDone ? 'var(--green)' : doneCount===0 ? 'var(--bg-card)' : 'var(--brand)'};
-          color:${allDone ? '#002' : doneCount===0 ? 'var(--text-3)' : 'var(--brand-on)'};
-          opacity:${doneCount===0 ? '.5' : '1'}}
-        #workout-fixed-bar #btn-complete-session:active{transform:scale(.96)}
+        #workout-fixed-bar .finish-slide{
+          flex:0 0 186px;height:52px;border-radius:16px;position:relative;overflow:hidden;
+          border:1px solid ${doneCount === 0 ? 'var(--line)' : allDone ? 'rgba(34,197,94,.65)' : 'var(--brand)'};
+          background:${doneCount === 0 ? 'var(--bg-card)' : allDone ? 'rgba(34,197,94,.16)' : 'var(--brand-soft)'};
+          color:${doneCount === 0 ? 'var(--text-3)' : 'var(--text)'};touch-action:none;user-select:none;
+          opacity:${doneCount === 0 ? '.55' : '1'}}
+        #workout-fixed-bar .finish-slide-fill{position:absolute;inset:0 auto 0 0;width:0;background:${allDone ? 'rgba(34,197,94,.28)' : 'rgba(0,180,255,.22)'};transition:width .12s ease}
+        #workout-fixed-bar .finish-slide-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding-left:42px;padding-right:12px;font-size:12px;font-weight:900;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
+        #workout-fixed-bar .finish-slide-handle{position:absolute;left:5px;top:5px;width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:${allDone ? 'var(--green)' : 'var(--brand)'};color:${allDone ? '#001b0d' : 'var(--brand-on)'};box-shadow:0 10px 22px rgba(0,0,0,.22);transition:transform .12s ease}
+        #workout-fixed-bar .finish-slide.disabled .finish-slide-handle{background:var(--bg-3);color:var(--text-3)}
       </style>
       <div class="wfb-inner">
         <div class="wfb-stats">
@@ -6797,26 +6800,78 @@ async function renderWorkout() {
             <div class="wfb-hint">${doneCount === 0 ? "Marque a 1ª série" : allDone ? "Pronto para finalizar" : "Progresso salvo"}</div>
           </div>
         </div>
-        <button id="btn-complete-session" ${doneCount === 0 ? 'disabled' : ''}>
-          ${allDone ? 'Concluir ✓' : 'Concluir'}
-        </button>
+        <div id="finish-slide" class="finish-slide ${doneCount === 0 ? 'disabled' : ''}" role="button" aria-disabled="${doneCount === 0 ? 'true' : 'false'}" aria-label="Deslize para concluir treino">
+          <div class="finish-slide-fill"></div>
+          <div class="finish-slide-label">${doneCount === 0 ? 'Marque séries' : allDone ? 'Deslize ✓' : 'Deslize'}</div>
+          <div class="finish-slide-handle">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </div>
+        </div>
       </div>`;
     document.body.appendChild(bar);
     // #24 fix: ocultar nav bar agora que sessão está ativa
     const bnBarEl = document.getElementById("bn-bar");
     if (bnBarEl) bnBarEl.style.display = "none";
-    document.getElementById("btn-complete-session").addEventListener("click", async () => {
-      if (!allDone) {
-        if (!await showConfirm({ title: "Concluir treino?", msg: `Você marcou ${doneCount} de ${totalTarget} séries.`, confirm: "Concluir mesmo assim", cancel: "Continuar" })) return;
-      }
-      completeSession();
-    });
+    initWorkoutFinishSlider({ allDone, doneCount, totalTarget });
   } else {
     document.getElementById("workout-fixed-bar")?.remove();
     // Sessão concluída — restaurar nav bar
     const bnBarEl = document.getElementById("bn-bar");
     if (bnBarEl) bnBarEl.style.display = "";
   }
+}
+
+function initWorkoutFinishSlider({ allDone, doneCount, totalTarget }) {
+  const slider = document.getElementById("finish-slide");
+  if (!slider || doneCount === 0) return;
+  const handle = slider.querySelector(".finish-slide-handle");
+  const fill = slider.querySelector(".finish-slide-fill");
+  const maxX = () => Math.max(1, slider.clientWidth - (handle?.offsetWidth || 42) - 10);
+  let dragging = false;
+  let startX = 0;
+  let currentX = 0;
+  const setX = (x) => {
+    currentX = Math.max(0, Math.min(maxX(), x));
+    if (handle) handle.style.transform = `translateX(${currentX}px)`;
+    if (fill) fill.style.width = `${currentX + 47}px`;
+  };
+  const reset = () => {
+    setX(0);
+    slider.classList.remove("completed");
+  };
+  const complete = async () => {
+    setX(maxX());
+    slider.classList.add("completed");
+    if (!allDone) {
+      const ok = await showConfirm({
+        title: "Concluir treino?",
+        msg: `Você marcou ${doneCount} de ${totalTarget} séries.`,
+        confirm: "Concluir mesmo assim",
+        cancel: "Continuar"
+      });
+      if (!ok) { reset(); return; }
+    }
+    completeSession();
+  };
+  slider.addEventListener("pointerdown", (ev) => {
+    if (STATE._completingSession) return;
+    dragging = true;
+    startX = ev.clientX - currentX;
+    slider.setPointerCapture?.(ev.pointerId);
+  });
+  slider.addEventListener("pointermove", (ev) => {
+    if (!dragging) return;
+    setX(ev.clientX - startX);
+  });
+  const finishDrag = (ev) => {
+    if (!dragging) return;
+    dragging = false;
+    slider.releasePointerCapture?.(ev.pointerId);
+    if (currentX >= maxX() * 0.82) complete();
+    else reset();
+  };
+  slider.addEventListener("pointerup", finishDrag);
+  slider.addEventListener("pointercancel", finishDrag);
 }
 
 function renderExerciseList(W, intensity, completed) {
