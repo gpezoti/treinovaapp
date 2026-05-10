@@ -6768,13 +6768,19 @@ async function renderWorkout() {
     return;
   }
 
-  // Garante session
-  if (!STATE.currentSession || STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code) {
+  // Se sessão salva é de outro treino/data, descartar
+  if (STATE.currentSession && (STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code)) {
+    STATE.currentSession = null;
+    STATE.setLogs = [];
+  }
+  // Se há sessão ativa para este treino, garantir logs carregados
+  if (STATE.currentSession && (!STATE.setLogs || STATE.setLogs.length === 0)) {
     el.innerHTML = `<div class="loading"><div class="spinner"></div>Carregando treino...</div>`;
-    await loadOrCreateSession(date, code, intensity);
+    await loadSetLogs();
   }
   const session = STATE.currentSession;
   const completed = session && session.status === "completed";
+  const sessionActive = session && session.status !== "completed";
 
   const [pillCls, pillTxt] = intensityPill(intensity);
   const scheme = getCurrentTrainingScheme(intensity);
@@ -6841,18 +6847,27 @@ async function renderWorkout() {
     <div class="ux-helper">Toque em um exercício para abrir séries, carga, descanso e instruções.</div>
     <div id="exercise-list"></div>
 
-    ${!completed ? `<div style="height:96px"></div>` : `
+    ${completed ? `
       <div style="margin-top:16px;padding-bottom:24px">
         <button class="btn-ghost" onclick="navTo('home')">← Voltar ao início</button>
+      </div>
+    ` : sessionActive ? `<div style="height:96px"></div>` : `
+      <div style="padding:16px 0 32px">
+        <button class="btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px" onclick="startWorkoutSession('${date}','${code}','${intensity}')">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Iniciar treino
+        </button>
+        <div style="font-size:12px;color:var(--text-2);margin-top:10px;text-align:center;line-height:1.4">Suas cargas são salvas automaticamente a cada série.</div>
       </div>
     `}
   `;
 
   renderExerciseList(W, intensity, completed);
 
-  // Barra fixa inferior de treino (substitui o botão inline + bottom nav)
+  // Barra fixa inferior: só aparece quando sessão estiver ativa (iniciada pelo usuário)
   document.getElementById("workout-fixed-bar")?.remove();
-  if (!completed) {
+  const bnBarFinal = document.getElementById("bn-bar");
+  if (!completed && sessionActive) {
     const bar = document.createElement("div");
     bar.id = "workout-fixed-bar";
     const pct = totalTarget > 0 ? Math.round(doneCount / totalTarget * 100) : 0;
@@ -6874,10 +6889,10 @@ async function renderWorkout() {
         #workout-fixed-bar .wfb-hint{font-size:10px;color:var(--text-3);white-space:nowrap}
         #workout-fixed-bar .finish-slide{
           flex:0 0 186px;height:52px;border-radius:16px;position:relative;overflow:hidden;
-          border:1px solid ${doneCount === 0 ? 'var(--line)' : allDone ? 'rgba(34,197,94,.65)' : 'var(--brand)'};
-          background:${doneCount === 0 ? 'var(--bg-card)' : allDone ? 'rgba(34,197,94,.16)' : 'var(--brand-soft)'};
-          color:${doneCount === 0 ? 'var(--text-3)' : 'var(--text)'};touch-action:none;user-select:none;
-          opacity:${doneCount === 0 ? '.55' : '1'}}
+          border:1px solid ${allDone ? 'rgba(34,197,94,.65)' : 'var(--brand)'};
+          background:${allDone ? 'rgba(34,197,94,.16)' : 'var(--brand-soft)'};
+          color:var(--text);touch-action:none;user-select:none;
+          opacity:1}
         #workout-fixed-bar .finish-slide-fill{position:absolute;inset:0 auto 0 0;width:0;background:${allDone ? 'rgba(34,197,94,.28)' : 'rgba(0,180,255,.22)'};transition:width .12s ease}
         #workout-fixed-bar .finish-slide-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding-left:42px;padding-right:12px;font-size:12px;font-weight:900;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
         #workout-fixed-bar .finish-slide-handle{position:absolute;left:5px;top:5px;width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:${allDone ? 'var(--green)' : 'var(--brand)'};color:${allDone ? '#001b0d' : 'var(--brand-on)'};box-shadow:0 10px 22px rgba(0,0,0,.22);transition:transform .12s ease}
@@ -6889,33 +6904,37 @@ async function renderWorkout() {
           <div class="wfb-track"><div class="wfb-fill" style="width:${pct}%"></div></div>
           <div class="wfb-foot">
             <div class="wfb-pct">${pct}% concluído</div>
-            <div class="wfb-hint">${doneCount === 0 ? "Marque a 1ª série" : allDone ? "Pronto para finalizar" : "Progresso salvo"}</div>
+            <div class="wfb-hint">${allDone ? "Pronto para finalizar" : doneCount > 0 ? "Progresso salvo" : "Pode concluir a qualquer hora"}</div>
           </div>
         </div>
-        <div id="finish-slide" class="finish-slide ${doneCount === 0 ? 'disabled' : ''}" role="button" aria-disabled="${doneCount === 0 ? 'true' : 'false'}" aria-label="Deslize para concluir treino">
+        <div id="finish-slide" class="finish-slide" role="button" aria-label="Deslize para concluir treino">
           <div class="finish-slide-fill"></div>
-          <div class="finish-slide-label">${doneCount === 0 ? 'Marque séries' : allDone ? 'Deslize ✓' : 'Deslize'}</div>
+          <div class="finish-slide-label">${allDone ? 'Deslize ✓' : 'Deslize'}</div>
           <div class="finish-slide-handle">
             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
           </div>
         </div>
       </div>`;
     document.body.appendChild(bar);
-    // #24 fix: ocultar nav bar agora que sessão está ativa
-    const bnBarEl = document.getElementById("bn-bar");
-    if (bnBarEl) bnBarEl.style.display = "none";
+    if (bnBarFinal) bnBarFinal.style.display = "none";
     initWorkoutFinishSlider({ allDone, doneCount, totalTarget });
   } else {
-    document.getElementById("workout-fixed-bar")?.remove();
-    // Sessão concluída — restaurar nav bar
-    const bnBarEl = document.getElementById("bn-bar");
-    if (bnBarEl) bnBarEl.style.display = "";
+    // Sem sessão ativa ou treino concluído — nav bar visível
+    if (bnBarFinal) bnBarFinal.style.display = "";
   }
+}
+
+// Chamado pelo botão "Iniciar treino" dentro da página de treino
+async function startWorkoutSession(date, code, intensity) {
+  const el = document.getElementById("view-workout");
+  if (el) el.innerHTML = `<div class="loading"><div class="spinner"></div>Iniciando treino...</div>`;
+  await loadOrCreateSession(date, code, intensity);
+  await renderWorkout();
 }
 
 function initWorkoutFinishSlider({ allDone, doneCount, totalTarget }) {
   const slider = document.getElementById("finish-slide");
-  if (!slider || doneCount === 0) return;
+  if (!slider) return;
   const handle = slider.querySelector(".finish-slide-handle");
   const fill = slider.querySelector(".finish-slide-fill");
   const maxX = () => Math.max(1, slider.clientWidth - (handle?.offsetWidth || 42) - 10);
