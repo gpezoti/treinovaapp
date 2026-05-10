@@ -460,13 +460,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .action-card:active { transform:scale(.98); }
 .action-card svg { color:var(--brand); }
 .action-title { font-weight:800; font-size:14px; }
-.action-sub { font-size:11px; color:var(--text-3); line-height:1.35; }
+.action-sub { font-size:12px; color:var(--text-3); line-height:1.4; }
 .insight-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
 .insight-card { background:var(--bg-card); border:1px solid var(--line); border-radius:14px; padding:12px; min-width:0; }
 .insight-card.is-warn { border-color:rgba(255,149,0,.45); background:linear-gradient(135deg,var(--orange-soft),var(--bg-card)); }
 .insight-card.is-danger { border-color:rgba(255,59,59,.45); background:linear-gradient(135deg,var(--red-soft),var(--bg-card)); }
+.insight-card.is-success { border-color:rgba(46,204,113,.45); background:linear-gradient(135deg,var(--green-soft),var(--bg-card)); }
 .insight-value { font-size:22px; font-weight:900; line-height:1; }
-.insight-label { font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.6px; margin-top:5px; }
+.insight-label { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:.4px; margin-top:5px; }
 @media (max-width: 380px) {
   .action-grid { grid-template-columns:1fr; }
   .insight-strip { grid-template-columns:1fr; }
@@ -760,8 +761,11 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       <button type="button" class="btn-ghost" style="margin-top:8px" onclick="showAuthForm()">← Voltar ao login</button>
     </div>
   </div>
-  <div style="text-align:center; margin-top:20px;">
-    <p class="text-xs muted">Não tem conta? Fale com seu professor para receber acesso.</p>
+  <div style="text-align:center; margin-top:20px; padding:0 4px;">
+    <p style="font-size:12px; color:var(--text-3); line-height:1.5; margin:0;">
+      Novo por aqui? Seu professor já criou seu acesso.<br>
+      Use o e-mail e senha que ele cadastrou para você.
+    </p>
   </div>
   <div style="position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:11px;color:var(--text-3)">
     <a href="#" onclick="event.preventDefault();openLegalModal('terms')" style="color:var(--text-3);text-decoration:none;margin:0 8px">Termos de Uso</a>
@@ -5148,16 +5152,16 @@ function renderBottomNav() {
     bar.classList.add("cols-5");
     items = [
       { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
-      { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/><path d="M9.5 9.5 7 7l3-3 3 3"/>` },
+      { id: "workout", label: "Meu treino", svg: `<path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/><path d="M9.5 9.5 7 7l3-3 3 3"/>` },
       { id: "students", label: "Alunos", svg: `<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a7 7 0 0 1 14 0v1"/><circle cx="17" cy="9" r="3"/><path d="M22 21v-1a5 5 0 0 0-5-5"/>` },
-      { id: "admin-workouts", label: "Gestão", svg: `<path d="M3 6h18M3 12h18M3 18h18"/><path d="M7 6v12M17 6v12"/>` },
+      { id: "admin-workouts", label: "Treinos", svg: `<path d="M3 6h18M3 12h18M3 18h18"/><path d="M7 6v12M17 6v12"/>` },
       { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
     ];
   } else {
     bar.classList.add("cols-5");
     items = [
       { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
-      { id: "calendar", label: "Periodiz.", svg: `<rect x="3" y="4.5" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>` },
+      { id: "calendar", label: "Agenda", svg: `<rect x="3" y="4.5" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>` },
       { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/><path d="M9.5 9.5 7 7l3-3 3 3"/>` },
       { id: "feed", label: "Feed", svg: `<path d="M4 4h16v4H4zM4 11h16v4H4zM4 18h10v4H4z"/>` },
       { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
@@ -5210,7 +5214,16 @@ function renderHome() {
     return;
   }
   if (STATE.profile.status === "blocked") {
-    el.innerHTML = `<div class="empty"><h3>Acesso bloqueado</h3><p>Fale com seu professor.</p></div>`;
+    const coachId = STATE.profile.coach_id;
+    el.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="32" r="22"/><path d="M22 32h20"/></svg>
+      <h3>Acesso pausado</h3>
+      <p>Sua conta foi temporariamente pausada. Fale com seu professor para regularizar.</p>
+      <div class="empty-actions">
+        ${coachId ? `<button class="btn-primary" style="width:auto" onclick="openChatThread('${coachId}')">Falar com professor</button>` : ""}
+        <button class="btn-ghost" style="width:auto" onclick="navTo('payments')">Ver mensalidades</button>
+      </div>
+    </div>`;
     return;
   }
 
@@ -5539,6 +5552,20 @@ function renderCoachHome(el) {
       <div class="greeting-eyebrow">Painel do Treinador</div>
       <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
       <div class="greeting-sub">${approved} aluno(s) ativo(s) · ${pending} aguardando</div>
+    </div>
+    <div class="insight-strip" style="margin-bottom:14px">
+      <button class="insight-card ${totalSessions7d > 0 ? 'is-success' : ''}" onclick="navTo('students')">
+        <div class="insight-value">${totalSessions7d}</div>
+        <div class="insight-label">treinos / sem.</div>
+      </button>
+      <button class="insight-card ${inactive > 0 ? 'is-warn' : ''}" onclick="navTo('students')">
+        <div class="insight-value">${inactive}</div>
+        <div class="insight-label">inativos</div>
+      </button>
+      <button class="insight-card ${overdue > 0 ? 'is-danger' : ''}" onclick="navTo('payments')">
+        <div class="insight-value">${overdue}</div>
+        <div class="insight-label">em aberto</div>
+      </button>
     </div>
     ${renderCoachOnboardingChecklist()}
     ${renderSelfTrainingCard()}
@@ -8002,7 +8029,7 @@ function renderStudents() {
         <div class="insight-value">${countInactive}</div><div class="insight-label">inativos</div>
       </button>
       <button class="insight-card ${countOverdue ? 'is-danger' : ''}" onclick="setStudentTab('overdue')">
-        <div class="insight-value">${countOverdue}</div><div class="insight-label">devendo</div>
+        <div class="insight-value">${countOverdue}</div><div class="insight-label">em aberto</div>
       </button>
     </div>
     <div style="position:relative;margin-bottom:10px">
