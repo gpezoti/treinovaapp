@@ -4963,7 +4963,6 @@ function renderPushSubscriptionCardHTML() {
       ${isIOSDevice() && !isStandaloneApp() ? `<div class="text-xs" style="margin-top:8px;color:var(--red);line-height:1.4">No iPhone, push fora do app só funciona com o app instalado na Tela de Início.</div>` : ""}
       <div class="sheet-action-grid" style="margin-top:12px">
         <button class="mini-btn mini-btn-primary" onclick="forceRenewPushSubscription()">Renovar push</button>
-        <button class="mini-btn mini-btn-ghost" onclick="testRestTimerPushDelayed()">Teste bloqueado 15s</button>
       </div>
     </div>`;
   }
@@ -5083,11 +5082,11 @@ function navTo(view) {
   // Destaque no bottom nav: sub-views ficam sem item ativo (ou home ativo)
   document.querySelectorAll(".bn-item").forEach(b => b.classList.toggle("active", b.dataset.nav === view));
 
-  // Nav bar: só oculta se sessão de treino ativa em andamento
-  // Bug #24 fix: não ocultar ao simplesmente abrir a aba treino
+  // Nav bar: só oculta quando a barra "deslize para concluir" estiver visível
+  // (ou seja, quando o treino foi explicitamente iniciado pelo usuário)
   const bnBar = document.getElementById("bn-bar");
-  const hasActiveSession = STATE.currentSession && STATE.currentSession.status !== "completed";
-  if (bnBar) bnBar.style.display = (view === "workout" && hasActiveSession) ? "none" : "";
+  const hasActiveWorkoutBar = !!document.getElementById("workout-fixed-bar");
+  if (bnBar) bnBar.style.display = (view === "workout" && hasActiveWorkoutBar) ? "none" : "";
 
   // Remover barra fixa de treino ao sair do workout
   if (view !== "workout") document.getElementById("workout-fixed-bar")?.remove();
@@ -5162,7 +5161,7 @@ function renderBottomNav() {
     items = [
       { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
       { id: "calendar", label: "Agenda", svg: `<rect x="3" y="4.5" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>` },
-      { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/><path d="M9.5 9.5 7 7l3-3 3 3"/>` },
+      { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/><path d="M17.5 6.5h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-2"/><line x1="6.5" y1="9" x2="6.5" y2="15"/><line x1="17.5" y1="9" x2="17.5" y2="15"/><line x1="6.5" y1="12" x2="17.5" y2="12"/><circle cx="6.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="16.5" r="1.5"/><circle cx="17.5" cy="7.5" r="1.5"/><circle cx="17.5" cy="16.5" r="1.5"/>` },
       { id: "feed", label: "Feed", svg: `<path d="M4 4h16v4H4zM4 11h16v4H4zM4 18h10v4H4z"/>` },
       { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
     ];
