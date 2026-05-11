@@ -405,6 +405,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .timer-fs-next { display: none; margin-top: 10px; background: var(--green); color: #03140a;
   border: 0; padding: 13px 18px; border-radius: 12px; font-weight: 900; font-size: 13px; }
 .timer-fs.done .timer-fs-next { display: inline-flex; align-items: center; justify-content: center; }
+.timer-fs-exname { font-size: 13px; font-weight: 700; color: var(--text); text-align: center;
+  padding: 0 28px; margin-top: -16px; margin-bottom: 16px; line-height: 1.35;
+  max-width: 320px; letter-spacing: 0.2px; min-height: 18px; }
 
 /* Bottom nav */
 .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex;
@@ -876,6 +879,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
         <div class="timer-ring-label" id="timer-fs-label">Próxima série</div>
       </div></div>
     </div>
+    <div id="timer-fs-exname" class="timer-fs-exname"></div>
     <div class="timer-controls">
       <button class="icon-btn" id="timer-fs-minus"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="12" x2="18" y2="12"/></svg></button>
       <button class="icon-btn" id="timer-fs-toggle"><svg id="timer-fs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
@@ -2979,15 +2983,11 @@ window.confirmSerieDone = async function(skipTimer) {
   const timerLabel = timerNextEx && isLastEx ? timerNextEx.name : nextLabel;
 
   if (!skipTimer) {
-    if (confirmBtn) {
-      confirmBtn.disabled = true;
-      confirmBtn.textContent = "Agendando descanso...";
-    }
+    closeSerieModal();  // fecha imediatamente — sem esperar o push de servidor
     await startTimer(pauseSec, timerLabel, () => {
       if (navigator.vibrate) navigator.vibrate([200,100,200]);
       if (isLastEx) setTimeout(autoAdvanceExercise, 600);
     });
-    closeSerieModal();
   } else {
     closeSerieModal();
     showToast("Timer pulado", null);
@@ -4147,10 +4147,12 @@ function reconcileTimerAfterLifecycle(reason = "resume") {
       const barTime = document.getElementById("timer-bar-time");
       const fsTime = document.getElementById("timer-fs-time");
       const fsLabel = document.getElementById("timer-fs-label");
+      const fsExNameEl = document.getElementById("timer-fs-exname");
       const barSub = document.getElementById("timer-bar-sub");
       if (barTime) barTime.textContent = "00:00";
       if (fsTime) fsTime.textContent = "00:00";
       if (fsLabel) fsLabel.textContent = "Vamos lá!";
+      if (fsExNameEl) fsExNameEl.textContent = "";
       if (barSub) barSub.textContent = saved.exerciseName || saved.label || "Próxima série";
       closeFsTimer();
       if (typeof doneCallback === "function") {
@@ -4279,9 +4281,14 @@ function updateTimerLabels() {
   const exerciseName = STATE.timer.exerciseName || label;
   const fsLabel = document.getElementById("timer-fs-label");
   const fsEyebrow = document.getElementById("timer-fs-eyebrow");
+  const fsExName = document.getElementById("timer-fs-exname");
   const barSub = document.getElementById("timer-bar-sub");
-  if (fsLabel) fsLabel.textContent = label;
+  // Dentro do anel: texto curto sempre (evita quebrar no círculo)
+  const isLongLabel = label.length > 18;
+  if (fsLabel) fsLabel.textContent = isLongLabel ? "Próximo exercício" : label;
   if (fsEyebrow) fsEyebrow.textContent = "Descanso";
+  // Abaixo do anel: nome completo do exercício (quando for longo)
+  if (fsExName) fsExName.textContent = isLongLabel ? label : "";
   if (barSub) barSub.textContent = exerciseName;
 }
 function finishTimer() {
@@ -4304,10 +4311,12 @@ function finishTimer() {
   const barTime = document.getElementById("timer-bar-time");
   const fsTime = document.getElementById("timer-fs-time");
   const fsLabel = document.getElementById("timer-fs-label");
+  const fsExNameEl2 = document.getElementById("timer-fs-exname");
   const barSub = document.getElementById("timer-bar-sub");
   if (barTime) barTime.textContent = "00:00";
   if (fsTime) fsTime.textContent = "00:00";
   if (fsLabel) fsLabel.textContent = "Vamos lá!";
+  if (fsExNameEl2) fsExNameEl2.textContent = "";
   if (barSub) barSub.textContent = STATE.timer.exerciseName || STATE.timer.label || "Próxima série";
   if (STATE.timer.onDone) STATE.timer.onDone();
   // Auto-fechar fullscreen e barra após 2.5s
@@ -12966,11 +12975,22 @@ function fmtSec(s){ const m=Math.floor(s/60), ss=s%60; const h=Math.floor(m/60),
 window.aeroStart = aeroStart; window.aeroPause = aeroPause; window.aeroReset = aeroReset;
 
 async function saveAeroLog() {
+  if (STATE._savingAeroLog) return;   // guard contra duplo toque
+  STATE._savingAeroLog = true;
+  const btn = document.querySelector('button[onclick="saveAeroLog()"]');
+  const origText = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
+
   const modality = document.getElementById("aero-modality").value;
   const intensity = document.getElementById("aero-int").value;
   const dist = document.getElementById("aero-dist").value;
   const hr = document.getElementById("aero-hr").value;
-  if (AERO_SECS === 0 && !dist) { showToast("Inicie o cronômetro ou informe distância", "error"); return; }
+  if (AERO_SECS === 0 && !dist) {
+    showToast("Inicie o cronômetro ou informe distância", "error");
+    STATE._savingAeroLog = false;
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+    return;
+  }
   const { error } = await sb.from("aero_logs").insert({
     student_id: STATE.profile.id,
     modality, intensity,
@@ -12978,7 +12998,12 @@ async function saveAeroLog() {
     distance_km: dist ? Number(dist) : null,
     hr_avg: hr ? Number(hr) : null
   });
-  if (error) { showToast(error.message, "error"); return; }
+  STATE._savingAeroLog = false;
+  if (error) {
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+    showToast(error.message, "error");
+    return;
+  }
   showToast("Aeróbio registrado ✓", "success");
   aeroReset();
   await renderAero();
@@ -13315,144 +13340,172 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
       ctx.restore();
     };
 
-    // ---------- background ----------
+    // ---------- BACKGROUND ----------
     ctx.fillStyle = "#06090f";
     ctx.fillRect(0, 0, W, H);
     const baseGrad = ctx.createLinearGradient(0, 0, W, H);
-    baseGrad.addColorStop(0, "#0a1322");
-    baseGrad.addColorStop(0.55, "#0a0f1a");
-    baseGrad.addColorStop(1, "#05080e");
+    baseGrad.addColorStop(0, "#0b1425");
+    baseGrad.addColorStop(0.55, "#090e1a");
+    baseGrad.addColorStop(1, "#04070d");
     ctx.fillStyle = baseGrad;
     ctx.fillRect(0, 0, W, H);
 
-    const glow1 = ctx.createRadialGradient(W*0.85, H*0.05, 0, W*0.85, H*0.05, W*0.95);
-    glow1.addColorStop(0, rgba(brand, 0.42));
-    glow1.addColorStop(0.45, rgba(brand, 0.10));
+    // Glow spots
+    const glow1 = ctx.createRadialGradient(W*0.85, H*0.08, 0, W*0.85, H*0.08, W*0.9);
+    glow1.addColorStop(0, rgba(brand, 0.38));
+    glow1.addColorStop(0.5, rgba(brand, 0.08));
     glow1.addColorStop(1, "transparent");
-    ctx.fillStyle = glow1;
-    ctx.fillRect(0, 0, W, H);
-    const glow2 = ctx.createRadialGradient(W*0.10, H*0.95, 0, W*0.10, H*0.95, W*0.85);
-    glow2.addColorStop(0, rgba(mix(brand, "#000814", 0.45), 0.32));
+    ctx.fillStyle = glow1; ctx.fillRect(0, 0, W, H);
+    const glow2 = ctx.createRadialGradient(W*0.12, H*0.92, 0, W*0.12, H*0.92, W*0.8);
+    glow2.addColorStop(0, rgba(mix(brand, "#000814", 0.5), 0.28));
     glow2.addColorStop(1, "transparent");
-    ctx.fillStyle = glow2;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = glow2; ctx.fillRect(0, 0, W, H);
 
-    ctx.fillStyle = rgba("#ffffff", 0.045);
-    for (let y = 60; y < H; y += 40) {
-      for (let x = 60; x < W; x += 40) {
-        ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI*2); ctx.fill();
+    // Dot grid
+    ctx.fillStyle = rgba("#ffffff", 0.038);
+    for (let y = 60; y < H; y += 42) {
+      for (let x = 60; x < W; x += 42) {
+        ctx.beginPath(); ctx.arc(x, y, 1.1, 0, Math.PI*2); ctx.fill();
       }
     }
+
+    // Diagonal sheen
     ctx.save();
-    ctx.translate(W*0.78, -120);
-    ctx.rotate(-0.45);
+    ctx.translate(W*0.78, -120); ctx.rotate(-0.45);
     const sheen = ctx.createLinearGradient(0, 0, 0, 600);
     sheen.addColorStop(0, rgba("#ffffff", 0.0));
-    sheen.addColorStop(0.5, rgba("#ffffff", 0.06));
+    sheen.addColorStop(0.5, rgba("#ffffff", 0.055));
     sheen.addColorStop(1, rgba("#ffffff", 0.0));
     ctx.fillStyle = sheen;
-    ctx.fillRect(-160, 0, 320, 1700);
+    ctx.fillRect(-160, 0, 320, 1800);
     ctx.restore();
 
-    const barX = 80;
-    const barTop = 220;
-    const barBot = H - 220;
-    const barW = 6;
+    // Vertical brand accent bar
+    const barX = 76, barTop = 240, barBot = H - 240, barW = 6;
     const barGrad = ctx.createLinearGradient(0, barTop, 0, barBot);
     barGrad.addColorStop(0, rgba(brand, 0.0));
-    barGrad.addColorStop(0.18, rgba(brand, 0.95));
-    barGrad.addColorStop(0.82, rgba(brand, 0.95));
+    barGrad.addColorStop(0.15, rgba(brand, 0.9));
+    barGrad.addColorStop(0.85, rgba(brand, 0.9));
     barGrad.addColorStop(1, rgba(brand, 0.0));
     ctx.fillStyle = barGrad;
     ctx.fillRect(barX, barTop, barW, barBot - barTop);
 
-    // ---------- HEADER ----------
+    // =============================================
+    // HEADER BRAND STRIP — nome do personal em destaque
+    // =============================================
     const PAD = 96;
-    const tileX = PAD, tileY = 88, tileS = 96;
-    roundRect(tileX, tileY, tileS, tileS, 24);
+    const HEADER_H = 200;
+
+    // Fundo do header com gradiente de marca
+    const headerGrad = ctx.createLinearGradient(0, 0, W, HEADER_H);
+    headerGrad.addColorStop(0, rgba(brand, 0.28));
+    headerGrad.addColorStop(0.6, rgba(brand, 0.10));
+    headerGrad.addColorStop(1, rgba(brand, 0.04));
+    ctx.fillStyle = headerGrad;
+    ctx.fillRect(0, 0, W, HEADER_H);
+
+    // Linha inferior do header
+    const headerLineGrad = ctx.createLinearGradient(0, 0, W, 0);
+    headerLineGrad.addColorStop(0, rgba(brand, 0.0));
+    headerLineGrad.addColorStop(0.3, rgba(brand, 0.7));
+    headerLineGrad.addColorStop(0.7, rgba(brand, 0.7));
+    headerLineGrad.addColorStop(1, rgba(brand, 0.0));
+    ctx.strokeStyle = headerLineGrad;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, HEADER_H); ctx.lineTo(W, HEADER_H); ctx.stroke();
+
+    // Logo "T" tile
+    const tileX = PAD, tileY = (HEADER_H - 88) / 2, tileS = 88;
+    roundRect(tileX, tileY, tileS, tileS, 20);
     const tileGrad = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS);
     tileGrad.addColorStop(0, brand);
-    tileGrad.addColorStop(1, mix(brand, "#000814", 0.45));
+    tileGrad.addColorStop(1, mix(brand, "#000814", 0.4));
     ctx.fillStyle = tileGrad; ctx.fill();
     ctx.save();
     ctx.globalCompositeOperation = "screen";
-    const tileSheen = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS*0.65);
-    tileSheen.addColorStop(0, rgba("#ffffff", 0.32));
-    tileSheen.addColorStop(1, rgba("#ffffff", 0));
-    roundRect(tileX, tileY, tileS, tileS, 24);
-    ctx.fillStyle = tileSheen; ctx.fill();
+    const tileSheen = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS*0.6);
+    tileSheen.addColorStop(0, rgba("#ffffff", 0.35)); tileSheen.addColorStop(1, rgba("#ffffff", 0));
+    roundRect(tileX, tileY, tileS, tileS, 20); ctx.fillStyle = tileSheen; ctx.fill();
     ctx.restore();
     ctx.fillStyle = "#ffffff";
-    ctx.font = "900 56px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("T", tileX + tileS/2, tileY + tileS/2 + 4);
+    ctx.font = "900 52px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("T", tileX + tileS/2, tileY + tileS/2 + 3);
     ctx.textBaseline = "alphabetic";
 
+    // Nome do app/personal — destaque máximo
     ctx.textAlign = "left";
-    ctx.fillStyle = "#f4f7ff";
-    ctx.font = "900 38px -apple-system, system-ui, sans-serif";
-    ctx.fillText(appName, tileX + tileS + 22, tileY + 44);
-    ctx.fillStyle = rgba("#f4f7ff", 0.55);
-    ctx.font = "700 20px -apple-system, system-ui, sans-serif";
-    ctx.fillText("APP DE TREINO PERSONAL", tileX + tileS + 22, tileY + 76);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 42px -apple-system, system-ui, sans-serif";
+    ctx.fillText(appName, tileX + tileS + 24, tileY + 46);
+    ctx.fillStyle = rgba("#f4f7ff", 0.58);
+    ctx.font = "600 22px -apple-system, system-ui, sans-serif";
+    ctx.fillText("PERSONAL TRAINER", tileX + tileS + 24, tileY + 80);
 
+    // Badge "CONCLUÍDO" / "DO FEED"
     const pillText = isFeed ? "DO FEED" : "CONCLUÍDO";
     ctx.font = "900 22px -apple-system, system-ui, sans-serif";
     const pillTW = ctx.measureText(pillText).width;
-    const pillH = 56;
-    const pillW = pillTW + 84;
+    const pillH = 52, pillW = pillTW + 76;
     const pillX = W - PAD - pillW;
     const pillY = tileY + (tileS - pillH)/2;
     roundRect(pillX, pillY, pillW, pillH, pillH/2);
-    ctx.fillStyle = rgba(brand, 0.18);
-    ctx.fill();
-    ctx.strokeStyle = rgba(brand, 0.65);
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    drawCheck(pillX + 30, pillY + pillH/2, 26, brand);
-    ctx.fillStyle = brand;
-    ctx.textAlign = "left";
+    ctx.fillStyle = rgba(brand, 0.20); ctx.fill();
+    ctx.strokeStyle = rgba(brand, 0.70); ctx.lineWidth = 2; ctx.stroke();
+    drawCheck(pillX + 28, pillY + pillH/2, 24, brand);
+    ctx.fillStyle = brand; ctx.textAlign = "left";
     ctx.font = "900 22px -apple-system, system-ui, sans-serif";
     ctx.textBaseline = "middle";
-    ctx.fillText(pillText, pillX + 56, pillY + pillH/2 + 1);
+    ctx.fillText(pillText, pillX + 52, pillY + pillH/2 + 1);
     ctx.textBaseline = "alphabetic";
 
-    // ---------- HERO ----------
-    ctx.fillStyle = rgba("#f4f7ff", 0.45);
-    ctx.font = "800 22px -apple-system, system-ui, sans-serif";
+    // =============================================
+    // HERO — data, título do treino, aluno
+    // =============================================
+    ctx.fillStyle = rgba("#f4f7ff", 0.42);
+    ctx.font = "800 24px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(dateLabel.toUpperCase(), PAD, 308);
+    ctx.fillText(dateLabel.toUpperCase(), PAD, 286);
 
     ctx.fillStyle = brand;
-    ctx.font = "900 48px -apple-system, system-ui, sans-serif";
-    ctx.fillText(isFeed ? "TREINO COMPARTILHADO" : "TREINO CONCLUÍDO", PAD, 372);
+    ctx.font = "900 52px -apple-system, system-ui, sans-serif";
+    ctx.fillText(isFeed ? "TREINO COMPARTILHADO" : "TREINO CONCLUÍDO", PAD, 350);
 
-    ctx.fillStyle = "#ffffff";
-    const titleFont = "900 96px -apple-system, system-ui, sans-serif";
-    const titleLines = wrapText(wname, titleFont, W - PAD*2 - 20, 3);
-    ctx.font = titleFont;
-    titleLines.forEach((line, i) => {
-      ctx.fillText(line, PAD, 472 + i * 104);
-    });
-
+    // Nome do aluno com destaque
     if (firstName || studentName) {
-      ctx.fillStyle = rgba("#f4f7ff", 0.72);
-      ctx.font = "600 28px -apple-system, system-ui, sans-serif";
-      const who = studentName || firstName;
-      ctx.fillText(`Por ${who}`, PAD, 472 + titleLines.length * 104 + 30);
+      const who = firstName || studentName;
+      const whoUpper = who.toUpperCase();
+      // Fundo pill do aluno
+      ctx.font = "800 32px -apple-system, system-ui, sans-serif";
+      const pillAW = ctx.measureText(whoUpper).width + 56;
+      roundRect(PAD - 4, 370, pillAW, 54, 14);
+      ctx.fillStyle = rgba("#ffffff", 0.07); ctx.fill();
+      ctx.strokeStyle = rgba("#ffffff", 0.12); ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(whoUpper, PAD + 20, 370 + 36);
     }
 
-    // ---------- STATS ----------
-    const statY = 858;
-    const statH = 224;
+    // Nome do treino — grande
+    ctx.fillStyle = "#ffffff";
+    const titleFont = "900 90px -apple-system, system-ui, sans-serif";
+    const titleLines = wrapText(wname, titleFont, W - PAD*2 - 20, 3);
+    ctx.font = titleFont;
+    const heroBase = (firstName || studentName) ? 492 : 452;
+    titleLines.forEach((line, i) => {
+      ctx.fillText(line, PAD, heroBase + i * 98);
+    });
+
+    // =============================================
+    // STATS BLOCK
+    // =============================================
+    const statY = 880;
+    const statH = 230;
     roundRect(PAD, statY, W - PAD*2, statH, 32);
     const statGrad = ctx.createLinearGradient(PAD, statY, PAD, statY+statH);
-    statGrad.addColorStop(0, rgba("#ffffff", 0.07));
-    statGrad.addColorStop(1, rgba("#ffffff", 0.025));
+    statGrad.addColorStop(0, rgba("#ffffff", 0.08));
+    statGrad.addColorStop(1, rgba("#ffffff", 0.022));
     ctx.fillStyle = statGrad; ctx.fill();
-    ctx.strokeStyle = rgba("#ffffff", 0.10);
-    ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = rgba("#ffffff", 0.10); ctx.lineWidth = 2; ctx.stroke();
 
     const colW = (W - PAD*2) / 3;
     const stats = [
@@ -13460,60 +13513,65 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
       { label: "VOLUME", value: `${volKg.toLocaleString("pt-BR")} kg`, draw: drawFlame },
       { label: "TEMPO",  value: `${minutes} min`, draw: drawClock },
     ];
-
     stats.forEach((s, i) => {
       const cx = PAD + colW * i + colW/2;
-      s.draw(cx, statY + 64, 56, brand);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "900 60px -apple-system, system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(s.value, cx, statY + 154);
-      ctx.fillStyle = rgba("#f4f7ff", 0.55);
-      ctx.font = "900 20px -apple-system, system-ui, sans-serif";
-      ctx.fillText(s.label, cx, statY + 192);
+      s.draw(cx, statY + 66, 54, brand);
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 58px -apple-system, system-ui, sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(s.value, cx, statY + 156);
+      ctx.fillStyle = rgba("#f4f7ff", 0.52); ctx.font = "900 20px -apple-system, system-ui, sans-serif";
+      ctx.fillText(s.label, cx, statY + 194);
     });
-    ctx.strokeStyle = rgba("#ffffff", 0.10);
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = rgba("#ffffff", 0.09); ctx.lineWidth = 1.5;
     for (let i = 1; i < 3; i++) {
       const x = PAD + colW * i;
-      ctx.beginPath();
-      ctx.moveTo(x, statY + 36);
-      ctx.lineTo(x, statY + statH - 36);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, statY + 38); ctx.lineTo(x, statY + statH - 38); ctx.stroke();
     }
 
-    // ---------- QUOTE ----------
-    const quoteY = 1130;
-    const quoteH = 116;
-    roundRect(PAD, quoteY, W - PAD*2, quoteH, 28);
+    // =============================================
+    // QUOTE / MOTIVATIONAL STRIP
+    // =============================================
+    const quoteY = 1148;
+    const quoteH = 108;
+    roundRect(PAD, quoteY, W - PAD*2, quoteH, 26);
     const qGrad = ctx.createLinearGradient(PAD, quoteY, W - PAD, quoteY);
-    qGrad.addColorStop(0, rgba(brand, 0.22));
-    qGrad.addColorStop(1, rgba(brand, 0.06));
+    qGrad.addColorStop(0, rgba(brand, 0.24)); qGrad.addColorStop(1, rgba(brand, 0.06));
     ctx.fillStyle = qGrad; ctx.fill();
-    ctx.strokeStyle = rgba(brand, 0.55);
-    ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = rgba(brand, 0.52); ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 30px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(isFeed ? "Performance em destaque." : "Mais um na conta. 💪", PAD + 30, quoteY + 46);
+    ctx.fillStyle = rgba("#f4f7ff", 0.65); ctx.font = "600 21px -apple-system, system-ui, sans-serif";
+    ctx.fillText(isFeed ? "Acompanhe a evolução no app." : "Disciplina vira progresso. Próximo!", PAD + 30, quoteY + 82);
 
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "900 32px -apple-system, system-ui, sans-serif";
+    // =============================================
+    // FOOTER — branding duplo: app + Treinova
+    // =============================================
+    const footerY = H - 120;
+    ctx.strokeStyle = rgba("#ffffff", 0.09); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, footerY); ctx.lineTo(W - PAD, footerY); ctx.stroke();
+
+    // Handle/app name à esquerda
+    ctx.fillStyle = rgba("#f4f7ff", 0.55);
+    ctx.font = "700 22px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(isFeed ? "Performance no feed." : "Mais um na conta. 💪", PAD + 32, quoteY + 50);
-    ctx.fillStyle = rgba("#f4f7ff", 0.70);
-    ctx.font = "600 22px -apple-system, system-ui, sans-serif";
-    ctx.fillText(isFeed ? "Acompanhe a evolução do aluno no Treinova." : "Disciplina vira progresso. Vamos pro próximo.", PAD + 32, quoteY + 86);
+    ctx.fillText(`@${handleName}`, PAD, footerY + 40);
 
-    // ---------- FOOTER ----------
-    ctx.strokeStyle = rgba("#ffffff", 0.10);
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(PAD, H - 110); ctx.lineTo(W - PAD, H - 110); ctx.stroke();
-
-    ctx.fillStyle = rgba("#f4f7ff", 0.62);
-    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(`@${handleName}`.toUpperCase(), PAD, H - 60);
-    ctx.fillStyle = brand;
-    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
+    // "Powered by TREINOVA" à direita
+    const poweredBy = "Powered by TREINOVA";
+    ctx.font = "700 20px -apple-system, system-ui, sans-serif";
+    const pbW = ctx.measureText(poweredBy).width;
+    // Ícone T pequeno
+    const ftTileS = 30, ftTileX = W - PAD - pbW - ftTileS - 12, ftTileY = footerY + 18;
+    roundRect(ftTileX, ftTileY, ftTileS, ftTileS, 7);
+    const ftGrad = ctx.createLinearGradient(ftTileX, ftTileY, ftTileX+ftTileS, ftTileY+ftTileS);
+    ftGrad.addColorStop(0, brand); ftGrad.addColorStop(1, mix(brand, "#000814", 0.4));
+    ctx.fillStyle = ftGrad; ctx.fill();
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 17px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("T", ftTileX + ftTileS/2, ftTileY + ftTileS/2 + 1);
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = rgba("#f4f7ff", 0.55); ctx.font = "700 20px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "right";
-    ctx.fillText(`#${appName}`, W - PAD, H - 60);
+    ctx.fillText(poweredBy, W - PAD, footerY + 40);
 
     return await new Promise(res => canvas.toBlob(res, "image/png"));
   } catch(e) {
