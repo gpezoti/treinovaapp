@@ -16,8 +16,17 @@ const ASAAS_WEBHOOK_TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN");
 
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+function paymentMethod(billingType?: string) {
+  if (billingType === "PIX") return "pix";
+  if (billingType === "BOLETO") return "boleto";
+  return (billingType || "asaas").toLowerCase();
+}
+
 serve(async (req) => {
   try {
+    if (req.method !== "POST") {
+      return new Response("method not allowed", { status: 405 });
+    }
     // C-01 FIX: fail-closed — se token não estiver configurado, rejeita
     if (!ASAAS_WEBHOOK_TOKEN) {
       console.error("[asaas-webhook] ASAAS_WEBHOOK_TOKEN não configurado — rejeitar request");
@@ -29,7 +38,12 @@ serve(async (req) => {
       return new Response("forbidden", { status: 403 });
     }
 
-    const body = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response("invalid json", { status: 400 });
+    }
     const event = body.event as string;
     const payment = body.payment;
 
@@ -47,12 +61,20 @@ serve(async (req) => {
     }
     if (!our) return new Response("payment not mapped", { status: 200 });
 
-    const update: any = { asaas_id: payment.id };
+    const update: any = {
+      asaas_id: payment.id,
+      invoice_url: payment.invoiceUrl || our.invoice_url || null,
+      boleto_url: payment.bankSlipUrl || our.boleto_url || null,
+      external_reference: payment.externalReference || our.external_reference || our.id,
+    };
 
-    if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED") {
+    if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED" || event === "PAYMENT_RECEIVED_IN_CASH") {
       update.status = "paid";
-      update.paid_at = new Date().toISOString();
-      update.method = payment.billingType === "PIX" ? "pix" : payment.billingType === "BOLETO" ? "boleto" : (payment.billingType||"asaas").toLowerCase();
+      update.paid_at = payment.paymentDate ? new Date(`${payment.paymentDate}T12:00:00Z`).toISOString() : new Date().toISOString();
+      update.method = paymentMethod(payment.billingType);
+    } else if (event === "PAYMENT_CREATED" || event === "PAYMENT_UPDATED" || event === "PAYMENT_PENDING" || event === "PAYMENT_RESTORED") {
+      update.status = "pending";
+      update.method = paymentMethod(payment.billingType);
     } else if (event === "PAYMENT_OVERDUE") {
       update.status = "overdue";
     } else if (event === "PAYMENT_DELETED" || event === "PAYMENT_REFUNDED") {

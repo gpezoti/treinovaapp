@@ -35,6 +35,10 @@ has('withTimeout(sb.functions.invoke("asaas-create-charge"', "Asaas function cal
 assert.ok(!html.includes("payments_user_id_fkey(*)"), "frontend must not depend on old payment FK name");
 assert.ok(!asaasEdge.includes("payments_user_id_fkey(*)"), "edge function must not depend on old payment FK name");
 assert.match(asaasEdge, /ASAAS_API_KEY não configurada/, "edge function must explain missing ASAAS_API_KEY");
+assert.match(asaasEdge, /https:\/\/api\.asaas\.com\/v3/, "edge function must default to Asaas production endpoint");
+assert.match(asaasEdge, /normalizeBillingType/, "edge function must validate billing types");
+assert.match(asaasEdge, /fetchExistingCharge/, "edge function must reuse existing Asaas charges");
+assert.match(asaasEdge, /payment\.asaas_id/, "edge function must detect existing Asaas charge before creating another one");
 
 // Student financial modal/back and layout.
 has('onclick="closeSheet(); renderPayments();"', "financial sheet back must close the modal");

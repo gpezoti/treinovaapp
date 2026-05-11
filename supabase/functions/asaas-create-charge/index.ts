@@ -1,8 +1,8 @@
 // supabase/functions/asaas-create-charge/index.ts
 // Cria uma cobrança no Asaas a partir de um payment_id.
 // Secrets necessários:
-//   - ASAAS_API_KEY (key do produtor: sandbox ou prod)
-//   - ASAAS_BASE_URL (https://sandbox.asaas.com/api/v3 ou https://api.asaas.com/v3)
+//   - ASAAS_API_KEY (key de produção do Asaas)
+//   - ASAAS_BASE_URL (produção: https://api.asaas.com/v3)
 //   - SUPABASE_URL
 //   - SUPABASE_SERVICE_ROLE_KEY
 //   - SUPABASE_ANON_KEY
@@ -11,7 +11,7 @@ import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ASAAS_API_KEY         = Deno.env.get("ASAAS_API_KEY")!;
-const ASAAS_BASE_URL        = Deno.env.get("ASAAS_BASE_URL") || "https://sandbox.asaas.com/api/v3";
+const ASAAS_BASE_URL        = (Deno.env.get("ASAAS_BASE_URL") || "https://api.asaas.com/v3").replace(/\/+$/, "");
 const SUPABASE_URL          = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SUPABASE_ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -44,9 +44,75 @@ async function asaasFetch(path: string, init: RequestInit = {}) {
       ...(init.headers || {}),
     },
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.errors?.[0]?.description || JSON.stringify(data));
+  const raw = await res.text();
+  let data: any = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    data = { raw };
+  }
+  if (!res.ok) {
+    const detail = data?.errors?.[0]?.description || data?.message || raw || res.statusText;
+    throw new Error(`Asaas HTTP ${res.status}: ${detail}`);
+  }
   return data;
+}
+
+function normalizeBillingType(value: unknown) {
+  const billingType = String(value || "PIX").trim().toUpperCase();
+  if (!["PIX", "BOLETO"].includes(billingType)) {
+    throw new Error("Forma de cobrança inválida. Use PIX ou BOLETO.");
+  }
+  return billingType;
+}
+
+function validatePaymentForCharge(payment: any) {
+  const amount = Number(payment.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Valor da cobrança inválido.");
+  }
+  if (!payment.due_date || !/^\d{4}-\d{2}-\d{2}$/.test(String(payment.due_date))) {
+    throw new Error("Data de vencimento inválida.");
+  }
+  if (payment.status === "paid") {
+    throw new Error("Este pagamento já está marcado como pago.");
+  }
+  if (payment.status === "cancelled") {
+    throw new Error("Este pagamento foi cancelado.");
+  }
+}
+
+async function fetchExistingCharge(payment: any, billingType: string) {
+  if (!payment.asaas_id) return null;
+
+  const charge = await asaasFetch(`/payments/${encodeURIComponent(payment.asaas_id)}`);
+  const updatePayload: any = {
+    invoice_url: charge.invoiceUrl || payment.invoice_url || null,
+    boleto_url: charge.bankSlipUrl || payment.boleto_url || null,
+    external_reference: payment.external_reference || payment.id,
+  };
+
+  let pixQr = payment.pix_qr || null;
+  let pixCopyPaste = payment.pix_copy_paste || null;
+  if (billingType === "PIX" && (!pixQr || !pixCopyPaste)) {
+    const pix = await asaasFetch(`/payments/${encodeURIComponent(payment.asaas_id)}/pixQrCode`);
+    pixQr = pix.encodedImage || null;
+    pixCopyPaste = pix.payload || null;
+    updatePayload.pix_qr = pixQr;
+    updatePayload.pix_copy_paste = pixCopyPaste;
+  }
+
+  await sbAdmin.from("payments").update(updatePayload).eq("id", payment.id);
+
+  return {
+    ok: true,
+    reused: true,
+    asaas_id: payment.asaas_id,
+    invoice_url: updatePayload.invoice_url,
+    pix_qr: pixQr,
+    pix_copy_paste: pixCopyPaste,
+    boleto_url: updatePayload.boleto_url,
+  };
 }
 
 async function ensureCustomer(profile: any): Promise<string> {
@@ -113,6 +179,7 @@ serve(async (req) => {
     // 3. Ler payload
     const { payment_id, billing_type } = await req.json();
     if (!payment_id) return json({ error: "payment_id obrigatório" }, 400);
+    const billingType = normalizeBillingType(billing_type);
 
     // 4. Buscar payment + perfil do pagador.
     // Evita depender do nome da FK, que pode variar entre payer_id/user_id em ambientes diferentes.
@@ -125,6 +192,7 @@ serve(async (req) => {
     if (pErr || !payment) return json({ error: "Pagamento não encontrado" }, 404);
     const payerId = payment.user_id || payment.payer_id;
     if (!payerId) return json({ error: "Pagamento sem pagador vinculado." }, 400);
+    validatePaymentForCharge(payment);
 
     const { data: payer, error: payerErr } = await sbAdmin
       .from("profiles")
@@ -141,6 +209,9 @@ serve(async (req) => {
       return json({ error: "Sem permissão para este pagamento" }, 403);
     }
 
+    const existing = await fetchExistingCharge(payment, billingType);
+    if (existing) return json(existing);
+
     // =========================================================================
     // Fluxo normal: criar/buscar customer no Asaas e gerar cobrança
     // =========================================================================
@@ -149,7 +220,7 @@ serve(async (req) => {
 
     const chargeBody: any = {
       customer:          customerId,
-      billingType:       billing_type || "PIX",
+      billingType,
       value:             Number(payment.amount),
       dueDate:           payment.due_date,
       description:       payment.reference || "Mensalidade Treinova",
@@ -169,13 +240,13 @@ serve(async (req) => {
 
     let pixQr = null, pixCopyPaste = null, boletoUrl = null;
 
-    if ((billing_type || "PIX") === "PIX") {
+    if (billingType === "PIX") {
       const pix   = await asaasFetch(`/payments/${charge.id}/pixQrCode`);
       pixQr        = pix.encodedImage;   // base64 do QR
       pixCopyPaste = pix.payload;        // copia e cola
       updatePayload.pix_qr         = pixQr;
       updatePayload.pix_copy_paste = pixCopyPaste;
-    } else if ((billing_type || "").toUpperCase() === "BOLETO") {
+    } else if (billingType === "BOLETO") {
       boletoUrl                  = charge.bankSlipUrl || null;
       updatePayload.boleto_url   = boletoUrl;
     }
