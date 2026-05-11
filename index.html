@@ -13144,6 +13144,29 @@ window.fireConfetti = fireConfetti;
 function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
   const wname = STATE.selectedWorkout && STATE.workouts[STATE.selectedWorkout]?.name || "Treino";
   const setsDone = (STATE.setLogs || []).filter(s => s.done).length;
+
+  // Coleta grupos musculares do treino atual
+  const CAT_LABEL = { peito:'Peito', costas:'Costas', ombros:'Ombros', biceps:'Bíceps', bicep:'Bíceps',
+    triceps:'Tríceps', tricep:'Tríceps', quadriceps:'Quadríceps', quad:'Quadríceps',
+    posterior:'Posterior', gluteos:'Glúteos', gluteo:'Glúteos', panturrilha:'Panturrilha',
+    abdomen:'Abdômen', core:'Core', mobility:'Mobilidade', cardio:'Cardio', aerobio:'Aeróbio' };
+  const WData = STATE.workouts[STATE.selectedWorkout];
+  const cats = WData ? [...new Set((WData.exercises||[]).map(e => (e.cat||'').toLowerCase()).filter(Boolean))] : [];
+  const muscleGroups = cats.map(c => CAT_LABEL[c] || c).filter(Boolean).slice(0, 6);
+
+  // Hora do treino (HH:MM)
+  const now = new Date();
+  const workoutTime = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const dateLabel = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  // Guarda meta no escopo global para o onclick do botão de compartilhar
+  window._shareWorkoutMeta = {
+    muscleGroups,
+    workoutTime,
+    dateLabel,
+    studentName: STATE.profile?.full_name || ''
+  };
+
   const overlay = document.createElement("div");
   overlay.id = "wc-overlay";
   overlay.innerHTML = `
@@ -13182,7 +13205,7 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
         </div>
       </div>
       <div class="wc-buttons">
-        <button class="wc-btn wc-share" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone})"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Compartilhar</button>
+        <button class="wc-btn wc-share" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone}, window._shareWorkoutMeta||{})"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Compartilhar</button>
         <button class="wc-btn wc-cont" onclick="document.getElementById('wc-overlay').remove();navTo('feed')">Ver feed</button>
       </div>
     </div>`;
@@ -13224,16 +13247,34 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     const ctx = canvas.getContext("2d");
 
     // ---------- helpers ----------
-    const brand = (STATE.branding && STATE.branding.brand_color) || "#13baf2";
+    const brand = (STATE.branding && (STATE.branding.primary_color || STATE.branding.brand_color)) || "#13baf2";
     const appName = ((STATE.branding && STATE.branding.app_name) || "TREINOVA").toUpperCase();
     const handleName = ((STATE.branding && STATE.branding.app_name) || "treinova").toLowerCase().replace(/\s+/g, "");
     const studentName = meta.studentName || STATE.profile?.full_name || "";
     const firstName = (studentName.split(" ")[0] || "").trim();
     const isFeed = meta.source === "feed";
     const dateLabel = meta.dateLabel || new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+    const workoutTime = meta.workoutTime || "";
+    const muscleGroups = Array.isArray(meta.muscleGroups) ? meta.muscleGroups : [];
     const minutes = Math.max(0, Math.floor(Number(duration || 0) / 60));
     const volKg = Math.round(Number(totalVolume || 0));
     const sets  = Math.max(0, Number(setsDone || 0));
+
+    // Carrega logo da marca para uso no canvas (header + footer)
+    const logoUrl = STATE.branding?.logo_url || null;
+    let logoImg = null;
+    if (logoUrl) {
+      try {
+        logoImg = await new Promise((res) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => res(img);
+          img.onerror = () => res(null);
+          img.src = logoUrl;
+          setTimeout(() => res(null), 4000);
+        });
+      } catch(e) { logoImg = null; }
+    }
 
     const hexToRgb = (hex) => {
       const h = String(hex || "").replace("#", "").trim();
@@ -13340,173 +13381,158 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
       ctx.restore();
     };
 
-    // ---------- BACKGROUND ----------
+    // =============================================
+    // BACKGROUND
+    // =============================================
     ctx.fillStyle = "#06090f";
     ctx.fillRect(0, 0, W, H);
     const baseGrad = ctx.createLinearGradient(0, 0, W, H);
     baseGrad.addColorStop(0, "#0b1425");
     baseGrad.addColorStop(0.55, "#090e1a");
     baseGrad.addColorStop(1, "#04070d");
-    ctx.fillStyle = baseGrad;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = baseGrad; ctx.fillRect(0, 0, W, H);
 
-    // Glow spots
-    const glow1 = ctx.createRadialGradient(W*0.85, H*0.08, 0, W*0.85, H*0.08, W*0.9);
-    glow1.addColorStop(0, rgba(brand, 0.38));
-    glow1.addColorStop(0.5, rgba(brand, 0.08));
-    glow1.addColorStop(1, "transparent");
+    const glow1 = ctx.createRadialGradient(W*0.85, H*0.10, 0, W*0.85, H*0.10, W*0.85);
+    glow1.addColorStop(0, rgba(brand, 0.32)); glow1.addColorStop(0.5, rgba(brand, 0.07)); glow1.addColorStop(1, "transparent");
     ctx.fillStyle = glow1; ctx.fillRect(0, 0, W, H);
-    const glow2 = ctx.createRadialGradient(W*0.12, H*0.92, 0, W*0.12, H*0.92, W*0.8);
-    glow2.addColorStop(0, rgba(mix(brand, "#000814", 0.5), 0.28));
-    glow2.addColorStop(1, "transparent");
+    const glow2 = ctx.createRadialGradient(W*0.10, H*0.90, 0, W*0.10, H*0.90, W*0.75);
+    glow2.addColorStop(0, rgba(mix(brand, "#000814", 0.5), 0.22)); glow2.addColorStop(1, "transparent");
     ctx.fillStyle = glow2; ctx.fillRect(0, 0, W, H);
 
-    // Dot grid
-    ctx.fillStyle = rgba("#ffffff", 0.038);
-    for (let y = 60; y < H; y += 42) {
-      for (let x = 60; x < W; x += 42) {
-        ctx.beginPath(); ctx.arc(x, y, 1.1, 0, Math.PI*2); ctx.fill();
-      }
-    }
+    ctx.fillStyle = rgba("#ffffff", 0.030);
+    for (let gy = 56; gy < H; gy += 46) { for (let gx = 56; gx < W; gx += 46) { ctx.beginPath(); ctx.arc(gx, gy, 1.0, 0, Math.PI*2); ctx.fill(); } }
 
-    // Diagonal sheen
-    ctx.save();
-    ctx.translate(W*0.78, -120); ctx.rotate(-0.45);
+    ctx.save(); ctx.translate(W*0.78, -120); ctx.rotate(-0.45);
     const sheen = ctx.createLinearGradient(0, 0, 0, 600);
-    sheen.addColorStop(0, rgba("#ffffff", 0.0));
-    sheen.addColorStop(0.5, rgba("#ffffff", 0.055));
-    sheen.addColorStop(1, rgba("#ffffff", 0.0));
-    ctx.fillStyle = sheen;
-    ctx.fillRect(-160, 0, 320, 1800);
-    ctx.restore();
+    sheen.addColorStop(0, rgba("#ffffff", 0.0)); sheen.addColorStop(0.5, rgba("#ffffff", 0.048)); sheen.addColorStop(1, rgba("#ffffff", 0.0));
+    ctx.fillStyle = sheen; ctx.fillRect(-160, 0, 320, 1800); ctx.restore();
 
     // Vertical brand accent bar
-    const barX = 76, barTop = 240, barBot = H - 240, barW = 6;
+    const PAD = 88;
+    const barX = 72, barTop = 200, barBot = H - 200, barW = 5;
     const barGrad = ctx.createLinearGradient(0, barTop, 0, barBot);
-    barGrad.addColorStop(0, rgba(brand, 0.0));
-    barGrad.addColorStop(0.15, rgba(brand, 0.9));
-    barGrad.addColorStop(0.85, rgba(brand, 0.9));
-    barGrad.addColorStop(1, rgba(brand, 0.0));
-    ctx.fillStyle = barGrad;
-    ctx.fillRect(barX, barTop, barW, barBot - barTop);
+    barGrad.addColorStop(0, rgba(brand, 0.0)); barGrad.addColorStop(0.12, rgba(brand, 0.85));
+    barGrad.addColorStop(0.88, rgba(brand, 0.85)); barGrad.addColorStop(1, rgba(brand, 0.0));
+    ctx.fillStyle = barGrad; ctx.fillRect(barX, barTop, barW, barBot - barTop);
 
     // =============================================
-    // HEADER BRAND STRIP — nome do personal em destaque
+    // HEADER BRAND STRIP
     // =============================================
-    const PAD = 96;
-    const HEADER_H = 200;
-
-    // Fundo do header com gradiente de marca
+    const HEADER_H = 172;
     const headerGrad = ctx.createLinearGradient(0, 0, W, HEADER_H);
-    headerGrad.addColorStop(0, rgba(brand, 0.28));
-    headerGrad.addColorStop(0.6, rgba(brand, 0.10));
-    headerGrad.addColorStop(1, rgba(brand, 0.04));
-    ctx.fillStyle = headerGrad;
-    ctx.fillRect(0, 0, W, HEADER_H);
-
-    // Linha inferior do header
-    const headerLineGrad = ctx.createLinearGradient(0, 0, W, 0);
-    headerLineGrad.addColorStop(0, rgba(brand, 0.0));
-    headerLineGrad.addColorStop(0.3, rgba(brand, 0.7));
-    headerLineGrad.addColorStop(0.7, rgba(brand, 0.7));
-    headerLineGrad.addColorStop(1, rgba(brand, 0.0));
-    ctx.strokeStyle = headerLineGrad;
-    ctx.lineWidth = 2;
+    headerGrad.addColorStop(0, rgba(brand, 0.30)); headerGrad.addColorStop(0.55, rgba(brand, 0.10)); headerGrad.addColorStop(1, rgba(brand, 0.03));
+    ctx.fillStyle = headerGrad; ctx.fillRect(0, 0, W, HEADER_H);
+    const headerLineGrd = ctx.createLinearGradient(0, 0, W, 0);
+    headerLineGrd.addColorStop(0, rgba(brand, 0.0)); headerLineGrd.addColorStop(0.25, rgba(brand, 0.72));
+    headerLineGrd.addColorStop(0.75, rgba(brand, 0.72)); headerLineGrd.addColorStop(1, rgba(brand, 0.0));
+    ctx.strokeStyle = headerLineGrd; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(0, HEADER_H); ctx.lineTo(W, HEADER_H); ctx.stroke();
 
-    // Logo "T" tile
-    const tileX = PAD, tileY = (HEADER_H - 88) / 2, tileS = 88;
-    roundRect(tileX, tileY, tileS, tileS, 20);
-    const tileGrad = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS);
-    tileGrad.addColorStop(0, brand);
-    tileGrad.addColorStop(1, mix(brand, "#000814", 0.4));
-    ctx.fillStyle = tileGrad; ctx.fill();
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    const tileSheen = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS*0.6);
-    tileSheen.addColorStop(0, rgba("#ffffff", 0.35)); tileSheen.addColorStop(1, rgba("#ffffff", 0));
-    roundRect(tileX, tileY, tileS, tileS, 20); ctx.fillStyle = tileSheen; ctx.fill();
-    ctx.restore();
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "900 52px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("T", tileX + tileS/2, tileY + tileS/2 + 3);
-    ctx.textBaseline = "alphabetic";
-
-    // Nome do app/personal — destaque máximo
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "900 42px -apple-system, system-ui, sans-serif";
-    ctx.fillText(appName, tileX + tileS + 24, tileY + 46);
-    ctx.fillStyle = rgba("#f4f7ff", 0.58);
-    ctx.font = "600 22px -apple-system, system-ui, sans-serif";
-    ctx.fillText("PERSONAL TRAINER", tileX + tileS + 24, tileY + 80);
-
-    // Badge "CONCLUÍDO" / "DO FEED"
-    const pillText = isFeed ? "DO FEED" : "CONCLUÍDO";
-    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
-    const pillTW = ctx.measureText(pillText).width;
-    const pillH = 52, pillW = pillTW + 76;
-    const pillX = W - PAD - pillW;
-    const pillY = tileY + (tileS - pillH)/2;
-    roundRect(pillX, pillY, pillW, pillH, pillH/2);
-    ctx.fillStyle = rgba(brand, 0.20); ctx.fill();
-    ctx.strokeStyle = rgba(brand, 0.70); ctx.lineWidth = 2; ctx.stroke();
-    drawCheck(pillX + 28, pillY + pillH/2, 24, brand);
-    ctx.fillStyle = brand; ctx.textAlign = "left";
-    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
-    ctx.textBaseline = "middle";
-    ctx.fillText(pillText, pillX + 52, pillY + pillH/2 + 1);
-    ctx.textBaseline = "alphabetic";
-
-    // =============================================
-    // HERO — data, título do treino, aluno
-    // =============================================
-    ctx.fillStyle = rgba("#f4f7ff", 0.42);
-    ctx.font = "800 24px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(dateLabel.toUpperCase(), PAD, 286);
-
-    ctx.fillStyle = brand;
-    ctx.font = "900 52px -apple-system, system-ui, sans-serif";
-    ctx.fillText(isFeed ? "TREINO COMPARTILHADO" : "TREINO CONCLUÍDO", PAD, 350);
-
-    // Nome do aluno com destaque
-    if (firstName || studentName) {
-      const who = firstName || studentName;
-      const whoUpper = who.toUpperCase();
-      // Fundo pill do aluno
-      ctx.font = "800 32px -apple-system, system-ui, sans-serif";
-      const pillAW = ctx.measureText(whoUpper).width + 56;
-      roundRect(PAD - 4, 370, pillAW, 54, 14);
-      ctx.fillStyle = rgba("#ffffff", 0.07); ctx.fill();
-      ctx.strokeStyle = rgba("#ffffff", 0.12); ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(whoUpper, PAD + 20, 370 + 36);
+    // Logo tile — usa imagem real ou fallback "T"
+    const tileS = 82, tileX = PAD, tileY = (HEADER_H - tileS) / 2;
+    if (logoImg) {
+      ctx.save();
+      roundRect(tileX, tileY, tileS, tileS, 16); ctx.clip();
+      ctx.drawImage(logoImg, tileX, tileY, tileS, tileS); ctx.restore();
+      roundRect(tileX, tileY, tileS, tileS, 16);
+      ctx.strokeStyle = rgba(brand, 0.38); ctx.lineWidth = 2; ctx.stroke();
+    } else {
+      roundRect(tileX, tileY, tileS, tileS, 16);
+      const tileGrad = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS);
+      tileGrad.addColorStop(0, brand); tileGrad.addColorStop(1, mix(brand, "#000814", 0.4));
+      ctx.fillStyle = tileGrad; ctx.fill();
+      ctx.save(); ctx.globalCompositeOperation = "screen";
+      const tileSheen = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS*0.6);
+      tileSheen.addColorStop(0, rgba("#ffffff", 0.30)); tileSheen.addColorStop(1, rgba("#ffffff", 0));
+      roundRect(tileX, tileY, tileS, tileS, 16); ctx.fillStyle = tileSheen; ctx.fill(); ctx.restore();
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 48px -apple-system, system-ui, sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("T", tileX + tileS/2, tileY + tileS/2 + 3);
+      ctx.textBaseline = "alphabetic";
     }
+
+    // App name + "PERSONAL TRAINER"
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 38px -apple-system, system-ui, sans-serif";
+    ctx.fillText(appName, tileX + tileS + 20, tileY + 40);
+    ctx.fillStyle = rgba("#f4f7ff", 0.52); ctx.font = "600 19px -apple-system, system-ui, sans-serif";
+    ctx.fillText("PERSONAL TRAINER", tileX + tileS + 20, tileY + 67);
+
+    // Badge CONCLUÍDO / DO FEED
+    const pillText = isFeed ? "DO FEED" : "CONCLUÍDO";
+    ctx.font = "800 19px -apple-system, system-ui, sans-serif";
+    const pillTW = ctx.measureText(pillText).width;
+    const pillH = 46, pillW = pillTW + 62;
+    const pillX = W - PAD - pillW, pillY = tileY + (tileS - pillH)/2;
+    roundRect(pillX, pillY, pillW, pillH, pillH/2);
+    ctx.fillStyle = rgba(brand, 0.18); ctx.fill();
+    ctx.strokeStyle = rgba(brand, 0.62); ctx.lineWidth = 1.5; ctx.stroke();
+    drawCheck(pillX + 24, pillY + pillH/2, 20, brand);
+    ctx.fillStyle = brand; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(pillText, pillX + 44, pillY + pillH/2 + 1); ctx.textBaseline = "alphabetic";
+
+    // =============================================
+    // HERO — data/hora, label, aluno, nome treino
+    // =============================================
+    const dateTimeStr = workoutTime ? `${dateLabel.toUpperCase()} · ${workoutTime}` : dateLabel.toUpperCase();
+    ctx.fillStyle = rgba("#f4f7ff", 0.38); ctx.font = "700 21px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(dateTimeStr, PAD, 218);
+
+    ctx.fillStyle = brand; ctx.font = "900 44px -apple-system, system-ui, sans-serif";
+    ctx.fillText(isFeed ? "TREINO COMPARTILHADO" : "TREINO CONCLUÍDO", PAD, 272);
+
+    // Nome do aluno (pill)
+    let heroCursor = 296;
+    if (firstName || studentName) {
+      const who = (firstName || studentName).toUpperCase();
+      ctx.font = "800 27px -apple-system, system-ui, sans-serif";
+      const pillAW = ctx.measureText(who).width + 44, pillAH = 46;
+      roundRect(PAD - 2, heroCursor, pillAW, pillAH, 11);
+      ctx.fillStyle = rgba("#ffffff", 0.09); ctx.fill();
+      ctx.strokeStyle = rgba("#ffffff", 0.15); ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = "#ffffff"; ctx.textBaseline = "middle";
+      ctx.fillText(who, PAD + 16, heroCursor + pillAH/2); ctx.textBaseline = "alphabetic";
+      heroCursor += pillAH + 20;
+    } else { heroCursor += 14; }
 
     // Nome do treino — grande
     ctx.fillStyle = "#ffffff";
-    const titleFont = "900 90px -apple-system, system-ui, sans-serif";
-    const titleLines = wrapText(wname, titleFont, W - PAD*2 - 20, 3);
+    const titleFont = "900 80px -apple-system, system-ui, sans-serif";
+    const titleLines = wrapText(wname, titleFont, W - PAD*2, 3);
     ctx.font = titleFont;
-    const heroBase = (firstName || studentName) ? 492 : 452;
-    titleLines.forEach((line, i) => {
-      ctx.fillText(line, PAD, heroBase + i * 98);
-    });
+    const titleLineH = 86;
+    titleLines.forEach((line, i) => ctx.fillText(line, PAD, heroCursor + 70 + i * titleLineH));
+    heroCursor += 70 + (titleLines.length - 1) * titleLineH + 16;
+
+    // Grupos musculares — pills coloridos
+    if (muscleGroups.length > 0) {
+      heroCursor += 20;
+      ctx.font = "700 19px -apple-system, system-ui, sans-serif";
+      const mgH = 42, mgGapX = 10, mgGapY = 10;
+      let mgX = PAD, mgY = heroCursor;
+      muscleGroups.forEach(lbl => {
+        const tw = ctx.measureText(lbl).width, pw = tw + 28;
+        if (mgX + pw > W - PAD && mgX > PAD) { mgX = PAD; mgY += mgH + mgGapY; }
+        roundRect(mgX, mgY, pw, mgH, mgH/2);
+        ctx.fillStyle = rgba(brand, 0.14); ctx.fill();
+        ctx.strokeStyle = rgba(brand, 0.38); ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = rgba("#f4f7ff", 0.85); ctx.textBaseline = "middle"; ctx.textAlign = "left";
+        ctx.fillText(lbl, mgX + 14, mgY + mgH/2); ctx.textBaseline = "alphabetic";
+        mgX += pw + mgGapX;
+      });
+      heroCursor = mgY + mgH;
+    }
 
     // =============================================
-    // STATS BLOCK
+    // STATS — posição dinâmica após hero (mínimo y=800)
     // =============================================
-    const statY = 880;
-    const statH = 230;
-    roundRect(PAD, statY, W - PAD*2, statH, 32);
+    const statY = Math.max(heroCursor + 36, 800);
+    const statH = 218;
+    roundRect(PAD, statY, W - PAD*2, statH, 26);
     const statGrad = ctx.createLinearGradient(PAD, statY, PAD, statY+statH);
-    statGrad.addColorStop(0, rgba("#ffffff", 0.08));
-    statGrad.addColorStop(1, rgba("#ffffff", 0.022));
+    statGrad.addColorStop(0, rgba("#ffffff", 0.08)); statGrad.addColorStop(1, rgba("#ffffff", 0.02));
     ctx.fillStyle = statGrad; ctx.fill();
-    ctx.strokeStyle = rgba("#ffffff", 0.10); ctx.lineWidth = 2; ctx.stroke();
-
+    ctx.strokeStyle = rgba("#ffffff", 0.09); ctx.lineWidth = 1.5; ctx.stroke();
     const colW = (W - PAD*2) / 3;
     const stats = [
       { label: "SÉRIES", value: String(sets), draw: drawDumbbell },
@@ -13515,63 +13541,66 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     ];
     stats.forEach((s, i) => {
       const cx = PAD + colW * i + colW/2;
-      s.draw(cx, statY + 66, 54, brand);
-      ctx.fillStyle = "#ffffff"; ctx.font = "900 58px -apple-system, system-ui, sans-serif"; ctx.textAlign = "center";
-      ctx.fillText(s.value, cx, statY + 156);
-      ctx.fillStyle = rgba("#f4f7ff", 0.52); ctx.font = "900 20px -apple-system, system-ui, sans-serif";
-      ctx.fillText(s.label, cx, statY + 194);
+      s.draw(cx, statY + 60, 48, brand);
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 52px -apple-system, system-ui, sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(s.value, cx, statY + 146);
+      ctx.fillStyle = rgba("#f4f7ff", 0.48); ctx.font = "800 17px -apple-system, system-ui, sans-serif";
+      ctx.fillText(s.label, cx, statY + 180);
     });
-    ctx.strokeStyle = rgba("#ffffff", 0.09); ctx.lineWidth = 1.5;
+    ctx.strokeStyle = rgba("#ffffff", 0.08); ctx.lineWidth = 1.5;
     for (let i = 1; i < 3; i++) {
-      const x = PAD + colW * i;
-      ctx.beginPath(); ctx.moveTo(x, statY + 38); ctx.lineTo(x, statY + statH - 38); ctx.stroke();
+      const sx = PAD + colW * i;
+      ctx.beginPath(); ctx.moveTo(sx, statY + 30); ctx.lineTo(sx, statY + statH - 30); ctx.stroke();
     }
 
     // =============================================
     // QUOTE / MOTIVATIONAL STRIP
     // =============================================
-    const quoteY = 1148;
-    const quoteH = 108;
-    roundRect(PAD, quoteY, W - PAD*2, quoteH, 26);
+    const quoteY = statY + statH + 18;
+    const quoteH = 96;
+    roundRect(PAD, quoteY, W - PAD*2, quoteH, 20);
     const qGrad = ctx.createLinearGradient(PAD, quoteY, W - PAD, quoteY);
-    qGrad.addColorStop(0, rgba(brand, 0.24)); qGrad.addColorStop(1, rgba(brand, 0.06));
+    qGrad.addColorStop(0, rgba(brand, 0.20)); qGrad.addColorStop(1, rgba(brand, 0.05));
     ctx.fillStyle = qGrad; ctx.fill();
-    ctx.strokeStyle = rgba(brand, 0.52); ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = "#ffffff"; ctx.font = "900 30px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(isFeed ? "Performance em destaque." : "Mais um na conta. 💪", PAD + 30, quoteY + 46);
-    ctx.fillStyle = rgba("#f4f7ff", 0.65); ctx.font = "600 21px -apple-system, system-ui, sans-serif";
-    ctx.fillText(isFeed ? "Acompanhe a evolução no app." : "Disciplina vira progresso. Próximo!", PAD + 30, quoteY + 82);
+    ctx.strokeStyle = rgba(brand, 0.45); ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 27px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(isFeed ? "Performance em destaque." : "Mais um na conta. 💪", PAD + 26, quoteY + 40);
+    ctx.fillStyle = rgba("#f4f7ff", 0.60); ctx.font = "600 18px -apple-system, system-ui, sans-serif";
+    ctx.fillText(isFeed ? "Acompanhe a evolução no app." : "Disciplina vira progresso. Próximo!", PAD + 26, quoteY + 72);
 
     // =============================================
-    // FOOTER — branding duplo: app + Treinova
+    // FOOTER — handle + logo real "Powered by TREINOVA"
     // =============================================
-    const footerY = H - 120;
-    ctx.strokeStyle = rgba("#ffffff", 0.09); ctx.lineWidth = 1;
+    const footerY = H - 100;
+    ctx.strokeStyle = rgba("#ffffff", 0.08); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(PAD, footerY); ctx.lineTo(W - PAD, footerY); ctx.stroke();
 
-    // Handle/app name à esquerda
-    ctx.fillStyle = rgba("#f4f7ff", 0.55);
-    ctx.font = "700 22px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(`@${handleName}`, PAD, footerY + 40);
+    ctx.fillStyle = rgba("#f4f7ff", 0.50); ctx.font = "700 19px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(`@${handleName}`, PAD, footerY + 36);
 
-    // "Powered by TREINOVA" à direita
+    // Logo real (igual ao login) + "Powered by TREINOVA"
     const poweredBy = "Powered by TREINOVA";
-    ctx.font = "700 20px -apple-system, system-ui, sans-serif";
+    ctx.font = "600 17px -apple-system, system-ui, sans-serif";
     const pbW = ctx.measureText(poweredBy).width;
-    // Ícone T pequeno
-    const ftTileS = 30, ftTileX = W - PAD - pbW - ftTileS - 12, ftTileY = footerY + 18;
-    roundRect(ftTileX, ftTileY, ftTileS, ftTileS, 7);
-    const ftGrad = ctx.createLinearGradient(ftTileX, ftTileY, ftTileX+ftTileS, ftTileY+ftTileS);
-    ftGrad.addColorStop(0, brand); ftGrad.addColorStop(1, mix(brand, "#000814", 0.4));
-    ctx.fillStyle = ftGrad; ctx.fill();
-    ctx.fillStyle = "#ffffff"; ctx.font = "900 17px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("T", ftTileX + ftTileS/2, ftTileY + ftTileS/2 + 1);
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = rgba("#f4f7ff", 0.55); ctx.font = "700 20px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(poweredBy, W - PAD, footerY + 40);
+    const ftS = 30, ftGapI = 9;
+    const ftX = W - PAD - ftS - ftGapI - pbW, ftY = footerY + 12;
+    if (logoImg) {
+      ctx.save();
+      roundRect(ftX, ftY, ftS, ftS, 7); ctx.clip();
+      ctx.drawImage(logoImg, ftX, ftY, ftS, ftS); ctx.restore();
+      roundRect(ftX, ftY, ftS, ftS, 7);
+      ctx.strokeStyle = rgba(brand, 0.30); ctx.lineWidth = 1.5; ctx.stroke();
+    } else {
+      roundRect(ftX, ftY, ftS, ftS, 7);
+      const ftGrd = ctx.createLinearGradient(ftX, ftY, ftX+ftS, ftY+ftS);
+      ftGrd.addColorStop(0, brand); ftGrd.addColorStop(1, mix(brand, "#000814", 0.4));
+      ctx.fillStyle = ftGrd; ctx.fill();
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 16px -apple-system, system-ui, sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("T", ftX + ftS/2, ftY + ftS/2 + 1); ctx.textBaseline = "alphabetic";
+    }
+    ctx.fillStyle = rgba("#f4f7ff", 0.50); ctx.font = "600 17px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(poweredBy, ftX + ftS + ftGapI, footerY + 36);
 
     return await new Promise(res => canvas.toBlob(res, "image/png"));
   } catch(e) {
