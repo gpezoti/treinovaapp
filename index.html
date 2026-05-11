@@ -7333,13 +7333,36 @@ function canShareFeedWorkout(p) {
 
 function getFeedWorkoutSharePayload(p) {
   const workoutLabel = p.workout_name || (p.workout_code ? `Treino ${p.workout_code}` : "Treino");
+  const postDate = p.created_at ? new Date(p.created_at) : null;
+
+  // Hora do treino a partir do created_at do post
+  const workoutTime = postDate
+    ? postDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  // Grupos musculares: tenta pelo workout do state, se carregado
+  const CAT_LABEL_F = { chest:'Peito', back:'Costas', shoulder:'Ombros', biceps:'Bíceps',
+    triceps:'Tríceps', quad:'Quadríceps', hamstring:'Posterior', glute:'Glúteos',
+    calf:'Panturrilha', core:'Abdômen', mobility:'Mobilidade', cardio:'Cardio' };
+  const wData = p.workout_code ? STATE.workouts?.[p.workout_code] : null;
+  const muscleGroups = wData
+    ? [...new Set((wData.exercises||[]).map(e => {
+        const mg = (e.muscle_group||'').trim();
+        if (mg) return mg;
+        const c = (e.cat||'').trim().toLowerCase();
+        return CAT_LABEL_F[c] || c;
+      }).filter(Boolean))].slice(0, 6)
+    : [];
+
   return {
     name: workoutLabel,
     totalVolume: Number(p.total_volume_kg || 0),
     duration: Number(p.duration_seconds || 0),
     setsDone: Number(p.set_count || p.sets_done || p.set_count_done || 0),
     studentName: (p.student && p.student.full_name) || STATE.profile?.full_name || "",
-    dateLabel: p.created_at ? new Date(p.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : "",
+    dateLabel: postDate ? postDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : "",
+    workoutTime,
+    muscleGroups,
     source: "feed"
   };
 }
@@ -13146,13 +13169,19 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
   const setsDone = (STATE.setLogs || []).filter(s => s.done).length;
 
   // Coleta grupos musculares do treino atual
-  const CAT_LABEL = { peito:'Peito', costas:'Costas', ombros:'Ombros', biceps:'Bíceps', bicep:'Bíceps',
-    triceps:'Tríceps', tricep:'Tríceps', quadriceps:'Quadríceps', quad:'Quadríceps',
-    posterior:'Posterior', gluteos:'Glúteos', gluteo:'Glúteos', panturrilha:'Panturrilha',
-    abdomen:'Abdômen', core:'Core', mobility:'Mobilidade', cardio:'Cardio', aerobio:'Aeróbio' };
+  // cat é o código inglês ("chest","back"…), muscle_group é o nome em PT ("Peito","Costas"…)
+  const CAT_LABEL = { chest:'Peito', back:'Costas', shoulder:'Ombros', biceps:'Bíceps',
+    triceps:'Tríceps', quad:'Quadríceps', hamstring:'Posterior', glute:'Glúteos',
+    calf:'Panturrilha', core:'Abdômen', mobility:'Mobilidade', cardio:'Cardio' };
   const WData = STATE.workouts[STATE.selectedWorkout];
-  const cats = WData ? [...new Set((WData.exercises||[]).map(e => (e.cat||'').toLowerCase()).filter(Boolean))] : [];
-  const muscleGroups = cats.map(c => CAT_LABEL[c] || c).filter(Boolean).slice(0, 6);
+  const rawCats = WData ? [...new Set((WData.exercises||[]).map(e => {
+    // prefere muscle_group (já em PT), senão converte cat pelo mapa
+    const mg = (e.muscle_group||'').trim();
+    if (mg) return mg;
+    const c = (e.cat||'').trim().toLowerCase();
+    return CAT_LABEL[c] || c;
+  }).filter(Boolean))] : [];
+  const muscleGroups = rawCats.slice(0, 6);
 
   // Hora do treino (HH:MM)
   const now = new Date();
@@ -13582,23 +13611,16 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     const poweredBy = "Powered by TREINOVA";
     ctx.font = "600 17px -apple-system, system-ui, sans-serif";
     const pbW = ctx.measureText(poweredBy).width;
+    // Logo do RODAPÉ: sempre Treinova (T gradiente fixo) — não o logo do personal
     const ftS = 30, ftGapI = 9;
     const ftX = W - PAD - ftS - ftGapI - pbW, ftY = footerY + 12;
-    if (logoImg) {
-      ctx.save();
-      roundRect(ftX, ftY, ftS, ftS, 7); ctx.clip();
-      ctx.drawImage(logoImg, ftX, ftY, ftS, ftS); ctx.restore();
-      roundRect(ftX, ftY, ftS, ftS, 7);
-      ctx.strokeStyle = rgba(brand, 0.30); ctx.lineWidth = 1.5; ctx.stroke();
-    } else {
-      roundRect(ftX, ftY, ftS, ftS, 7);
-      const ftGrd = ctx.createLinearGradient(ftX, ftY, ftX+ftS, ftY+ftS);
-      ftGrd.addColorStop(0, brand); ftGrd.addColorStop(1, mix(brand, "#000814", 0.4));
-      ctx.fillStyle = ftGrd; ctx.fill();
-      ctx.fillStyle = "#ffffff"; ctx.font = "900 16px -apple-system, system-ui, sans-serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("T", ftX + ftS/2, ftY + ftS/2 + 1); ctx.textBaseline = "alphabetic";
-    }
+    roundRect(ftX, ftY, ftS, ftS, 7);
+    const ftGrd = ctx.createLinearGradient(ftX, ftY, ftX+ftS, ftY+ftS);
+    ftGrd.addColorStop(0, "#13baf2"); ftGrd.addColorStop(1, "#0a6e99");
+    ctx.fillStyle = ftGrd; ctx.fill();
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 16px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("T", ftX + ftS/2, ftY + ftS/2 + 1); ctx.textBaseline = "alphabetic";
     ctx.fillStyle = rgba("#f4f7ff", 0.50); ctx.font = "600 17px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
     ctx.fillText(poweredBy, ftX + ftS + ftGapI, footerY + 36);
 
