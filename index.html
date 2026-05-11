@@ -13210,10 +13210,11 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
       #wc-overlay .wc-stat{background:var(--bg-card);border:1px solid var(--line);border-radius:10px;padding:10px}
       #wc-overlay .wc-val{font-size:20px;font-weight:900;color:var(--brand)}
       #wc-overlay .wc-lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
-      #wc-overlay .wc-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      #wc-overlay .wc-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
       #wc-overlay .wc-btn{padding:13px;border-radius:10px;font-weight:700;border:0;cursor:pointer;font-size:13px}
       #wc-overlay .wc-share{background:var(--brand);color:var(--brand-on)}
-      #wc-overlay .wc-cont{background:var(--bg-card);color:var(--text);border:1px solid var(--line)}
+      #wc-overlay .wc-share2{background:var(--bg-card);color:var(--brand);border:1.5px solid var(--brand)}
+      #wc-overlay .wc-cont{background:var(--bg-card);color:var(--text);border:1px solid var(--line);width:100%;margin-top:0}
     </style>
     <div class="wc-card">
       <div class="wc-emoji"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
@@ -13234,33 +13235,33 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
         </div>
       </div>
       <div class="wc-buttons">
-        <button class="wc-btn wc-share" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone}, window._shareWorkoutMeta||{})"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Compartilhar</button>
-        <button class="wc-btn wc-cont" onclick="document.getElementById('wc-overlay').remove();navTo('feed')">Ver feed</button>
+        <button class="wc-btn wc-share" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone}, window._shareWorkoutMeta||{}, 'post')"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/></svg> Post</button>
+        <button class="wc-btn wc-share2" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone}, window._shareWorkoutMeta||{}, 'stories')"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/></svg> Stories</button>
       </div>
+      <button class="wc-btn wc-cont" onclick="document.getElementById('wc-overlay').remove();navTo('feed')">Ver feed</button>
     </div>`;
   document.body.appendChild(overlay);
 }
 window.showWorkoutCompleteModal = showWorkoutCompleteModal;
 
-async function shareWorkout(totalVolume, duration, name, setsDone, meta = {}) {
+async function shareWorkout(totalVolume, duration, name, setsDone, meta = {}, format = "post") {
   try {
-    const blob = await generateWorkoutCard(name, totalVolume, duration, setsDone, meta);
-    if (blob && navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'treino.png', { type: 'image/png' })] })) {
-      const file = new File([blob], 'treino.png', { type: 'image/png' });
+    const blob = await generateWorkoutCard(name, totalVolume, duration, setsDone, meta, format);
+    const fname = format === "stories" ? "treino-stories.png" : "treino-post.png";
+    if (blob && navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], fname, { type: 'image/png' })] })) {
+      const file = new File([blob], fname, { type: 'image/png' });
       await navigator.share({ files: [file], title: meta.source === "feed" ? "Meu treino no Treinova" : "Treino concluído 💪" });
       return;
     }
     if (blob) {
-      // Fallback: abre a imagem em nova aba para o usuário salvar
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = "treino.png"; a.click();
+      a.href = url; a.download = fname; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 3000);
       showToast("Imagem salva — compartilhe onde quiser 📤", "success");
       return;
     }
   } catch(e) { console.warn("shareWorkout:", e); }
-  // Último fallback: texto
   const text = `${meta.source === "feed" ? "Meu treino no Treinova" : "Acabei o treino de hoje 💪"}\n${name}\n${setsDone} séries · ${Math.round(totalVolume)}kg · ${Math.floor(duration/60)}min\n#Treinova`;
   try {
     await navigator.clipboard.writeText(text);
@@ -13268,14 +13269,15 @@ async function shareWorkout(totalVolume, duration, name, setsDone, meta = {}) {
   } catch(e) { showToast("Compartilhamento não suportado", "error"); }
 }
 
-async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta = {}) {
+async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta = {}, format = "post") {
   try {
-    const W = 1080, H = 1350;
+    const W = 1080, H = format === "stories" ? 1920 : 1350;
+    const sc = H / 1350;
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
 
-    // ---------- helpers ----------
+    // ---------- data ----------
     const brand = (STATE.branding && (STATE.branding.primary_color || STATE.branding.brand_color)) || "#13baf2";
     const appName = ((STATE.branding && STATE.branding.app_name) || "TREINOVA").toUpperCase();
     const handleName = ((STATE.branding && STATE.branding.app_name) || "treinova").toLowerCase().replace(/\s+/g, "");
@@ -13289,44 +13291,35 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     const volKg = Math.round(Number(totalVolume || 0));
     const sets  = Math.max(0, Number(setsDone || 0));
 
-    // Carrega logo do personal (para o header)
+    // ---------- load images ----------
     const logoUrl = STATE.branding?.logo_url || null;
     let logoImg = null;
     if (logoUrl) {
       try {
         logoImg = await new Promise((res) => {
-          const img = new Image();
-          img.crossOrigin = "anonymous";
-          img.onload = () => res(img);
-          img.onerror = () => res(null);
-          img.src = logoUrl;
-          setTimeout(() => res(null), 4000);
+          const img = new Image(); img.crossOrigin = "anonymous";
+          img.onload = () => res(img); img.onerror = () => res(null);
+          img.src = logoUrl; setTimeout(() => res(null), 4000);
         });
       } catch(e) { logoImg = null; }
     }
-
-    // Carrega logo do TREINOVA para o rodapé (ícone do app — apple-touch-icon)
     const treinovaIconUrl = (window.location.origin || "") + "/assets/apple-touch-icon.png";
     let treinovaLogoImg = null;
     try {
       treinovaLogoImg = await new Promise((res) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
+        const img = new Image(); img.crossOrigin = "anonymous";
         img.onload = () => res(img);
         img.onerror = () => {
-          // fallback: tenta icon-192.png
-          const img2 = new Image();
-          img2.crossOrigin = "anonymous";
-          img2.onload = () => res(img2);
-          img2.onerror = () => res(null);
+          const img2 = new Image(); img2.crossOrigin = "anonymous";
+          img2.onload = () => res(img2); img2.onerror = () => res(null);
           img2.src = (window.location.origin || "") + "/assets/icon-192.png";
           setTimeout(() => res(null), 3000);
         };
-        img.src = treinovaIconUrl;
-        setTimeout(() => res(null), 4000);
+        img.src = treinovaIconUrl; setTimeout(() => res(null), 4000);
       });
     } catch(e) { treinovaLogoImg = null; }
 
+    // ---------- utils ----------
     const hexToRgb = (hex) => {
       const h = String(hex || "").replace("#", "").trim();
       const v = h.length === 3 ? h.split("").map(c=>c+c).join("") : h.padEnd(6,"0");
@@ -13334,334 +13327,361 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     };
     const rgba = (hex, a) => { const [r,g,b] = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; };
     const mix = (hex, target, t) => {
-      const [r1,g1,b1] = hexToRgb(hex);
-      const [r2,g2,b2] = hexToRgb(target);
-      const m = (a,b) => Math.round(a + (b-a) * t);
+      const [r1,g1,b1] = hexToRgb(hex); const [r2,g2,b2] = hexToRgb(target);
+      const m = (a,b) => Math.round(a + (b-a)*t);
       return `rgb(${m(r1,r2)},${m(g1,g2)},${m(b1,b2)})`;
     };
     const roundRect = (x, y, w, h, r) => {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.arcTo(x + w, y, x + w, y + h, r);
-      ctx.arcTo(x + w, y + h, x, y + h, r);
-      ctx.arcTo(x, y + h, x, y, r);
-      ctx.arcTo(x, y, x + w, y, r);
-      ctx.closePath();
+      ctx.beginPath(); ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r);     ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
     };
-    const wrapText = (text, font, maxWidth, maxLines) => {
+    const wrapText = (text, font, maxW, maxLines) => {
       ctx.font = font;
       const words = String(text || "Treino").split(/\s+/).filter(Boolean);
       const lines = []; let line = "";
       for (const word of words) {
         const test = line ? `${line} ${word}` : word;
-        if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+        if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = word; }
         else line = test;
       }
       if (line) lines.push(line);
       if (lines.length > maxLines) {
-        const last = lines.slice(maxLines - 1).join(" ");
-        let trimmed = last;
-        while (ctx.measureText(trimmed + "…").width > maxWidth && trimmed.length > 0) {
-          trimmed = trimmed.slice(0, -1);
-        }
-        return [...lines.slice(0, maxLines - 1), (trimmed + "…").trim()];
+        let trimmed = lines.slice(maxLines-1).join(" ");
+        while (ctx.measureText(trimmed+"…").width > maxW && trimmed.length > 0) trimmed = trimmed.slice(0,-1);
+        return [...lines.slice(0,maxLines-1), (trimmed+"…").trim()];
       }
       return lines;
     };
 
-    const drawDumbbell = (cx, cy, size, color) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.fillStyle = color;
-      const u = size / 24;
-      ctx.fillRect(-7*u, -1.4*u, 14*u, 2.8*u);
-      ctx.fillRect(-10*u, -5*u, 3*u, 10*u);
-      ctx.fillRect(-12*u, -3.5*u, 2*u, 7*u);
-      ctx.fillRect(7*u, -5*u, 3*u, 10*u);
-      ctx.fillRect(10*u, -3.5*u, 2*u, 7*u);
+    // ---------- icon helpers ----------
+    const drawDumbbell = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy); ctx.fillStyle = color;
+      const u = sz/24;
+      ctx.fillRect(-7*u,-1.4*u,14*u,2.8*u);
+      ctx.fillRect(-10*u,-5*u,3*u,10*u); ctx.fillRect(-12*u,-3.5*u,2*u,7*u);
+      ctx.fillRect(7*u,-5*u,3*u,10*u);  ctx.fillRect(10*u,-3.5*u,2*u,7*u);
       ctx.restore();
     };
-    const drawClock = (cx, cy, size, color) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = size * 0.10;
-      ctx.lineCap = "round";
-      ctx.beginPath(); ctx.arc(0, 0, size * 0.46, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -size*0.30); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(size*0.22, size*0.04); ctx.stroke();
-      ctx.beginPath(); ctx.arc(0, 0, size*0.05, 0, Math.PI*2); ctx.fill();
+    const drawClock = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy);
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = sz*0.10; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.arc(0,0,sz*0.46,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-sz*0.30); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(sz*0.22,sz*0.04); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,sz*0.06,0,Math.PI*2); ctx.fill();
       ctx.restore();
     };
-    const drawFlame = (cx, cy, size, color) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.fillStyle = color;
-      const u = size / 24;
-      ctx.beginPath();
-      ctx.moveTo(0, -10*u);
-      ctx.bezierCurveTo(7*u, -4*u, 8*u, 2*u, 6*u, 6*u);
-      ctx.bezierCurveTo(5*u, 8*u, 3*u, 10*u, 0, 10*u);
-      ctx.bezierCurveTo(-3*u, 10*u, -7*u, 7*u, -7*u, 2*u);
-      ctx.bezierCurveTo(-7*u, -2*u, -3*u, -3*u, -2*u, -7*u);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = rgba("#ffffff", 0.55);
-      ctx.beginPath();
-      ctx.moveTo(0, -3*u);
-      ctx.bezierCurveTo(3*u, 0, 3.5*u, 4*u, 1.5*u, 7*u);
-      ctx.bezierCurveTo(0, 8*u, -2*u, 7*u, -2.5*u, 5*u);
-      ctx.bezierCurveTo(-3*u, 3*u, -1*u, 1*u, 0, -3*u);
-      ctx.closePath();
-      ctx.fill();
+    const drawFlame = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy); ctx.fillStyle = color;
+      const u = sz/24;
+      ctx.beginPath(); ctx.moveTo(0,-10*u);
+      ctx.bezierCurveTo(7*u,-4*u,8*u,2*u,6*u,6*u); ctx.bezierCurveTo(5*u,8*u,3*u,10*u,0,10*u);
+      ctx.bezierCurveTo(-3*u,10*u,-7*u,7*u,-7*u,2*u); ctx.bezierCurveTo(-7*u,-2*u,-3*u,-3*u,-2*u,-7*u);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = rgba("#ffffff",0.50);
+      ctx.beginPath(); ctx.moveTo(0,-3*u);
+      ctx.bezierCurveTo(3*u,0,3.5*u,4*u,1.5*u,7*u); ctx.bezierCurveTo(0,8*u,-2*u,7*u,-2.5*u,5*u);
+      ctx.bezierCurveTo(-3*u,3*u,-1*u,1*u,0,-3*u); ctx.closePath(); ctx.fill();
       ctx.restore();
     };
-    const drawCheck = (cx, cy, size, color) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = size * 0.18;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.beginPath();
-      ctx.moveTo(-size*0.36, 0);
-      ctx.lineTo(-size*0.08, size*0.30);
-      ctx.lineTo(size*0.40, -size*0.30);
-      ctx.stroke();
+    const drawChart = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy);
+      ctx.strokeStyle = color; ctx.lineWidth = sz*0.12; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      const u = sz/24;
+      ctx.beginPath(); ctx.moveTo(-10*u,6*u); ctx.lineTo(-4*u,-2*u); ctx.lineTo(2*u,4*u); ctx.lineTo(10*u,-8*u); ctx.stroke();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(10*u,-8*u,sz*0.11,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    };
+    const drawInstagram = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy);
+      const r = sz*0.46;
+      ctx.strokeStyle = color; ctx.lineWidth = sz*0.09; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      roundRect(-r,-r,r*2,r*2,r*0.48); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,r*0.50,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(r*0.52,-r*0.52,r*0.13,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    };
+    const drawPerson = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy); ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(0,-sz*0.28,sz*0.20,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0,sz*0.18,sz*0.32,Math.PI,0); ctx.closePath(); ctx.fill();
       ctx.restore();
     };
 
-    // =============================================
-    // BACKGROUND
-    // =============================================
-    ctx.fillStyle = "#06090f";
-    ctx.fillRect(0, 0, W, H);
-    const baseGrad = ctx.createLinearGradient(0, 0, W, H);
-    baseGrad.addColorStop(0, "#0b1425");
-    baseGrad.addColorStop(0.55, "#090e1a");
-    baseGrad.addColorStop(1, "#04070d");
-    ctx.fillStyle = baseGrad; ctx.fillRect(0, 0, W, H);
+    // ============================================================
+    // BACKGROUND — aggressive dark neon
+    // ============================================================
+    ctx.fillStyle = "#030917"; ctx.fillRect(0,0,W,H);
 
-    const glow1 = ctx.createRadialGradient(W*0.85, H*0.10, 0, W*0.85, H*0.10, W*0.85);
-    glow1.addColorStop(0, rgba(brand, 0.32)); glow1.addColorStop(0.5, rgba(brand, 0.07)); glow1.addColorStop(1, "transparent");
-    ctx.fillStyle = glow1; ctx.fillRect(0, 0, W, H);
-    const glow2 = ctx.createRadialGradient(W*0.10, H*0.90, 0, W*0.10, H*0.90, W*0.75);
-    glow2.addColorStop(0, rgba(mix(brand, "#000814", 0.5), 0.22)); glow2.addColorStop(1, "transparent");
-    ctx.fillStyle = glow2; ctx.fillRect(0, 0, W, H);
+    // 4 radial glow pools
+    const g1 = ctx.createRadialGradient(W*0.88,H*0.07,0,W*0.88,H*0.07,W*0.82);
+    g1.addColorStop(0,rgba(brand,0.58)); g1.addColorStop(0.38,rgba(brand,0.13)); g1.addColorStop(1,"transparent");
+    ctx.fillStyle=g1; ctx.fillRect(0,0,W,H);
+    const g2 = ctx.createRadialGradient(W*0.05,H*0.94,0,W*0.05,H*0.94,W*0.62);
+    g2.addColorStop(0,rgba(brand,0.30)); g2.addColorStop(0.5,rgba(brand,0.06)); g2.addColorStop(1,"transparent");
+    ctx.fillStyle=g2; ctx.fillRect(0,0,W,H);
+    const g3 = ctx.createRadialGradient(W*0.45,H*0.44,0,W*0.45,H*0.44,W*0.52);
+    g3.addColorStop(0,rgba(brand,0.06)); g3.addColorStop(1,"transparent");
+    ctx.fillStyle=g3; ctx.fillRect(0,0,W,H);
+    const g4 = ctx.createRadialGradient(W*0.78,H*0.74,0,W*0.78,H*0.74,W*0.42);
+    g4.addColorStop(0,rgba(brand,0.16)); g4.addColorStop(1,"transparent");
+    ctx.fillStyle=g4; ctx.fillRect(0,0,W,H);
 
-    ctx.fillStyle = rgba("#ffffff", 0.030);
-    for (let gy = 56; gy < H; gy += 46) { for (let gx = 56; gx < W; gx += 46) { ctx.beginPath(); ctx.arc(gx, gy, 1.0, 0, Math.PI*2); ctx.fill(); } }
+    // Dot grid
+    ctx.fillStyle = rgba("#ffffff",0.025);
+    for (let gy=40;gy<H;gy+=52) for (let gx=40;gx<W;gx+=52) { ctx.beginPath(); ctx.arc(gx,gy,1,0,Math.PI*2); ctx.fill(); }
 
-    ctx.save(); ctx.translate(W*0.78, -120); ctx.rotate(-0.45);
-    const sheen = ctx.createLinearGradient(0, 0, 0, 600);
-    sheen.addColorStop(0, rgba("#ffffff", 0.0)); sheen.addColorStop(0.5, rgba("#ffffff", 0.048)); sheen.addColorStop(1, rgba("#ffffff", 0.0));
-    ctx.fillStyle = sheen; ctx.fillRect(-160, 0, 320, 1800); ctx.restore();
+    // Curved energy arc beams
+    ctx.save();
+    ctx.shadowBlur=55; ctx.shadowColor=rgba(brand,0.90);
+    const drawArc=(p0x,p0y,cp1x,cp1y,cp2x,cp2y,p1x,p1y,alpha,lw)=>{
+      ctx.strokeStyle=rgba(brand,alpha); ctx.lineWidth=lw;
+      ctx.beginPath(); ctx.moveTo(p0x,p0y); ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,p1x,p1y); ctx.stroke();
+    };
+    drawArc(W,H*0.02, W*0.85,H*0.18, W*0.55,H*0.30, W*0.08,H*0.55, 0.55,3);
+    drawArc(0,H*0.93,  W*0.20,H*0.80, W*0.55,H*0.88, W,H*0.74,     0.28,2);
+    drawArc(W*0.70,0,  W*0.95,H*0.24, W*0.76,H*0.50, W*0.28,H*0.62,0.20,1.5);
+    ctx.restore();
 
-    // Vertical brand accent bar
-    const PAD = 88;
-    const barX = 72, barTop = 200, barBot = H - 200, barW = 5;
-    const barGrad = ctx.createLinearGradient(0, barTop, 0, barBot);
-    barGrad.addColorStop(0, rgba(brand, 0.0)); barGrad.addColorStop(0.12, rgba(brand, 0.85));
-    barGrad.addColorStop(0.88, rgba(brand, 0.85)); barGrad.addColorStop(1, rgba(brand, 0.0));
-    ctx.fillStyle = barGrad; ctx.fillRect(barX, barTop, barW, barBot - barTop);
+    // ============================================================
+    // HEADER — logo + app name + badge
+    // ============================================================
+    const PAD = 82;
+    const HEADER_H = Math.round(152*sc);
+    // header bg
+    const hGrd = ctx.createLinearGradient(0,0,W,HEADER_H);
+    hGrd.addColorStop(0,rgba(brand,0.24)); hGrd.addColorStop(1,"rgba(3,9,23,0)");
+    ctx.fillStyle=hGrd; ctx.fillRect(0,0,W,HEADER_H);
+    // bottom separator
+    const sepGrd = ctx.createLinearGradient(0,0,W,0);
+    sepGrd.addColorStop(0,rgba(brand,0)); sepGrd.addColorStop(0.3,rgba(brand,0.70));
+    sepGrd.addColorStop(0.7,rgba(brand,0.70)); sepGrd.addColorStop(1,rgba(brand,0));
+    ctx.strokeStyle=sepGrd; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(0,HEADER_H); ctx.lineTo(W,HEADER_H); ctx.stroke();
 
-    // =============================================
-    // HEADER BRAND STRIP
-    // =============================================
-    const HEADER_H = 172;
-    const headerGrad = ctx.createLinearGradient(0, 0, W, HEADER_H);
-    headerGrad.addColorStop(0, rgba(brand, 0.30)); headerGrad.addColorStop(0.55, rgba(brand, 0.10)); headerGrad.addColorStop(1, rgba(brand, 0.03));
-    ctx.fillStyle = headerGrad; ctx.fillRect(0, 0, W, HEADER_H);
-    const headerLineGrd = ctx.createLinearGradient(0, 0, W, 0);
-    headerLineGrd.addColorStop(0, rgba(brand, 0.0)); headerLineGrd.addColorStop(0.25, rgba(brand, 0.72));
-    headerLineGrd.addColorStop(0.75, rgba(brand, 0.72)); headerLineGrd.addColorStop(1, rgba(brand, 0.0));
-    ctx.strokeStyle = headerLineGrd; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(0, HEADER_H); ctx.lineTo(W, HEADER_H); ctx.stroke();
-
-    // Logo tile — usa imagem real ou fallback "T"
-    const tileS = 82, tileX = PAD, tileY = (HEADER_H - tileS) / 2;
+    // Logo tile
+    const tileS=Math.round(76*sc), tileX=PAD, tileY=Math.round((HEADER_H-tileS)/2);
     if (logoImg) {
-      ctx.save();
-      roundRect(tileX, tileY, tileS, tileS, 16); ctx.clip();
-      ctx.drawImage(logoImg, tileX, tileY, tileS, tileS); ctx.restore();
-      roundRect(tileX, tileY, tileS, tileS, 16);
-      ctx.strokeStyle = rgba(brand, 0.38); ctx.lineWidth = 2; ctx.stroke();
+      ctx.save(); roundRect(tileX,tileY,tileS,tileS,Math.round(tileS*0.18)); ctx.clip();
+      ctx.drawImage(logoImg,tileX,tileY,tileS,tileS); ctx.restore();
+      roundRect(tileX,tileY,tileS,tileS,Math.round(tileS*0.18));
+      ctx.strokeStyle=rgba(brand,0.42); ctx.lineWidth=2; ctx.stroke();
     } else {
-      roundRect(tileX, tileY, tileS, tileS, 16);
-      const tileGrad = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS);
-      tileGrad.addColorStop(0, brand); tileGrad.addColorStop(1, mix(brand, "#000814", 0.4));
-      ctx.fillStyle = tileGrad; ctx.fill();
-      ctx.save(); ctx.globalCompositeOperation = "screen";
-      const tileSheen = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS*0.6);
-      tileSheen.addColorStop(0, rgba("#ffffff", 0.30)); tileSheen.addColorStop(1, rgba("#ffffff", 0));
-      roundRect(tileX, tileY, tileS, tileS, 16); ctx.fillStyle = tileSheen; ctx.fill(); ctx.restore();
-      ctx.fillStyle = "#ffffff"; ctx.font = "900 48px -apple-system, system-ui, sans-serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("T", tileX + tileS/2, tileY + tileS/2 + 3);
-      ctx.textBaseline = "alphabetic";
+      roundRect(tileX,tileY,tileS,tileS,Math.round(tileS*0.18));
+      const tGrd=ctx.createLinearGradient(tileX,tileY,tileX+tileS,tileY+tileS);
+      tGrd.addColorStop(0,brand); tGrd.addColorStop(1,mix(brand,"#000814",0.4));
+      ctx.fillStyle=tGrd; ctx.fill();
+      ctx.fillStyle="#ffffff"; ctx.font=`900 ${Math.round(44*sc)}px -apple-system,system-ui,sans-serif`;
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText("T",tileX+tileS/2,tileY+tileS/2+2); ctx.textBaseline="alphabetic";
+    }
+    ctx.textAlign="left";
+    ctx.fillStyle="#ffffff"; ctx.font=`900 ${Math.round(33*sc)}px -apple-system,system-ui,sans-serif`;
+    ctx.fillText(appName,tileX+tileS+18,tileY+Math.round(36*sc));
+    ctx.fillStyle=rgba("#f4f7ff",0.44); ctx.font=`600 ${Math.round(17*sc)}px -apple-system,system-ui,sans-serif`;
+    ctx.fillText("PERSONAL TRAINER",tileX+tileS+18,tileY+Math.round(60*sc));
+
+    // Badge
+    const pillTxt = isFeed ? "DO FEED" : "CONCLUÍDO";
+    ctx.font=`800 ${Math.round(17*sc)}px -apple-system,system-ui,sans-serif`;
+    const pTW=ctx.measureText(pillTxt).width;
+    const pH=Math.round(40*sc), pW=pTW+Math.round(46*sc);
+    const pX=W-PAD-pW, pY=tileY+(tileS-pH)/2;
+    roundRect(pX,pY,pW,pH,pH/2);
+    ctx.fillStyle=rgba(brand,0.15); ctx.fill();
+    ctx.strokeStyle=rgba(brand,0.68); ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle=brand; ctx.textAlign="left"; ctx.textBaseline="middle";
+    ctx.fillText(pillTxt,pX+Math.round(20*sc),pY+pH/2+1); ctx.textBaseline="alphabetic";
+
+    // ============================================================
+    // HEADLINE — "TREINO" huge neon + "COMPARTILHADO/CONCLUÍDO" white
+    // ============================================================
+    const heroTop = HEADER_H + Math.round(44*sc);
+    const tFontSz = Math.round(110*sc);
+    ctx.save();
+    ctx.shadowColor=rgba(brand,0.85); ctx.shadowBlur=38;
+    ctx.fillStyle=brand; ctx.font=`900 ${tFontSz}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+    ctx.fillText("TREINO",PAD,heroTop+Math.round(tFontSz*0.82));
+    ctx.restore();
+
+    // Underline
+    ctx.font=`900 ${tFontSz}px -apple-system,system-ui,sans-serif`;
+    const treinoW=ctx.measureText("TREINO").width;
+    const uY=heroTop+Math.round(tFontSz*0.82)+Math.round(9*sc);
+    const uGrd=ctx.createLinearGradient(PAD,uY,PAD+treinoW,uY);
+    uGrd.addColorStop(0,brand); uGrd.addColorStop(0.65,rgba(brand,0.45)); uGrd.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle=uGrd; ctx.fillRect(PAD,uY,treinoW,Math.round(5*sc));
+
+    // "COMPARTILHADO" / "CONCLUÍDO"
+    const wFontSz = Math.round(84*sc);
+    const wText = isFeed ? "COMPARTILHADO" : "CONCLUÍDO";
+    ctx.fillStyle="#ffffff"; ctx.font=`900 ${wFontSz}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+    const wLineY = uY + Math.round(16*sc) + Math.round(wFontSz*0.88);
+    ctx.fillText(wText,PAD,wLineY);
+
+    // ============================================================
+    // DATE/TIME + PERSON PILL + WORKOUT NAME + MUSCLES
+    // ============================================================
+    let cursor = wLineY + Math.round(34*sc);
+
+    // date/time
+    if (workoutTime || dateLabel) {
+      const dtStr = workoutTime ? `${String(dateLabel).toUpperCase()} · ${workoutTime}` : String(dateLabel).toUpperCase();
+      ctx.fillStyle=rgba("#f4f7ff",0.38); ctx.font=`700 ${Math.round(20*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+      ctx.fillText(dtStr,PAD,cursor);
+      cursor += Math.round(32*sc);
     }
 
-    // App name + "PERSONAL TRAINER"
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#ffffff"; ctx.font = "900 38px -apple-system, system-ui, sans-serif";
-    ctx.fillText(appName, tileX + tileS + 20, tileY + 40);
-    ctx.fillStyle = rgba("#f4f7ff", 0.52); ctx.font = "600 19px -apple-system, system-ui, sans-serif";
-    ctx.fillText("PERSONAL TRAINER", tileX + tileS + 20, tileY + 67);
-
-    // Badge CONCLUÍDO / DO FEED
-    const pillText = isFeed ? "DO FEED" : "CONCLUÍDO";
-    ctx.font = "800 19px -apple-system, system-ui, sans-serif";
-    const pillTW = ctx.measureText(pillText).width;
-    const pillH = 46, pillW = pillTW + 62;
-    const pillX = W - PAD - pillW, pillY = tileY + (tileS - pillH)/2;
-    roundRect(pillX, pillY, pillW, pillH, pillH/2);
-    ctx.fillStyle = rgba(brand, 0.18); ctx.fill();
-    ctx.strokeStyle = rgba(brand, 0.62); ctx.lineWidth = 1.5; ctx.stroke();
-    drawCheck(pillX + 24, pillY + pillH/2, 20, brand);
-    ctx.fillStyle = brand; ctx.textAlign = "left"; ctx.textBaseline = "middle";
-    ctx.fillText(pillText, pillX + 44, pillY + pillH/2 + 1); ctx.textBaseline = "alphabetic";
-
-    // =============================================
-    // HERO — data/hora, label, aluno, nome treino
-    // =============================================
-    const dateTimeStr = workoutTime ? `${dateLabel.toUpperCase()} · ${workoutTime}` : dateLabel.toUpperCase();
-    ctx.fillStyle = rgba("#f4f7ff", 0.38); ctx.font = "700 21px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(dateTimeStr, PAD, 218);
-
-    ctx.fillStyle = brand; ctx.font = "900 44px -apple-system, system-ui, sans-serif";
-    ctx.fillText(isFeed ? "TREINO COMPARTILHADO" : "TREINO CONCLUÍDO", PAD, 272);
-
-    // Nome do aluno (pill)
-    let heroCursor = 296;
+    // Student name pill
     if (firstName || studentName) {
       const who = (firstName || studentName).toUpperCase();
-      ctx.font = "800 27px -apple-system, system-ui, sans-serif";
-      const pillAW = ctx.measureText(who).width + 44, pillAH = 46;
-      roundRect(PAD - 2, heroCursor, pillAW, pillAH, 11);
-      ctx.fillStyle = rgba("#ffffff", 0.09); ctx.fill();
-      ctx.strokeStyle = rgba("#ffffff", 0.15); ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.fillStyle = "#ffffff"; ctx.textBaseline = "middle";
-      ctx.fillText(who, PAD + 16, heroCursor + pillAH/2); ctx.textBaseline = "alphabetic";
-      heroCursor += pillAH + 20;
-    } else { heroCursor += 14; }
+      ctx.font=`800 ${Math.round(23*sc)}px -apple-system,system-ui,sans-serif`;
+      const nW=ctx.measureText(who).width, nH=Math.round(46*sc);
+      const iconR=Math.round(13*sc), nPad=Math.round(12*sc);
+      const totalPW=iconR*2+nPad+nW+nPad;
+      roundRect(PAD,cursor,totalPW,nH,nH/2);
+      ctx.fillStyle=rgba("#ffffff",0.09); ctx.fill();
+      ctx.strokeStyle=rgba("#ffffff",0.18); ctx.lineWidth=1.5; ctx.stroke();
+      drawPerson(PAD+iconR,cursor+nH/2,iconR*0.95,rgba("#f4f7ff",0.68));
+      ctx.fillStyle="#ffffff"; ctx.textBaseline="middle"; ctx.textAlign="left";
+      ctx.fillText(who,PAD+iconR*2+nPad,cursor+nH/2); ctx.textBaseline="alphabetic";
+      cursor += nH + Math.round(16*sc);
+    }
 
-    // Nome do treino — grande
-    ctx.fillStyle = "#ffffff";
-    const titleFont = "900 80px -apple-system, system-ui, sans-serif";
-    const titleLines = wrapText(wname, titleFont, W - PAD*2, 3);
-    ctx.font = titleFont;
-    const titleLineH = 86;
-    titleLines.forEach((line, i) => ctx.fillText(line, PAD, heroCursor + 70 + i * titleLineH));
-    heroCursor += 70 + (titleLines.length - 1) * titleLineH + 16;
+    // Workout name
+    const wnameFSz = Math.round(60*sc);
+    const wnFont = `900 ${wnameFSz}px -apple-system,system-ui,sans-serif`;
+    const wnLines = wrapText(wname, wnFont, W-PAD*2, 2);
+    const wnLineH = Math.round(wnameFSz*1.14);
+    ctx.font=wnFont; ctx.fillStyle="#ffffff"; ctx.textAlign="left";
+    wnLines.forEach((line,i) => ctx.fillText(line,PAD,cursor+wnLineH*(i+1)-Math.round(6*sc)));
+    cursor += wnLineH*wnLines.length + Math.round(12*sc);
 
-    // Grupos musculares — pills coloridos
+    // Muscle group pills
     if (muscleGroups.length > 0) {
-      heroCursor += 20;
-      ctx.font = "700 19px -apple-system, system-ui, sans-serif";
-      const mgH = 42, mgGapX = 10, mgGapY = 10;
-      let mgX = PAD, mgY = heroCursor;
+      cursor += Math.round(8*sc);
+      const mgFont=`700 ${Math.round(18*sc)}px -apple-system,system-ui,sans-serif`;
+      ctx.font=mgFont;
+      const mgH=Math.round(38*sc), gapX=8, gapY=8;
+      let mgX=PAD, mgY=cursor;
       muscleGroups.forEach(lbl => {
-        const tw = ctx.measureText(lbl).width, pw = tw + 28;
-        if (mgX + pw > W - PAD && mgX > PAD) { mgX = PAD; mgY += mgH + mgGapY; }
-        roundRect(mgX, mgY, pw, mgH, mgH/2);
-        ctx.fillStyle = rgba(brand, 0.14); ctx.fill();
-        ctx.strokeStyle = rgba(brand, 0.38); ctx.lineWidth = 1.5; ctx.stroke();
-        ctx.fillStyle = rgba("#f4f7ff", 0.85); ctx.textBaseline = "middle"; ctx.textAlign = "left";
-        ctx.fillText(lbl, mgX + 14, mgY + mgH/2); ctx.textBaseline = "alphabetic";
-        mgX += pw + mgGapX;
+        const tw=ctx.measureText(lbl).width, pw=tw+Math.round(24*sc);
+        if (mgX+pw>W-PAD && mgX>PAD) { mgX=PAD; mgY+=mgH+gapY; }
+        roundRect(mgX,mgY,pw,mgH,mgH/2);
+        ctx.fillStyle=rgba(brand,0.15); ctx.fill();
+        ctx.strokeStyle=rgba(brand,0.42); ctx.lineWidth=1.5; ctx.stroke();
+        ctx.fillStyle=rgba("#f4f7ff",0.88); ctx.textBaseline="middle"; ctx.textAlign="left";
+        ctx.fillText(lbl,mgX+Math.round(12*sc),mgY+mgH/2); ctx.textBaseline="alphabetic";
+        mgX+=pw+gapX;
       });
-      heroCursor = mgY + mgH;
+      cursor = mgY + mgH;
     }
 
-    // =============================================
-    // STATS — posição dinâmica após hero (mínimo y=800)
-    // =============================================
-    const statY = Math.max(heroCursor + 36, 800);
-    const statH = 218;
-    roundRect(PAD, statY, W - PAD*2, statH, 26);
-    const statGrad = ctx.createLinearGradient(PAD, statY, PAD, statY+statH);
-    statGrad.addColorStop(0, rgba("#ffffff", 0.08)); statGrad.addColorStop(1, rgba("#ffffff", 0.02));
-    ctx.fillStyle = statGrad; ctx.fill();
-    ctx.strokeStyle = rgba("#ffffff", 0.09); ctx.lineWidth = 1.5; ctx.stroke();
-    const colW = (W - PAD*2) / 3;
-    const stats = [
-      { label: "SÉRIES", value: String(sets), draw: drawDumbbell },
-      { label: "VOLUME", value: `${volKg.toLocaleString("pt-BR")} kg`, draw: drawFlame },
-      { label: "TEMPO",  value: `${minutes} min`, draw: drawClock },
+    // ============================================================
+    // 3 SEPARATE STAT CARDS
+    // ============================================================
+    const STAT_GAP = Math.round(16*sc);
+    const STAT_H   = Math.round(214*sc);
+    const statCardW = Math.round((W - PAD*2 - STAT_GAP*2) / 3);
+    const statTop = Math.max(cursor + Math.round(38*sc), Math.round(920*sc));
+
+    const statDefs = [
+      { label:"SÉRIES", value:String(sets),                       draw:drawDumbbell },
+      { label:"VOLUME", value:`${volKg.toLocaleString("pt-BR")}kg`, draw:drawFlame },
+      { label:"TEMPO",  value:`${minutes}min`,                    draw:drawClock },
     ];
-    stats.forEach((s, i) => {
-      const cx = PAD + colW * i + colW/2;
-      s.draw(cx, statY + 60, 48, brand);
-      ctx.fillStyle = "#ffffff"; ctx.font = "900 52px -apple-system, system-ui, sans-serif"; ctx.textAlign = "center";
-      ctx.fillText(s.value, cx, statY + 146);
-      ctx.fillStyle = rgba("#f4f7ff", 0.48); ctx.font = "800 17px -apple-system, system-ui, sans-serif";
-      ctx.fillText(s.label, cx, statY + 180);
+
+    statDefs.forEach((s,i) => {
+      const sx=PAD+i*(statCardW+STAT_GAP), sy=statTop;
+      // card bg
+      roundRect(sx,sy,statCardW,STAT_H,Math.round(20*sc));
+      const cGrd=ctx.createLinearGradient(sx,sy,sx,sy+STAT_H);
+      cGrd.addColorStop(0,"rgba(255,255,255,0.075)"); cGrd.addColorStop(1,"rgba(255,255,255,0.020)");
+      ctx.fillStyle=cGrd; ctx.fill();
+      ctx.strokeStyle=rgba(brand,0.24); ctx.lineWidth=1.5; ctx.stroke();
+
+      // Radial glow behind icon
+      const iconCX=sx+statCardW/2, iconCY=sy+Math.round(64*sc);
+      const glowR=Math.round(44*sc);
+      const glowG=ctx.createRadialGradient(iconCX,iconCY,0,iconCX,iconCY,glowR);
+      glowG.addColorStop(0,rgba(brand,0.38)); glowG.addColorStop(0.55,rgba(brand,0.10)); glowG.addColorStop(1,"transparent");
+      ctx.fillStyle=glowG; ctx.beginPath(); ctx.arc(iconCX,iconCY,glowR,0,Math.PI*2); ctx.fill();
+
+      // Icon
+      s.draw(iconCX,iconCY,Math.round(40*sc),brand);
+
+      // Value
+      ctx.fillStyle="#ffffff"; ctx.font=`900 ${Math.round(50*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="center";
+      ctx.fillText(s.value,iconCX,sy+Math.round(144*sc));
+
+      // Label
+      ctx.fillStyle=rgba("#f4f7ff",0.44); ctx.font=`800 ${Math.round(15*sc)}px -apple-system,system-ui,sans-serif`;
+      ctx.fillText(s.label,iconCX,sy+Math.round(178*sc));
     });
-    ctx.strokeStyle = rgba("#ffffff", 0.08); ctx.lineWidth = 1.5;
-    for (let i = 1; i < 3; i++) {
-      const sx = PAD + colW * i;
-      ctx.beginPath(); ctx.moveTo(sx, statY + 30); ctx.lineTo(sx, statY + statH - 30); ctx.stroke();
-    }
 
-    // =============================================
-    // QUOTE / MOTIVATIONAL STRIP
-    // =============================================
-    const quoteY = statY + statH + 18;
-    const quoteH = 96;
-    roundRect(PAD, quoteY, W - PAD*2, quoteH, 20);
-    const qGrad = ctx.createLinearGradient(PAD, quoteY, W - PAD, quoteY);
-    qGrad.addColorStop(0, rgba(brand, 0.20)); qGrad.addColorStop(1, rgba(brand, 0.05));
-    ctx.fillStyle = qGrad; ctx.fill();
-    ctx.strokeStyle = rgba(brand, 0.45); ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.fillStyle = "#ffffff"; ctx.font = "900 27px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(isFeed ? "Performance em destaque." : "Mais um na conta. 💪", PAD + 26, quoteY + 40);
-    ctx.fillStyle = rgba("#f4f7ff", 0.60); ctx.font = "600 18px -apple-system, system-ui, sans-serif";
-    ctx.fillText(isFeed ? "Acompanhe a evolução no app." : "Disciplina vira progresso. Próximo!", PAD + 26, quoteY + 72);
+    // ============================================================
+    // PERFORMANCE / MOTIVATION STRIP
+    // ============================================================
+    const perfY = statTop + STAT_H + Math.round(16*sc);
+    const perfH = Math.round(88*sc);
+    roundRect(PAD,perfY,W-PAD*2,perfH,Math.round(18*sc));
+    const pGrd2=ctx.createLinearGradient(PAD,perfY,W-PAD,perfY);
+    pGrd2.addColorStop(0,rgba(brand,0.22)); pGrd2.addColorStop(1,rgba(brand,0.05));
+    ctx.fillStyle=pGrd2; ctx.fill();
+    ctx.strokeStyle=rgba(brand,0.42); ctx.lineWidth=1.5; ctx.stroke();
 
-    // =============================================
-    // FOOTER — handle + logo real "Powered by TREINOVA"
-    // =============================================
-    const footerY = H - 100;
-    ctx.strokeStyle = rgba("#ffffff", 0.08); ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(PAD, footerY); ctx.lineTo(W - PAD, footerY); ctx.stroke();
+    const chartSz=Math.round(30*sc);
+    drawChart(PAD+chartSz+Math.round(6*sc),perfY+perfH/2,chartSz,brand);
 
-    ctx.fillStyle = rgba("#f4f7ff", 0.50); ctx.font = "700 19px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(`@${handleName}`, PAD, footerY + 36);
+    ctx.fillStyle="#ffffff"; ctx.font=`900 ${Math.round(24*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+    ctx.fillText(isFeed?"Performance em destaque.":"Mais um na conta. 💪", PAD+Math.round(56*sc), perfY+Math.round(36*sc));
+    ctx.fillStyle=rgba("#f4f7ff",0.55); ctx.font=`600 ${Math.round(16*sc)}px -apple-system,system-ui,sans-serif`;
+    ctx.fillText(isFeed?"Acompanhe a evolução no app.":"Disciplina vira resultado. Bora! 🔥", PAD+Math.round(56*sc), perfY+Math.round(64*sc));
 
-    // Logo real (igual ao login) + "Powered by TREINOVA"
-    const poweredBy = "Powered by TREINOVA";
-    ctx.font = "600 17px -apple-system, system-ui, sans-serif";
-    const pbW = ctx.measureText(poweredBy).width;
-    // Logo do RODAPÉ: ícone real do Treinova (apple-touch-icon)
-    const ftS = 32, ftGapI = 9;
-    const ftX = W - PAD - ftS - ftGapI - pbW, ftY = footerY + 10;
+    // ============================================================
+    // FOOTER
+    // ============================================================
+    const footerY = H - Math.round(88*sc);
+    ctx.strokeStyle=rgba("#ffffff",0.07); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(PAD,footerY); ctx.lineTo(W-PAD,footerY); ctx.stroke();
+
+    const ftIconSz=Math.round(27*sc), ftTxtY=footerY+Math.round(35*sc);
+
+    // IG icon + @handle
+    drawInstagram(PAD+ftIconSz/2, footerY+Math.round(24*sc), ftIconSz, rgba("#f4f7ff",0.55));
+    ctx.fillStyle=rgba("#f4f7ff",0.55); ctx.font=`700 ${Math.round(18*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+    ctx.fillText(`@${handleName}`, PAD+ftIconSz+Math.round(10*sc), ftTxtY);
+
+    // Treinova logo + "Powered by TREINOVA"
+    const pbTxt="Powered by TREINOVA";
+    ctx.font=`600 ${Math.round(17*sc)}px -apple-system,system-ui,sans-serif`;
+    const pbW=ctx.measureText(pbTxt).width;
+    const ftLogoS=Math.round(29*sc), ftLogoGap=9;
+    const ftLogoX=W-PAD-ftLogoS-ftLogoGap-pbW, ftLogoY=footerY+Math.round(9*sc);
     if (treinovaLogoImg) {
-      // desenha com bordas arredondadas iguais ao ícone iOS (22% do tamanho)
       ctx.save();
-      roundRect(ftX, ftY, ftS, ftS, Math.round(ftS * 0.22));
-      ctx.clip();
-      ctx.drawImage(treinovaLogoImg, ftX, ftY, ftS, ftS);
-      ctx.restore();
+      roundRect(ftLogoX,ftLogoY,ftLogoS,ftLogoS,Math.round(ftLogoS*0.22));
+      ctx.clip(); ctx.drawImage(treinovaLogoImg,ftLogoX,ftLogoY,ftLogoS,ftLogoS); ctx.restore();
     } else {
-      // fallback: gradiente azul Treinova
-      roundRect(ftX, ftY, ftS, ftS, 7);
-      const ftGrd = ctx.createLinearGradient(ftX, ftY, ftX+ftS, ftY+ftS);
-      ftGrd.addColorStop(0, "#13baf2"); ftGrd.addColorStop(1, "#0a6e99");
-      ctx.fillStyle = ftGrd; ctx.fill();
-      ctx.fillStyle = "#ffffff"; ctx.font = "900 17px -apple-system, system-ui, sans-serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("T", ftX + ftS/2, ftY + ftS/2 + 1); ctx.textBaseline = "alphabetic";
+      roundRect(ftLogoX,ftLogoY,ftLogoS,ftLogoS,7);
+      const fGrd=ctx.createLinearGradient(ftLogoX,ftLogoY,ftLogoX+ftLogoS,ftLogoY+ftLogoS);
+      fGrd.addColorStop(0,"#13baf2"); fGrd.addColorStop(1,"#0a6e99");
+      ctx.fillStyle=fGrd; ctx.fill();
+      ctx.fillStyle="#ffffff"; ctx.font=`900 ${Math.round(15*sc)}px -apple-system,system-ui,sans-serif`;
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText("T",ftLogoX+ftLogoS/2,ftLogoY+ftLogoS/2+1); ctx.textBaseline="alphabetic";
     }
-    ctx.fillStyle = rgba("#f4f7ff", 0.50); ctx.font = "600 17px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(poweredBy, ftX + ftS + ftGapI, footerY + 36);
+    ctx.fillStyle=rgba("#f4f7ff",0.50); ctx.font=`600 ${Math.round(17*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+    ctx.fillText(pbTxt, ftLogoX+ftLogoS+ftLogoGap, ftTxtY);
 
-    return await new Promise(res => canvas.toBlob(res, "image/png"));
+    return await new Promise(res => canvas.toBlob(res,"image/png"));
   } catch(e) {
     console.warn("generateWorkoutCard:", e);
     return null;
   }
 }
+
 window.shareWorkout = shareWorkout;
 
 /* ---------- TERMOS / PRIVACIDADE MODAIS ---------- */
