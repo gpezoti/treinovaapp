@@ -13289,7 +13289,7 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     const volKg = Math.round(Number(totalVolume || 0));
     const sets  = Math.max(0, Number(setsDone || 0));
 
-    // Carrega logo da marca para uso no canvas (header + footer)
+    // Carrega logo do personal (para o header)
     const logoUrl = STATE.branding?.logo_url || null;
     let logoImg = null;
     if (logoUrl) {
@@ -13304,6 +13304,28 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
         });
       } catch(e) { logoImg = null; }
     }
+
+    // Carrega logo do TREINOVA para o rodapé (ícone do app — apple-touch-icon)
+    const treinovaIconUrl = (window.location.origin || "") + "/assets/apple-touch-icon.png";
+    let treinovaLogoImg = null;
+    try {
+      treinovaLogoImg = await new Promise((res) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => res(img);
+        img.onerror = () => {
+          // fallback: tenta icon-192.png
+          const img2 = new Image();
+          img2.crossOrigin = "anonymous";
+          img2.onload = () => res(img2);
+          img2.onerror = () => res(null);
+          img2.src = (window.location.origin || "") + "/assets/icon-192.png";
+          setTimeout(() => res(null), 3000);
+        };
+        img.src = treinovaIconUrl;
+        setTimeout(() => res(null), 4000);
+      });
+    } catch(e) { treinovaLogoImg = null; }
 
     const hexToRgb = (hex) => {
       const h = String(hex || "").replace("#", "").trim();
@@ -13611,16 +13633,26 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     const poweredBy = "Powered by TREINOVA";
     ctx.font = "600 17px -apple-system, system-ui, sans-serif";
     const pbW = ctx.measureText(poweredBy).width;
-    // Logo do RODAPÉ: sempre Treinova (T gradiente fixo) — não o logo do personal
-    const ftS = 30, ftGapI = 9;
-    const ftX = W - PAD - ftS - ftGapI - pbW, ftY = footerY + 12;
-    roundRect(ftX, ftY, ftS, ftS, 7);
-    const ftGrd = ctx.createLinearGradient(ftX, ftY, ftX+ftS, ftY+ftS);
-    ftGrd.addColorStop(0, "#13baf2"); ftGrd.addColorStop(1, "#0a6e99");
-    ctx.fillStyle = ftGrd; ctx.fill();
-    ctx.fillStyle = "#ffffff"; ctx.font = "900 16px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("T", ftX + ftS/2, ftY + ftS/2 + 1); ctx.textBaseline = "alphabetic";
+    // Logo do RODAPÉ: ícone real do Treinova (apple-touch-icon)
+    const ftS = 32, ftGapI = 9;
+    const ftX = W - PAD - ftS - ftGapI - pbW, ftY = footerY + 10;
+    if (treinovaLogoImg) {
+      // desenha com bordas arredondadas iguais ao ícone iOS (22% do tamanho)
+      ctx.save();
+      roundRect(ftX, ftY, ftS, ftS, Math.round(ftS * 0.22));
+      ctx.clip();
+      ctx.drawImage(treinovaLogoImg, ftX, ftY, ftS, ftS);
+      ctx.restore();
+    } else {
+      // fallback: gradiente azul Treinova
+      roundRect(ftX, ftY, ftS, ftS, 7);
+      const ftGrd = ctx.createLinearGradient(ftX, ftY, ftX+ftS, ftY+ftS);
+      ftGrd.addColorStop(0, "#13baf2"); ftGrd.addColorStop(1, "#0a6e99");
+      ctx.fillStyle = ftGrd; ctx.fill();
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 17px -apple-system, system-ui, sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("T", ftX + ftS/2, ftY + ftS/2 + 1); ctx.textBaseline = "alphabetic";
+    }
     ctx.fillStyle = rgba("#f4f7ff", 0.50); ctx.font = "600 17px -apple-system, system-ui, sans-serif"; ctx.textAlign = "left";
     ctx.fillText(poweredBy, ftX + ftS + ftGapI, footerY + 36);
 
