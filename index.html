@@ -5392,6 +5392,32 @@ window.onDayClick = function(iso) {
   const info = findDayInfo(iso);
   if (!info) return;
   if (info.workout_code === "OFF") { showToast("Dia OFF — descanso!"); return; }
+  const today = todayISO();
+  const isLate = iso < today;
+  if (isLate) {
+    // Sheet de retomada para dias atrasados
+    const dt = new Date(iso + "T00:00:00");
+    const dayLabel = dt.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
+    const wCode = info.workout_code;
+    const W = STATE.workouts[wCode];
+    const wName = W ? W.name : "Treino " + wCode;
+    openSheet(`
+      <div style="text-align:center;margin-bottom:4px">
+        <div style="font-size:32px;margin-bottom:6px">📅</div>
+        <h3 style="margin:0 0 4px">Treino em atraso</h3>
+        <p style="color:var(--text-2);font-size:13px;margin:0 0 16px">${wName} · ${dayLabel}</p>
+        <p style="color:var(--text-2);font-size:13px;line-height:1.5;margin:0 0 20px">Sem problema — você ainda pode registrar este treino. Acontece com todo mundo!</p>
+      </div>
+      <button class="btn-primary" onclick="closeSheet();${info.preset_code ? `openWorkoutWithPreset('${iso}','${wCode}','${info.preset_code}')` : `openWorkout('${iso}','${wCode}','${info.intensity}')`}" style="margin-bottom:10px">
+        ▶ Fazer este treino agora
+      </button>
+      <button class="btn-ghost" onclick="closeSheet();navTo('chat')" style="margin-bottom:8px">
+        💬 Avisar o professor
+      </button>
+      <button class="btn-ghost" onclick="closeSheet()">Fechar</button>
+    `);
+    return;
+  }
   if (info.preset_code) {
     openWorkoutWithPreset(iso, info.workout_code, info.preset_code);
   } else {
@@ -5540,23 +5566,7 @@ function renderCoachHome(el) {
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Compartilhar link de cadastro
         </button>
       </div>
-      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">Próximos passos</div>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;align-items:center;gap:12px">
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">1</div>
-            <div><div style="font-size:13px;font-weight:600;color:var(--text)">Adicione um aluno</div><div style="font-size:12px;color:var(--text-3)">Crie a conta dele direto aqui</div></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px">
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">2</div>
-            <div><div style="font-size:13px;font-weight:600;color:var(--text)">Atribua um treino</div><div style="font-size:12px;color:var(--text-3)">Monte a periodização na aba Alunos</div></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px">
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">3</div>
-            <div><div style="font-size:13px;font-weight:600;color:var(--text)">Acompanhe o progresso</div><div style="font-size:12px;color:var(--text-3)">Feed, cargas e atividade em tempo real</div></div>
-          </div>
-        </div>
-      </div>`;
+      ${renderCoachOnboardingChecklist()}`;
     return;
   }
 
@@ -6693,16 +6703,24 @@ function renderCalendar() {
     </div>`;
   }).join("");
 
+  // Legenda filtrada: só mostra tipos que existem no plano do aluno
+  const intensitiesInPlan = new Set(allDays.map(d => d.intensity || "").filter(Boolean));
+  const hasOff = allDays.some(d => d.workout_code === "OFF");
+  const legendItems = [
+    { key: "yellow", dot: "dot-yellow", label: "Hipertrofia · pausa 1'" },
+    { key: "red",    dot: "dot-red",    label: "Força · pausa 2'30\"–3'" },
+    { key: "flex",   dot: "dot-flex",   label: "Flex + aeróbio" },
+  ].filter(li => intensitiesInPlan.has(li.key));
+  if (hasOff) legendItems.push({ key: "off", dot: "dot-off", label: "OFF" });
+  const legendHtml = legendItems.length > 0
+    ? `<div class="legend">${legendItems.map(li => `<span class="legend-item"><span class="legend-dot ${li.dot}"></span> ${li.label}</span>`).join("")}</div>`
+    : "";
+
   el.innerHTML = `
     <h1 class="view-title">Periodização</h1>
     <p class="view-subtitle">${escape(STATE.branding.app_tagline || 'Ciclo 5 · Melhora postural e estética')}</p>
     ${progressCard}
-    <div class="legend">
-      <span class="legend-item"><span class="legend-dot dot-yellow"></span> Hipertrofia · pausa 1'</span>
-      <span class="legend-item"><span class="legend-dot dot-red"></span> Força · pausa 2'30"–3'</span>
-      <span class="legend-item"><span class="legend-dot dot-flex"></span> Flex + aeróbio</span>
-      <span class="legend-item"><span class="legend-dot dot-off"></span> OFF</span>
-    </div>
+    ${legendHtml}
     ${html}`;
 
   requestAnimationFrame(() => {
@@ -8356,14 +8374,46 @@ window.openNewStudentSheet = function() {
     <div class="form-group"><label class="form-label">Nome completo</label><input class="input" id="ns-name" placeholder="Nome" /></div>
     <div class="form-group"><label class="form-label">Email</label><input class="input" id="ns-email" type="email" placeholder="email@exemplo.com" /></div>
     <div class="form-group"><label class="form-label">Telefone</label><input class="input" id="ns-phone" type="tel" placeholder="(11) 99999-0000" /></div>
-    <div class="form-group"><label class="form-label">Senha temporária</label><input class="input" id="ns-pass" type="text" placeholder="Mínimo 6 caracteres" /></div>
+    <div class="form-group">
+      <label class="form-label">Senha temporária</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1;position:relative">
+          <input class="input" id="ns-pass" type="password" placeholder="Mínimo 6 caracteres" style="padding-right:44px" />
+          <button type="button" onclick="(function(){const i=document.getElementById('ns-pass');i.type=i.type==='password'?'text':'password';this.innerHTML=i.type==='password'?'<svg viewBox=\\'0 0 24 24\\' width=\\'18\\' height=\\'18\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\'><path d=\\'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z\\'/><circle cx=\\'12\\' cy=\\'12\\' r=\\'3\\'/></svg>':'<svg viewBox=\\'0 0 24 24\\' width=\\'18\\' height=\\'18\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\'><path d=\\'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94\\'/><path d=\\'M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19\\'/><line x1=\\'1\\' y1=\\'1\\' x2=\\'23\\' y2=\\'23\\'/></svg>'}).call(this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--text-3);cursor:pointer;padding:4px;display:flex;align-items:center">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <button type="button" onclick="(function(){const chars='ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';let p='';for(let i=0;i<8;i++)p+=chars[Math.floor(Math.random()*chars.length)];const inp=document.getElementById('ns-pass');inp.value=p;inp.type='text';showToast('Senha gerada: '+p,'success')})()" style="flex:0 0 auto;background:var(--bg-card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700;color:var(--text-2);cursor:pointer;white-space:nowrap">🎲 Gerar</button>
+      </div>
+    </div>
     <div class="ux-helper">Dica: o aluno será orientado a trocar a senha no primeiro acesso.</div>
+    <div style="border-top:1px solid var(--line);margin:12px 0 10px"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">💰 Plano mensal <span style="font-weight:400;opacity:.6">(opcional)</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Valor (R$)</label>
+        <input class="input" id="ns-plan-value" type="number" inputmode="decimal" placeholder="Ex: 250" min="0" />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Vence todo dia</label>
+        <input class="input" id="ns-plan-day" type="number" inputmode="numeric" placeholder="Ex: 10" min="1" max="31" />
+      </div>
+    </div>
     <label class="row-flex" style="margin-bottom:10px">
       <input type="checkbox" id="ns-seed" checked /> <span class="text-sm">Criar periodização padrão de 12 semanas</span>
     </label>
     <button class="btn-primary" onclick="submitNewStudent()">Criar aluno</button>
     <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Cancelar</button>
   `);
+  // Pré-preencher último valor de plano salvo
+  setTimeout(() => {
+    try {
+      const lv = localStorage.getItem("treinova_last_plan_value");
+      const ld = localStorage.getItem("treinova_last_plan_day");
+      if (lv) { const el = document.getElementById("ns-plan-value"); if (el) el.value = lv; }
+      if (ld) { const el = document.getElementById("ns-plan-day"); if (el) el.value = ld; }
+    } catch(e) {}
+  }, 60);
 };
 // Cliente Supabase isolado, sem persistir sessão — usado para criar contas
 // sem afetar o login do staff atual.
@@ -8396,6 +8446,8 @@ window.submitNewStudent = async function() {
   const phone = document.getElementById("ns-phone").value.trim();
   const pass = document.getElementById("ns-pass").value;
   const seedPer = document.getElementById("ns-seed").checked;
+  const planValue = parseFloat(document.getElementById("ns-plan-value")?.value || "") || null;
+  const planDay = parseInt(document.getElementById("ns-plan-day")?.value || "") || null;
   if (!name || !email || !pass || pass.length < 6) { showToast("Preencha tudo (senha 6+)", "error"); return; }
   setBusy(true);
   try {
@@ -8420,12 +8472,34 @@ window.submitNewStudent = async function() {
       const { error: seedErr } = await sb.rpc("seed_periodization_for_student", { p_student: studentId });
       if (seedErr) console.warn("seed periodização falhou:", seedErr);
     }
+
+    // 3) Plano mensal (opcional)
+    if (planValue && planDay) {
+      const dueDate = (() => {
+        const now = new Date();
+        const d = new Date(now.getFullYear(), now.getMonth(), planDay);
+        if (d <= now) d.setMonth(d.getMonth() + 1);
+        return d.toISOString().slice(0, 10);
+      })();
+      await sb.from("payments").insert({
+        student_id: studentId,
+        coach_id: STATE.profile.id,
+        amount: planValue,
+        due_date: dueDate,
+        status: "pending",
+        description: "Mensalidade"
+      }).catch(e => console.warn("[plan insert]", e));
+      // Salva valor padrão para próximos alunos
+      try { localStorage.setItem("treinova_last_plan_value", String(planValue)); } catch(e) {}
+      try { localStorage.setItem("treinova_last_plan_day", String(planDay)); } catch(e) {}
+    }
+
     await sb.from("follows").upsert(
       { follower_id: STATE.profile.id, following_id: studentId },
       { onConflict: "follower_id,following_id", ignoreDuplicates: true }
     ).catch(e => console.warn("[follow new student]", e));
 
-    showToast("Aluno criado", "success");
+    showToast("Aluno criado" + (planValue ? " com plano de R$ " + planValue.toFixed(2) : ""), "success");
     closeSheet();
     await loadStudents();
     renderStudents();
@@ -10220,8 +10294,38 @@ function _renderPickerFull() {
 }
 
 // Atualiza só a lista de resultados — Bug #20 fix: sem recriar o input
+// Helper: lê/salva exercícios recentes do picker (localStorage, por coach)
+function _getRecentPickerIds() {
+  try {
+    const key = `treinova_recent_exercises_${STATE.profile?.id || "coach"}`;
+    return JSON.parse(localStorage.getItem(key) || "[]");
+  } catch(e) { return []; }
+}
+function _saveRecentPickerId(libExId) {
+  try {
+    const key = `treinova_recent_exercises_${STATE.profile?.id || "coach"}`;
+    const arr = _getRecentPickerIds().filter(id => id !== libExId);
+    arr.unshift(libExId);
+    localStorage.setItem(key, JSON.stringify(arr.slice(0, 12)));
+  } catch(e) {}
+}
+
+function _pickerExerciseRow(e, ctx) {
+  const selected = ctx.selected && ctx.selected.has(e.id);
+  return `
+    <div class="list-row ${selected ? 'selected' : ''}" onclick="toggleExercisePick('${e.id}')" style="cursor:pointer;border-color:${selected ? 'var(--brand)' : 'var(--line)'};">
+      <div class="lr-avatar" style="overflow:hidden;">${getExThumb(e)}</div>
+      <div class="lr-info">
+        <div class="lr-name">${escape(e.name)}</div>
+        <div class="lr-sub">${escape(e.muscle_group || "")}${e.method ? " · " + escape(e.method) : ""}</div>
+      </div>
+      <div style="width:28px;height:28px;border-radius:999px;border:1px solid ${selected ? 'var(--brand)' : 'var(--line)'};display:grid;place-items:center;color:${selected ? 'var(--brand)' : 'var(--text-3)'}">${selected ? '✓' : '+'}</div>
+    </div>`;
+}
+
 function _renderPickerResults() {
   const ctx = STATE._pickerCtx || {};
+  const isSearching = !!(ctx.query || ctx.group !== "todos");
   const filter = (STATE.library || []).filter(e => {
     if (ctx.group !== "todos" && e.muscle_group !== ctx.group) return false;
     if (ctx.query && !e.name.toLowerCase().includes(ctx.query.toLowerCase())) return false;
@@ -10229,20 +10333,30 @@ function _renderPickerResults() {
   });
   const el = document.getElementById("ep-results");
   if (!el) return;
-  el.innerHTML = filter.length === 0
+
+  // Seção "Usados recentemente" — só aparece sem filtro ativo
+  let recentHtml = "";
+  if (!isSearching) {
+    const recentIds = _getRecentPickerIds();
+    const recents = recentIds
+      .map(id => (STATE.library || []).find(e => e.id === id))
+      .filter(Boolean)
+      .slice(0, 8);
+    if (recents.length > 0) {
+      recentHtml = `
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px;padding:0 2px">⚡ Usados recentemente</div>
+        ${recents.map(e => _pickerExerciseRow(e, ctx)).join("")}
+        <div style="height:1px;background:var(--line);margin:10px 0 8px"></div>
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px;padding:0 2px">📚 Biblioteca completa</div>`;
+    }
+  }
+
+  el.innerHTML = filter.length === 0 && !recentHtml
     ? `<div class="empty" style="padding:16px 0"><p>Nenhum exercício encontrado.</p></div>`
-    : filter.map(e => {
-      const selected = ctx.selected && ctx.selected.has(e.id);
-      return `
-        <div class="list-row ${selected ? 'selected' : ''}" onclick="toggleExercisePick('${e.id}')" style="cursor:pointer;border-color:${selected ? 'var(--brand)' : 'var(--line)'};">
-          <div class="lr-avatar" style="overflow:hidden;">${getExThumb(e)}</div>
-          <div class="lr-info">
-            <div class="lr-name">${escape(e.name)}</div>
-            <div class="lr-sub">${escape(e.muscle_group || "")}${e.method ? " · " + escape(e.method) : ""}</div>
-          </div>
-          <div style="width:28px;height:28px;border-radius:999px;border:1px solid ${selected ? 'var(--brand)' : 'var(--line)'};display:grid;place-items:center;color:${selected ? 'var(--brand)' : 'var(--text-3)'}">${selected ? '✓' : '+'}</div>
-        </div>`;
-    }).join("");
+    : recentHtml + (filter.length === 0
+        ? `<div class="empty" style="padding:8px 0"><p>Nenhum exercício encontrado.</p></div>`
+        : filter.map(e => _pickerExerciseRow(e, ctx)).join(""));
+
   const addBtn = document.getElementById("ep-add-selected");
   if (addBtn) {
     const count = ctx.selected ? ctx.selected.size : 0;
@@ -10319,6 +10433,8 @@ window.addSelectedExercisesToWorkout = async function() {
     const rows = selected.map((lib, idx) => buildWorkoutExerciseFromLibrary(lib, ctx, startPos + idx));
     const { error } = await sb.from("exercises").insert(rows);
     if (error) throw error;
+    // Registrar no histórico de recentes
+    [...selectedIds].reverse().forEach(id => _saveRecentPickerId(id));
     showToast(`${selected.length} exercício${selected.length > 1 ? "s" : ""} adicionado${selected.length > 1 ? "s" : ""}`, "success");
     await loadWorkouts();
     // Bug #22 fix: volta para o editor do workout correto (não fecha o sheet)
@@ -12505,7 +12621,13 @@ function closeChatThread() {
 window.closeChatThread = closeChatThread;
 
 window.deleteConversation = async function(otherUserId) {
-  if (!await showConfirm({ title: "Excluir conversa?", msg: "Toda a conversa será apagada. Esta ação não pode ser desfeita.", confirm: "Excluir", danger: true })) return;
+  // Busca nome do contato para exibir na confirmação
+  const thread = (STATE.chatThreads || []).find(t => {
+    const oid = t.a === STATE.profile.id ? t.b : t.a;
+    return oid === otherUserId;
+  });
+  const contactName = thread?.other?.full_name || "esta pessoa";
+  if (!await showConfirm({ title: "Excluir conversa?", msg: `Toda a conversa com ${contactName} será apagada permanentemente. Esta ação não pode ser desfeita.`, confirm: "Excluir conversa", danger: true })) return;
   const me = STATE.profile.id;
   const { data: deletedCount, error: rpcError } = await sb.rpc("delete_conversation_with_user", { p_other_user_id: otherUserId });
   if (rpcError) {
