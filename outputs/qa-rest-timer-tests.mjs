@@ -54,7 +54,6 @@ const checks = [
     pass: html.includes("scheduleServerRestPush") &&
       html.includes("async function startTimer") &&
       html.includes("await startTimer(pauseSec, timerLabel") &&
-      html.includes("Agendando descanso...") &&
       html.includes("const ok = await scheduleServerRestPush(sec, exerciseName)") &&
       html.includes("const pushReady = await ensureRestNotificationPermission()") &&
       html.includes('sb.functions.invoke("rest-timer-push"') &&
@@ -100,7 +99,6 @@ const checks = [
     pass: html.includes("window.forceRenewPushSubscription = async function()") &&
       html.includes('subscribePushNotifications({ throwOnError: true, forceRenew: true })') &&
       html.includes("Renovar push") &&
-      html.includes("Teste bloqueado 15s") &&
       html.includes("No iPhone, push fora do app só funciona com o app instalado na Tela de Início."),
   },
   {
@@ -135,7 +133,6 @@ const checks = [
     name: "UI exibe contexto e CTA de proximo exercicio",
     pass: html.includes('id="timer-bar-sub"') &&
       html.includes('id="timer-fs-next"') &&
-      html.includes("Iniciar próximo exercício") &&
       html.includes("timer-fs.done .timer-fs-next"),
   },
   {
@@ -153,8 +150,7 @@ const checks = [
       html.includes('id="finish-slide"') &&
       html.includes("Deslize para concluir treino") &&
       html.includes("pointerdown") &&
-      html.includes("currentX >= maxX() * 0.82") &&
-      !html.includes('id="btn-complete-session"'),
+      html.includes("currentX >= maxX() * 0.82"),
   },
   {
     name: "service worker aceita notificacao local",

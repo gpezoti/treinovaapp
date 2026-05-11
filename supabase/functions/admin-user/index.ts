@@ -32,6 +32,21 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function cleanEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
+function assertAdmin(caller: { role: string }) {
+  if (caller.role !== "admin") {
+    return json({ error: "Apenas admin pode executar esta ação." }, 403);
+  }
+  return null;
+}
+
 async function createAuthUserOrReuseProfile(params: {
   email: string;
   password: string;
@@ -223,6 +238,109 @@ serve(async (req) => {
       });
       if (error) return json({ error: error.message }, 500);
       return json({ ok: true, action: "send_password_reset" });
+    }
+
+    if (action === "update_trainer") {
+      const denied = assertAdmin(caller);
+      if (denied) return denied;
+
+      const { data: target } = await sbAdmin
+        .from("profiles")
+        .select("id,email,role,status")
+        .eq("id", user_id)
+        .single();
+
+      if (!target) return json({ error: "Treinador não encontrado." }, 404);
+      if (target.role === "admin") return json({ error: "Admin Master não pode ser alterado por esta ação." }, 403);
+
+      const fullName = cleanText(body.full_name);
+      const email = cleanEmail(body.email);
+      const phone = cleanText(body.phone);
+      const avatarEmoji = cleanText(body.avatar_emoji);
+      const status = cleanText(body.status || target.status);
+      const role = cleanText(body.role || target.role);
+      const password = String(body.password || "");
+
+      if (!fullName || !email.includes("@")) {
+        return json({ error: "Nome e email válido são obrigatórios." }, 400);
+      }
+      if (!["approved", "blocked", "pending"].includes(status)) {
+        return json({ error: "Status inválido." }, 400);
+      }
+      if (!["coach", "student"].includes(role)) {
+        return json({ error: "Papel inválido." }, 400);
+      }
+      if (password && password.length < 6) {
+        return json({ error: "A nova senha precisa ter pelo menos 6 caracteres." }, 400);
+      }
+
+      const authPatch: Record<string, unknown> = {
+        email,
+        email_confirm: true,
+        user_metadata: { full_name: fullName, role },
+      };
+      if (password) authPatch.password = password;
+
+      const { error: authUpdateErr } = await sbAdmin.auth.admin.updateUserById(user_id, authPatch);
+      if (authUpdateErr) return json({ error: authUpdateErr.message }, 500);
+
+      const profilePatch: Record<string, unknown> = {
+        email,
+        full_name: fullName,
+        phone: phone || null,
+        avatar_emoji: avatarEmoji || "🎯",
+        status,
+        role,
+        coach_id: role === "coach" ? null : body.coach_id || null,
+      };
+      if (password) profilePatch.must_reset_password = false;
+
+      const { error: profileErr } = await sbAdmin
+        .from("profiles")
+        .update(profilePatch)
+        .eq("id", user_id);
+
+      if (profileErr) return json({ error: profileErr.message }, 500);
+      return json({ ok: true, action: "update_trainer" });
+    }
+
+    if (action === "remove_trainer") {
+      const denied = assertAdmin(caller);
+      if (denied) return denied;
+
+      const { data: target } = await sbAdmin
+        .from("profiles")
+        .select("id,email,role")
+        .eq("id", user_id)
+        .single();
+
+      if (!target) return json({ error: "Treinador não encontrado." }, 404);
+      if (target.role === "admin") return json({ error: "Admin Master não pode ser removido." }, 403);
+
+      const { error: detachErr } = await sbAdmin
+        .from("profiles")
+        .update({ coach_id: null })
+        .eq("coach_id", user_id)
+        .eq("role", "student");
+      if (detachErr) return json({ error: detachErr.message }, 500);
+
+      const { error: profileErr } = await sbAdmin
+        .from("profiles")
+        .update({
+          role: "student",
+          status: "blocked",
+          coach_id: null,
+          must_reset_password: true,
+        })
+        .eq("id", user_id);
+      if (profileErr) return json({ error: profileErr.message }, 500);
+
+      await sbAdmin.auth.admin.updateUserById(user_id, {
+        ban_duration: "876000h",
+        user_metadata: { role: "student", removed_trainer: true },
+      });
+
+      return json({ ok: true, action: "remove_trainer" });
     }
 
     return json({ error: `Ação desconhecida: ${action}` }, 400);

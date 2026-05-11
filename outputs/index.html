@@ -401,10 +401,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .timer-controls { display: flex; gap: 12px; margin-bottom: 14px; }
 .timer-controls .icon-btn { width: 48px; height: 48px; background: var(--bg-2); }
 .timer-fs-skip { background: transparent; border: 1px solid var(--line); color: var(--text);
-  border-radius: 12px; padding: 12px 22px; font-weight: 700; font-size: 13px; }
+  border-radius: 12px; padding: 12px 22px; font-weight: 700; font-size: 13px; transition: opacity .2s; }
+.timer-fs.done .timer-fs-skip { display: none; }
 .timer-fs-next { display: none; margin-top: 10px; background: var(--green); color: #03140a;
-  border: 0; padding: 13px 18px; border-radius: 12px; font-weight: 900; font-size: 13px; }
-.timer-fs.done .timer-fs-next { display: inline-flex; align-items: center; justify-content: center; }
+  border: 0; padding: 15px 28px; border-radius: 12px; font-weight: 900; font-size: 15px;
+  width: 100%; max-width: 280px; }
+.timer-fs.done .timer-fs-next { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.timer-fs-exname { font-size: 13px; font-weight: 700; color: var(--text); text-align: center;
+  padding: 0 28px; margin-top: -16px; margin-bottom: 16px; line-height: 1.35;
+  max-width: 320px; letter-spacing: 0.2px; min-height: 18px; }
 
 /* Bottom nav */
 .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex;
@@ -460,13 +465,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .action-card:active { transform:scale(.98); }
 .action-card svg { color:var(--brand); }
 .action-title { font-weight:800; font-size:14px; }
-.action-sub { font-size:11px; color:var(--text-3); line-height:1.35; }
+.action-sub { font-size:12px; color:var(--text-3); line-height:1.4; }
 .insight-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
 .insight-card { background:var(--bg-card); border:1px solid var(--line); border-radius:14px; padding:12px; min-width:0; }
 .insight-card.is-warn { border-color:rgba(255,149,0,.45); background:linear-gradient(135deg,var(--orange-soft),var(--bg-card)); }
 .insight-card.is-danger { border-color:rgba(255,59,59,.45); background:linear-gradient(135deg,var(--red-soft),var(--bg-card)); }
+.insight-card.is-success { border-color:rgba(46,204,113,.45); background:linear-gradient(135deg,var(--green-soft),var(--bg-card)); }
 .insight-value { font-size:22px; font-weight:900; line-height:1; }
-.insight-label { font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.6px; margin-top:5px; }
+.insight-label { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:.4px; margin-top:5px; }
 @media (max-width: 380px) {
   .action-grid { grid-template-columns:1fr; }
   .insight-strip { grid-template-columns:1fr; }
@@ -760,8 +766,11 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       <button type="button" class="btn-ghost" style="margin-top:8px" onclick="showAuthForm()">← Voltar ao login</button>
     </div>
   </div>
-  <div style="text-align:center; margin-top:20px;">
-    <p class="text-xs muted">Não tem conta? Fale com seu professor para receber acesso.</p>
+  <div style="text-align:center; margin-top:20px; padding:0 4px;">
+    <p style="font-size:12px; color:var(--text-3); line-height:1.5; margin:0;">
+      Novo por aqui? Seu professor já criou seu acesso.<br>
+      Use o e-mail e senha que ele cadastrou para você.
+    </p>
   </div>
   <div style="position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:11px;color:var(--text-3)">
     <a href="#" onclick="event.preventDefault();openLegalModal('terms')" style="color:var(--text-3);text-decoration:none;margin:0 8px">Termos de Uso</a>
@@ -872,13 +881,17 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
         <div class="timer-ring-label" id="timer-fs-label">Próxima série</div>
       </div></div>
     </div>
+    <div id="timer-fs-exname" class="timer-fs-exname"></div>
     <div class="timer-controls">
       <button class="icon-btn" id="timer-fs-minus"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="12" x2="18" y2="12"/></svg></button>
       <button class="icon-btn" id="timer-fs-toggle"><svg id="timer-fs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
       <button class="icon-btn" id="timer-fs-plus"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="6" x2="12" y2="18"/><line x1="6" y1="12" x2="18" y2="12"/></svg></button>
     </div>
     <button class="timer-fs-skip" id="timer-fs-skip">Pular descanso</button>
-    <button class="timer-fs-next" id="timer-fs-next">Iniciar próximo exercício</button>
+    <button class="timer-fs-next" id="timer-fs-next">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Continuar treino
+    </button>
   </div>
 
   <nav class="bottom-nav">
@@ -2393,6 +2406,13 @@ async function signOut() {
    DATA LOADING
    ============================================================================= */
 async function loadWorkouts() {
+  // Coach pode ter ocultado treinos globais/de outros coaches da PROPRIA lista
+  let hiddenSet = new Set();
+  if (STATE.profile && STATE.profile.role === "coach") {
+    const { data: hidden } = await sb.from("coach_hidden_workouts")
+      .select("workout_id").eq("coach_id", STATE.profile.id);
+    (hidden || []).forEach(h => hiddenSet.add(h.workout_id));
+  }
   let q = sb.from("workouts").select("*").order("code");
   const role = STATE.profile && STATE.profile.role;
   const myId = STATE.profile && STATE.profile.id;
@@ -2417,6 +2437,7 @@ async function loadWorkouts() {
   const isStudent = STATE.profile && STATE.profile.role === "student";
   const grouped = {};
   (workouts || []).forEach(w => {
+    if (hiddenSet.has(w.id)) return; // ocultos por este coach
     if (!grouped[w.code]) grouped[w.code] = [];
     grouped[w.code].push(w);
   });
@@ -2967,15 +2988,11 @@ window.confirmSerieDone = async function(skipTimer) {
   const timerLabel = timerNextEx && isLastEx ? timerNextEx.name : nextLabel;
 
   if (!skipTimer) {
-    if (confirmBtn) {
-      confirmBtn.disabled = true;
-      confirmBtn.textContent = "Agendando descanso...";
-    }
+    closeSerieModal();  // fecha imediatamente — sem esperar o push de servidor
     await startTimer(pauseSec, timerLabel, () => {
       if (navigator.vibrate) navigator.vibrate([200,100,200]);
       if (isLastEx) setTimeout(autoAdvanceExercise, 600);
     });
-    closeSerieModal();
   } else {
     closeSerieModal();
     showToast("Timer pulado", null);
@@ -4006,7 +4023,7 @@ async function verifyRestTimerPushJob(timerId) {
 }
 async function upsertRestTimerPushJobDirect(timerId, seconds, exerciseName) {
   if (!sb || !STATE.user?.id || !timerId) return false;
-  const fireAt = new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString();
+  const fireAt = buildRestPushFireAt(seconds);
   const { error } = await sb.from("rest_timer_push_jobs").upsert({
     user_id: STATE.user.id,
     timer_id: timerId,
@@ -4022,6 +4039,14 @@ async function upsertRestTimerPushJobDirect(timerId, seconds, exerciseName) {
   if (error) throw error;
   return true;
 }
+// Compensa latencia tipica de entrega do push (APNs/FCM ~10-15s).
+const PUSH_LATENCY_COMPENSATION_MS = 12000;
+function buildRestPushFireAt(seconds) {
+  const totalMs = Math.max(1, Number(seconds || 0)) * 1000;
+  const adjustedMs = Math.max(1000, totalMs - PUSH_LATENCY_COMPENSATION_MS);
+  return new Date(Date.now() + adjustedMs).toISOString();
+}
+
 async function scheduleServerRestPush(seconds, exerciseName) {
   try {
     if (!sb || !STATE.user || !STATE.timer?.id) return false;
@@ -4031,7 +4056,7 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       rememberRestPushStatus("subscription_failed", "Permissão/assinatura Web Push não está pronta.");
       return false;
     }
-    const fireAt = new Date(Date.now() + Math.max(1, Number(seconds || 0)) * 1000).toISOString();
+    const fireAt = buildRestPushFireAt(seconds);
     const subscription = await getCurrentPushSubscriptionPayload();
     const { error } = await sb.functions.invoke("rest-timer-push", {
       body: {
@@ -4127,10 +4152,12 @@ function reconcileTimerAfterLifecycle(reason = "resume") {
       const barTime = document.getElementById("timer-bar-time");
       const fsTime = document.getElementById("timer-fs-time");
       const fsLabel = document.getElementById("timer-fs-label");
+      const fsExNameEl = document.getElementById("timer-fs-exname");
       const barSub = document.getElementById("timer-bar-sub");
       if (barTime) barTime.textContent = "00:00";
       if (fsTime) fsTime.textContent = "00:00";
       if (fsLabel) fsLabel.textContent = "Vamos lá!";
+      if (fsExNameEl) fsExNameEl.textContent = "";
       if (barSub) barSub.textContent = saved.exerciseName || saved.label || "Próxima série";
       closeFsTimer();
       if (typeof doneCallback === "function") {
@@ -4259,9 +4286,14 @@ function updateTimerLabels() {
   const exerciseName = STATE.timer.exerciseName || label;
   const fsLabel = document.getElementById("timer-fs-label");
   const fsEyebrow = document.getElementById("timer-fs-eyebrow");
+  const fsExName = document.getElementById("timer-fs-exname");
   const barSub = document.getElementById("timer-bar-sub");
-  if (fsLabel) fsLabel.textContent = label;
+  // Dentro do anel: texto curto sempre (evita quebrar no círculo)
+  const isLongLabel = label.length > 18;
+  if (fsLabel) fsLabel.textContent = isLongLabel ? "Próximo exercício" : label;
   if (fsEyebrow) fsEyebrow.textContent = "Descanso";
+  // Abaixo do anel: nome completo do exercício (quando for longo)
+  if (fsExName) fsExName.textContent = isLongLabel ? label : "";
   if (barSub) barSub.textContent = exerciseName;
 }
 function finishTimer() {
@@ -4284,10 +4316,12 @@ function finishTimer() {
   const barTime = document.getElementById("timer-bar-time");
   const fsTime = document.getElementById("timer-fs-time");
   const fsLabel = document.getElementById("timer-fs-label");
+  const fsExNameEl2 = document.getElementById("timer-fs-exname");
   const barSub = document.getElementById("timer-bar-sub");
   if (barTime) barTime.textContent = "00:00";
   if (fsTime) fsTime.textContent = "00:00";
   if (fsLabel) fsLabel.textContent = "Vamos lá!";
+  if (fsExNameEl2) fsExNameEl2.textContent = "";
   if (barSub) barSub.textContent = STATE.timer.exerciseName || STATE.timer.label || "Próxima série";
   if (STATE.timer.onDone) STATE.timer.onDone();
   // Auto-fechar fullscreen e barra após 2.5s
@@ -4943,7 +4977,6 @@ function renderPushSubscriptionCardHTML() {
       ${isIOSDevice() && !isStandaloneApp() ? `<div class="text-xs" style="margin-top:8px;color:var(--red);line-height:1.4">No iPhone, push fora do app só funciona com o app instalado na Tela de Início.</div>` : ""}
       <div class="sheet-action-grid" style="margin-top:12px">
         <button class="mini-btn mini-btn-primary" onclick="forceRenewPushSubscription()">Renovar push</button>
-        <button class="mini-btn mini-btn-ghost" onclick="testRestTimerPushDelayed()">Teste bloqueado 15s</button>
       </div>
     </div>`;
   }
@@ -4961,6 +4994,7 @@ function renderPushSubscriptionCardHTML() {
       </div>
       <button class="mini-btn mini-btn-primary" onclick="requestPushPermission()">Ativar</button>
     </div>
+
   </div>`;
 }
 
@@ -5062,11 +5096,11 @@ function navTo(view) {
   // Destaque no bottom nav: sub-views ficam sem item ativo (ou home ativo)
   document.querySelectorAll(".bn-item").forEach(b => b.classList.toggle("active", b.dataset.nav === view));
 
-  // Nav bar: só oculta se sessão de treino ativa em andamento
-  // Bug #24 fix: não ocultar ao simplesmente abrir a aba treino
+  // Nav bar: só oculta quando a barra "deslize para concluir" estiver visível
+  // (ou seja, quando o treino foi explicitamente iniciado pelo usuário)
   const bnBar = document.getElementById("bn-bar");
-  const hasActiveSession = STATE.currentSession && STATE.currentSession.status !== "completed";
-  if (bnBar) bnBar.style.display = (view === "workout" && hasActiveSession) ? "none" : "";
+  const hasActiveWorkoutBar = !!document.getElementById("workout-fixed-bar");
+  if (bnBar) bnBar.style.display = (view === "workout" && hasActiveWorkoutBar) ? "none" : "";
 
   // Remover barra fixa de treino ao sair do workout
   if (view !== "workout") document.getElementById("workout-fixed-bar")?.remove();
@@ -5131,18 +5165,17 @@ function renderBottomNav() {
     bar.classList.add("cols-5");
     items = [
       { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
-      { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/><path d="M9.5 9.5 7 7l3-3 3 3"/>` },
-      { id: "feed", label: "Feed", svg: `<path d="M4 4h16v4H4zM4 11h16v4H4zM4 18h10v4H4z"/>` },
+      { id: "workout", label: "Treinar", svg: `<path d="M6.5 6.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/><path d="M17.5 6.5h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-2"/><line x1="6.5" y1="9" x2="6.5" y2="15"/><line x1="17.5" y1="9" x2="17.5" y2="15"/><line x1="6.5" y1="12" x2="17.5" y2="12"/><circle cx="6.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="16.5" r="1.5"/><circle cx="17.5" cy="7.5" r="1.5"/><circle cx="17.5" cy="16.5" r="1.5"/>` },
       { id: "students", label: "Alunos", svg: `<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a7 7 0 0 1 14 0v1"/><circle cx="17" cy="9" r="3"/><path d="M22 21v-1a5 5 0 0 0-5-5"/>` },
-      { id: "admin-workouts", label: "Gestão", svg: `<path d="M3 6h18M3 12h18M3 18h18"/><path d="M7 6v12M17 6v12"/>` },
+      { id: "admin-workouts", label: "Biblioteca", svg: `<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>` },
       { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
     ];
   } else {
     bar.classList.add("cols-5");
     items = [
       { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
-      { id: "calendar", label: "Periodiz.", svg: `<rect x="3" y="4.5" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>` },
-      { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/><path d="M9.5 9.5 7 7l3-3 3 3"/>` },
+      { id: "calendar", label: "Agenda", svg: `<rect x="3" y="4.5" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>` },
+      { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/><path d="M17.5 6.5h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-2"/><line x1="6.5" y1="9" x2="6.5" y2="15"/><line x1="17.5" y1="9" x2="17.5" y2="15"/><line x1="6.5" y1="12" x2="17.5" y2="12"/><circle cx="6.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="16.5" r="1.5"/><circle cx="17.5" cy="7.5" r="1.5"/><circle cx="17.5" cy="16.5" r="1.5"/>` },
       { id: "feed", label: "Feed", svg: `<path d="M4 4h16v4H4zM4 11h16v4H4zM4 18h10v4H4z"/>` },
       { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
     ];
@@ -5194,7 +5227,16 @@ function renderHome() {
     return;
   }
   if (STATE.profile.status === "blocked") {
-    el.innerHTML = `<div class="empty"><h3>Acesso bloqueado</h3><p>Fale com seu professor.</p></div>`;
+    const coachId = STATE.profile.coach_id;
+    el.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="32" r="22"/><path d="M22 32h20"/></svg>
+      <h3>Acesso pausado</h3>
+      <p>Sua conta foi temporariamente pausada. Fale com seu professor para regularizar.</p>
+      <div class="empty-actions">
+        ${coachId ? `<button class="btn-primary" style="width:auto" onclick="openChatThread('${coachId}')">Falar com professor</button>` : ""}
+        <button class="btn-ghost" style="width:auto" onclick="navTo('payments')">Ver mensalidades</button>
+      </div>
+    </div>`;
     return;
   }
 
@@ -5350,6 +5392,32 @@ window.onDayClick = function(iso) {
   const info = findDayInfo(iso);
   if (!info) return;
   if (info.workout_code === "OFF") { showToast("Dia OFF — descanso!"); return; }
+  const today = todayISO();
+  const isLate = iso < today;
+  if (isLate) {
+    // Sheet de retomada para dias atrasados
+    const dt = new Date(iso + "T00:00:00");
+    const dayLabel = dt.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
+    const wCode = info.workout_code;
+    const W = STATE.workouts[wCode];
+    const wName = W ? W.name : "Treino " + wCode;
+    openSheet(`
+      <div style="text-align:center;margin-bottom:4px">
+        <div style="font-size:32px;margin-bottom:6px">📅</div>
+        <h3 style="margin:0 0 4px">Treino em atraso</h3>
+        <p style="color:var(--text-2);font-size:13px;margin:0 0 16px">${wName} · ${dayLabel}</p>
+        <p style="color:var(--text-2);font-size:13px;line-height:1.5;margin:0 0 20px">Sem problema — você ainda pode registrar este treino. Acontece com todo mundo!</p>
+      </div>
+      <button class="btn-primary" onclick="closeSheet();${info.preset_code ? `openWorkoutWithPreset('${iso}','${wCode}','${info.preset_code}')` : `openWorkout('${iso}','${wCode}','${info.intensity}')`}" style="margin-bottom:10px">
+        ▶ Fazer este treino agora
+      </button>
+      <button class="btn-ghost" onclick="closeSheet();navTo('chat')" style="margin-bottom:8px">
+        💬 Avisar o professor
+      </button>
+      <button class="btn-ghost" onclick="closeSheet()">Fechar</button>
+    `);
+    return;
+  }
   if (info.preset_code) {
     openWorkoutWithPreset(iso, info.workout_code, info.preset_code);
   } else {
@@ -5409,6 +5477,65 @@ function renderSelfTrainingCard({ emptyCta = true } = {}) {
 /* =============================================================================
    RENDER — COACH HOME
    ============================================================================= */
+
+function renderCoachOnboardingChecklist() {
+  if (!STATE.profile || STATE.profile.role !== "coach") return "";
+  const myId = STATE.profile.id;
+  const branding = STATE.branding || {};
+  const customizedBrand = !!(branding.logo_url || (branding.primary_color && branding.primary_color !== "#00b4ff" && branding.primary_color !== "#13baf2"));
+  const ownPresets = (typeof _PRESETS !== "undefined" ? _PRESETS : []).filter(p => p.coach_id === myId).length;
+  const ownWorkouts = Object.values(STATE.workouts || {}).filter(w => w && w.coach_id === myId).length;
+  const numStudents = (STATE.students || []).length;
+  const hasPeriod = (STATE.students || []).some(s => Number(s.sessions_done || 0) > 0 || s.last_session_at);
+  let sharedOnce = false;
+  try { sharedOnce = localStorage.getItem("treinova_coach_shared_link_v1") === "1"; } catch(e) {}
+  const steps = [
+    { id: "brand",     label: "Personalize sua marca",            done: customizedBrand,        action: "openBrandingSheet()" },
+    { id: "presets",   label: "Configure tipos de periodização",  done: ownPresets > 0,         action: "openPresetEditor()" },
+    { id: "workouts",  label: "Crie seu primeiro tipo de treino", done: ownWorkouts > 0,        action: "navTo('admin-workouts'); setTimeout(openCreateWorkoutTypeSheet, 200)" },
+    { id: "students",  label: "Adicione seu primeiro aluno",      done: numStudents > 0,        action: "navTo('students'); setTimeout(openNewStudentSheet, 200)" },
+    { id: "period",    label: "Monte a periodização do aluno",    done: numStudents > 0 && hasPeriod, action: "navTo('students')" },
+    { id: "share",     label: "Compartilhe o link de cadastro",   done: sharedOnce,             action: "trackCoachSharedLink(); openShareLinkSheet()" }
+  ];
+  const total = steps.length;
+  const done = steps.filter(s => s.done).length;
+  const pct = Math.round((done/total) * 100);
+  if (done >= total) {
+    try {
+      localStorage.setItem(`treinova_coach_setup_complete_at_${myId}`, new Date().toISOString());
+      localStorage.setItem("treinova_coach_setup_complete_at", new Date().toISOString());
+    } catch(e) {}
+    return "";
+  }
+  return `
+  <div class="card mb-12" style="border-color:rgba(0,180,255,.30);background:linear-gradient(135deg,var(--brand-soft),var(--bg-card))">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <div class="fw-700 text-sm" style="color:var(--brand)">Configure seu app</div>
+        <div class="text-xs muted" style="margin-top:2px">${done} de ${total} passos concluídos</div>
+      </div>
+      <div style="font-size:18px;font-weight:900;color:var(--brand)">${pct}%</div>
+    </div>
+    <div style="height:6px;border-radius:999px;background:var(--bg-3);overflow:hidden;margin-bottom:12px">
+      <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--brand),var(--brand-2));border-radius:999px;transition:width .3s ease"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${steps.map(s => `
+        <button onclick="${s.done ? '' : s.action}" ${s.done ? 'disabled' : ''} style="display:flex;align-items:center;gap:10px;padding:9px 4px;background:transparent;border:0;text-align:left;cursor:${s.done ? 'default' : 'pointer'};opacity:${s.done ? '.55' : '1'}">
+          <div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto;${s.done ? 'background:var(--brand);color:var(--brand-on)' : 'background:transparent;border:1.5px solid var(--line-2);color:var(--text-3)'}">
+            ${s.done ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
+          </div>
+          <div style="flex:1;font-size:13px;color:var(--text);${s.done ? 'text-decoration:line-through' : ''}">${s.label}</div>
+          ${s.done ? '' : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>`}
+        </button>
+      `).join("")}
+    </div>
+  </div>`;
+}
+window.trackCoachSharedLink = function() {
+  try { localStorage.setItem("treinova_coach_shared_link_v1", "1"); } catch(e) {}
+};
+
 function renderCoachHome(el) {
   const pending = STATE.students.filter(s => s.status === "pending").length;
   const approved = STATE.students.filter(s => s.status === "approved").length;
@@ -5439,23 +5566,7 @@ function renderCoachHome(el) {
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Compartilhar link de cadastro
         </button>
       </div>
-      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">Próximos passos</div>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;align-items:center;gap:12px">
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">1</div>
-            <div><div style="font-size:13px;font-weight:600;color:var(--text)">Adicione um aluno</div><div style="font-size:12px;color:var(--text-3)">Crie a conta dele direto aqui</div></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px">
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">2</div>
-            <div><div style="font-size:13px;font-weight:600;color:var(--text)">Atribua um treino</div><div style="font-size:12px;color:var(--text-3)">Monte a periodização na aba Alunos</div></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px">
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">3</div>
-            <div><div style="font-size:13px;font-weight:600;color:var(--text)">Acompanhe o progresso</div><div style="font-size:12px;color:var(--text-3)">Feed, cargas e atividade em tempo real</div></div>
-          </div>
-        </div>
-      </div>`;
+      ${renderCoachOnboardingChecklist()}`;
     return;
   }
 
@@ -5465,6 +5576,58 @@ function renderCoachHome(el) {
       <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
       <div class="greeting-sub">${approved} aluno(s) ativo(s) · ${pending} aguardando</div>
     </div>
+    <div class="insight-strip" style="margin-bottom:10px">
+      <button class="insight-card ${totalSessions7d > 0 ? 'is-success' : ''}" onclick="navTo('students')">
+        <div class="insight-value">${totalSessions7d}</div>
+        <div class="insight-label">treinos / sem.</div>
+      </button>
+      <button class="insight-card ${inactive > 0 ? 'is-warn' : ''}" onclick="navTo('students')">
+        <div class="insight-value">${inactive}</div>
+        <div class="insight-label">inativos</div>
+      </button>
+      <button class="insight-card ${overdue > 0 ? 'is-danger' : ''}" onclick="navTo('payments')">
+        <div class="insight-value">${overdue}</div>
+        <div class="insight-label">em aberto</div>
+      </button>
+    </div>
+    ${(() => {
+      const cutoff = new Date(Date.now() - 7*86400000).toISOString();
+      const alerts = [];
+      // Inativos: pegar os 2 mais antigos
+      STATE.students.filter(s => s.status === "approved" && (!s.last_session_at || s.last_session_at < cutoff))
+        .sort((a,b) => (a.last_session_at||"") < (b.last_session_at||"") ? -1 : 1)
+        .slice(0,2)
+        .forEach(s => {
+          const days = s.last_session_at ? Math.floor((Date.now()-new Date(s.last_session_at).getTime())/86400000) : null;
+          const label = days ? `${days} dias sem treinar` : "nunca treinou";
+          alerts.push({ type:"warn", name: s.full_name || "Aluno", label, action:`openStudentSheet('${s.id}')` });
+        });
+      // Inadimplentes: 1 adicional se não já listado
+      STATE.students.filter(s => s.payment_status === "overdue" || s.payment_status === "pending_overdue")
+        .filter(s => !alerts.find(a => a.name === (s.full_name||"Aluno")))
+        .slice(0,1)
+        .forEach(s => alerts.push({ type:"danger", name: s.full_name || "Aluno", label:"mensalidade em aberto", action:`navTo('payments')` }));
+
+      if (alerts.length === 0) {
+        return (inactive === 0 && overdue === 0 && approved > 0) ? `
+          <div style="display:flex;align-items:center;gap:10px;background:var(--green-soft);border:1px solid rgba(46,204,113,.3);border-radius:12px;padding:10px 14px;margin-bottom:10px">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span style="font-size:13px;font-weight:700;color:var(--green)">Todos treinando bem esta semana 💪</span>
+          </div>` : "";
+      }
+      return `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+        ${alerts.map(a => `
+          <button onclick="${a.action}" style="display:flex;align-items:center;gap:10px;background:${a.type==="danger"?"var(--red-soft)":"var(--yellow-soft)"};border:1px solid ${a.type==="danger"?"rgba(255,59,59,.3)":"rgba(255,214,10,.3)"};border-radius:12px;padding:10px 14px;text-align:left;width:100%">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="${a.type==="danger"?"var(--red)":"var(--yellow)"}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div style="flex:1;min-width:0">
+              <span style="font-size:13px;font-weight:800;color:var(--text)">${escape(a.name)}</span>
+              <span style="font-size:12px;color:var(--text-2);margin-left:6px">· ${a.label}</span>
+            </div>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--text-3)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>`).join("")}
+      </div>`;
+    })()}
+    ${renderCoachOnboardingChecklist()}
     ${renderSelfTrainingCard()}
     <div class="action-grid">
       <button class="action-card" onclick="navTo('students'); setTimeout(openNewStudentSheet, 120)">
@@ -5487,31 +5650,6 @@ function renderCoachHome(el) {
         <div class="action-title">Financeiro</div>
         <div class="action-sub">Cobranças e inadimplência</div>
       </button>
-    </div>
-    <div class="insight-strip">
-      <button class="insight-card ${pending ? 'is-warn' : ''}" onclick="navTo('students'); _studentTab='all'; renderStudents();">
-        <div class="insight-value">${pending}</div><div class="insight-label">pendentes</div>
-      </button>
-      <button class="insight-card ${inactive ? 'is-warn' : ''}" onclick="navTo('students'); setStudentTab('inactive');">
-        <div class="insight-value">${inactive}</div><div class="insight-label">inativos</div>
-      </button>
-      <button class="insight-card ${overdue ? 'is-danger' : ''}" onclick="navTo('students'); setStudentTab('overdue');">
-        <div class="insight-value">${overdue}</div><div class="insight-label">devendo</div>
-      </button>
-    </div>
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-value">${approved}</div>
-        <div class="stat-label">Alunos ativos</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" style="color: ${pending > 0 ? 'var(--orange)' : 'var(--text)'}">${pending}</div>
-        <div class="stat-label">Pendentes</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${totalSessions7d}</div>
-        <div class="stat-label">Treinos 7d</div>
-      </div>
     </div>
     ${pending > 0 ? `
       <div class="section-title">Aprovações pendentes</div>
@@ -6565,16 +6703,24 @@ function renderCalendar() {
     </div>`;
   }).join("");
 
+  // Legenda filtrada: só mostra tipos que existem no plano do aluno
+  const intensitiesInPlan = new Set(allDays.map(d => d.intensity || "").filter(Boolean));
+  const hasOff = allDays.some(d => d.workout_code === "OFF");
+  const legendItems = [
+    { key: "yellow", dot: "dot-yellow", label: "Hipertrofia · pausa 1'" },
+    { key: "red",    dot: "dot-red",    label: "Força · pausa 2'30\"–3'" },
+    { key: "flex",   dot: "dot-flex",   label: "Flex + aeróbio" },
+  ].filter(li => intensitiesInPlan.has(li.key));
+  if (hasOff) legendItems.push({ key: "off", dot: "dot-off", label: "OFF" });
+  const legendHtml = legendItems.length > 0
+    ? `<div class="legend">${legendItems.map(li => `<span class="legend-item"><span class="legend-dot ${li.dot}"></span> ${li.label}</span>`).join("")}</div>`
+    : "";
+
   el.innerHTML = `
     <h1 class="view-title">Periodização</h1>
     <p class="view-subtitle">${escape(STATE.branding.app_tagline || 'Ciclo 5 · Melhora postural e estética')}</p>
     ${progressCard}
-    <div class="legend">
-      <span class="legend-item"><span class="legend-dot dot-yellow"></span> Hipertrofia · pausa 1'</span>
-      <span class="legend-item"><span class="legend-dot dot-red"></span> Força · pausa 2'30"–3'</span>
-      <span class="legend-item"><span class="legend-dot dot-flex"></span> Flex + aeróbio</span>
-      <span class="legend-item"><span class="legend-dot dot-off"></span> OFF</span>
-    </div>
+    ${legendHtml}
     ${html}`;
 
   requestAnimationFrame(() => {
@@ -6691,13 +6837,19 @@ async function renderWorkout() {
     return;
   }
 
-  // Garante session
-  if (!STATE.currentSession || STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code) {
+  // Se sessão salva é de outro treino/data, descartar
+  if (STATE.currentSession && (STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code)) {
+    STATE.currentSession = null;
+    STATE.setLogs = [];
+  }
+  // Se há sessão ativa para este treino, garantir logs carregados
+  if (STATE.currentSession && (!STATE.setLogs || STATE.setLogs.length === 0)) {
     el.innerHTML = `<div class="loading"><div class="spinner"></div>Carregando treino...</div>`;
-    await loadOrCreateSession(date, code, intensity);
+    await loadSetLogs();
   }
   const session = STATE.currentSession;
   const completed = session && session.status === "completed";
+  const sessionActive = session && session.status !== "completed";
 
   const [pillCls, pillTxt] = intensityPill(intensity);
   const scheme = getCurrentTrainingScheme(intensity);
@@ -6715,12 +6867,27 @@ async function renderWorkout() {
         Voltar
       </button>
     </div>
+    ${(() => {
+      const pct = totalTarget > 0 ? Math.min(100, Math.round((doneCount/totalTarget) * 100)) : (completed ? 100 : 0);
+      const remainingSets = Math.max(0, totalTarget - doneCount);
+      const pauseSec = Number.isFinite(Number(scheme.pauseSec)) ? Number(scheme.pauseSec) : 60;
+      const estMinRemain = Math.max(0, Math.round((remainingSets * (pauseSec + 30)) / 60));
+      return `
+      <div class="wp-progress" style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:6px 0 10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--text-2);text-transform:uppercase;margin-bottom:6px">
+          <span>${completed ? "Treino concluído" : `${pct}% · ${doneCount}/${totalTarget} séries`}</span>
+          <span style="color:var(--text-3);font-weight:700">${completed ? "✓" : (estMinRemain ? `~${estMinRemain}min restantes` : "quase lá")}</span>
+        </div>
+        <div style="height:6px;border-radius:999px;background:var(--bg-3);overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--brand),var(--brand-2));border-radius:999px;transition:width .3s ease"></div>
+        </div>
+      </div>`;
+    })()}
     <div class="workout-hero">
       <div class="wh-eyebrow">${fmtFullDateBR(date)} · Semana ${(findDayInfo(date)||{}).week || "—"}</div>
       <div class="wh-title">${escape(W.name)}</div>
       <div class="wh-focus">${escape(W.focus || "")}</div>
       <div class="wh-meta">
-        <span class="meta-chip"><strong>${doneCount}/${totalTarget}</strong> séries</span>
         <span class="meta-chip">${W.exercises.length} exercícios</span>
         <span class="today-pill ${pillCls}">${pillTxt}</span>
         ${completed ? `<span class="today-pill pill-approved">✓ Concluído</span>` : ""}
@@ -6745,22 +6912,33 @@ async function renderWorkout() {
       </div>
     ` : ""}
 
+    ${!completed && !sessionActive ? `
+      <div style="padding:0 0 16px">
+        <button class="btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px" onclick="startWorkoutSession('${date}','${code}','${intensity}')">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Iniciar treino
+        </button>
+        <div style="font-size:12px;color:var(--text-2);margin-top:10px;text-align:center;line-height:1.4">Suas cargas são salvas automaticamente a cada série.</div>
+      </div>
+    ` : ""}
+
     <div class="section-title">Exercícios do treino</div>
     <div class="ux-helper">Toque em um exercício para abrir séries, carga, descanso e instruções.</div>
     <div id="exercise-list"></div>
 
-    ${!completed ? `<div style="height:96px"></div>` : `
+    ${completed ? `
       <div style="margin-top:16px;padding-bottom:24px">
         <button class="btn-ghost" onclick="navTo('home')">← Voltar ao início</button>
       </div>
-    `}
+    ` : sessionActive ? `<div style="height:96px"></div>` : `<div style="height:24px"></div>`}
   `;
 
   renderExerciseList(W, intensity, completed);
 
-  // Barra fixa inferior de treino (substitui o botão inline + bottom nav)
+  // Barra fixa inferior: só aparece quando sessão estiver ativa (iniciada pelo usuário)
   document.getElementById("workout-fixed-bar")?.remove();
-  if (!completed) {
+  const bnBarFinal = document.getElementById("bn-bar");
+  if (!completed && sessionActive) {
     const bar = document.createElement("div");
     bar.id = "workout-fixed-bar";
     const pct = totalTarget > 0 ? Math.round(doneCount / totalTarget * 100) : 0;
@@ -6782,10 +6960,10 @@ async function renderWorkout() {
         #workout-fixed-bar .wfb-hint{font-size:10px;color:var(--text-3);white-space:nowrap}
         #workout-fixed-bar .finish-slide{
           flex:0 0 186px;height:52px;border-radius:16px;position:relative;overflow:hidden;
-          border:1px solid ${doneCount === 0 ? 'var(--line)' : allDone ? 'rgba(34,197,94,.65)' : 'var(--brand)'};
-          background:${doneCount === 0 ? 'var(--bg-card)' : allDone ? 'rgba(34,197,94,.16)' : 'var(--brand-soft)'};
-          color:${doneCount === 0 ? 'var(--text-3)' : 'var(--text)'};touch-action:none;user-select:none;
-          opacity:${doneCount === 0 ? '.55' : '1'}}
+          border:1px solid ${allDone ? 'rgba(34,197,94,.65)' : 'var(--brand)'};
+          background:${allDone ? 'rgba(34,197,94,.16)' : 'var(--brand-soft)'};
+          color:var(--text);touch-action:none;user-select:none;
+          opacity:1}
         #workout-fixed-bar .finish-slide-fill{position:absolute;inset:0 auto 0 0;width:0;background:${allDone ? 'rgba(34,197,94,.28)' : 'rgba(0,180,255,.22)'};transition:width .12s ease}
         #workout-fixed-bar .finish-slide-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding-left:42px;padding-right:12px;font-size:12px;font-weight:900;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
         #workout-fixed-bar .finish-slide-handle{position:absolute;left:5px;top:5px;width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:${allDone ? 'var(--green)' : 'var(--brand)'};color:${allDone ? '#001b0d' : 'var(--brand-on)'};box-shadow:0 10px 22px rgba(0,0,0,.22);transition:transform .12s ease}
@@ -6797,33 +6975,37 @@ async function renderWorkout() {
           <div class="wfb-track"><div class="wfb-fill" style="width:${pct}%"></div></div>
           <div class="wfb-foot">
             <div class="wfb-pct">${pct}% concluído</div>
-            <div class="wfb-hint">${doneCount === 0 ? "Marque a 1ª série" : allDone ? "Pronto para finalizar" : "Progresso salvo"}</div>
+            <div class="wfb-hint">${allDone ? "Pronto para finalizar" : doneCount > 0 ? "Progresso salvo" : "Pode concluir a qualquer hora"}</div>
           </div>
         </div>
-        <div id="finish-slide" class="finish-slide ${doneCount === 0 ? 'disabled' : ''}" role="button" aria-disabled="${doneCount === 0 ? 'true' : 'false'}" aria-label="Deslize para concluir treino">
+        <div id="finish-slide" class="finish-slide" role="button" aria-label="Deslize para concluir treino">
           <div class="finish-slide-fill"></div>
-          <div class="finish-slide-label">${doneCount === 0 ? 'Marque séries' : allDone ? 'Deslize ✓' : 'Deslize'}</div>
+          <div class="finish-slide-label">${allDone ? 'Deslize ✓' : 'Deslize'}</div>
           <div class="finish-slide-handle">
             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
           </div>
         </div>
       </div>`;
     document.body.appendChild(bar);
-    // #24 fix: ocultar nav bar agora que sessão está ativa
-    const bnBarEl = document.getElementById("bn-bar");
-    if (bnBarEl) bnBarEl.style.display = "none";
+    if (bnBarFinal) bnBarFinal.style.display = "none";
     initWorkoutFinishSlider({ allDone, doneCount, totalTarget });
   } else {
-    document.getElementById("workout-fixed-bar")?.remove();
-    // Sessão concluída — restaurar nav bar
-    const bnBarEl = document.getElementById("bn-bar");
-    if (bnBarEl) bnBarEl.style.display = "";
+    // Sem sessão ativa ou treino concluído — nav bar visível
+    if (bnBarFinal) bnBarFinal.style.display = "";
   }
+}
+
+// Chamado pelo botão "Iniciar treino" dentro da página de treino
+async function startWorkoutSession(date, code, intensity) {
+  const el = document.getElementById("view-workout");
+  if (el) el.innerHTML = `<div class="loading"><div class="spinner"></div>Iniciando treino...</div>`;
+  await loadOrCreateSession(date, code, intensity);
+  await renderWorkout();
 }
 
 function initWorkoutFinishSlider({ allDone, doneCount, totalTarget }) {
   const slider = document.getElementById("finish-slide");
-  if (!slider || doneCount === 0) return;
+  if (!slider) return;
   const handle = slider.querySelector(".finish-slide-handle");
   const fill = slider.querySelector(".finish-slide-fill");
   const maxX = () => Math.max(1, slider.clientWidth - (handle?.offsetWidth || 42) - 10);
@@ -6960,13 +7142,16 @@ function renderSetsTable(ex, logs, scheme, completed) {
   for (let i = 0; i < target; i++) {
     const log = logs.find(l => l.set_number === i+1);
     const isDone = log && log.done;
-    const loadVal = log && log.load_kg != null ? log.load_kg : "";
+    const logLoad = log && log.load_kg != null ? log.load_kg : null;
+    const loadVal = logLoad !== null ? logLoad : (lastLoad || "");
+    const isPreFilled = logLoad === null && !!lastLoad && !isDone;
     rows += `<div class="set-row ${isDone ? "done" : ""}">
       <div class="set-num">${i+1}</div>
       <div class="set-target">${scheme.reps} reps</div>
       <div class="set-load">
-        <input type="number" inputmode="decimal" placeholder="${lastLoad || "0"}" value="${escape(loadVal)}"
+        <input type="number" inputmode="decimal" placeholder="0" value="${escape(loadVal)}"
                ${completed ? "disabled" : ""}
+               style="${isPreFilled ? "color:var(--text-2);" : ""}"
                onchange="onLoadChange(${ex.position}, ${i}, this.value)" />
         <span class="unit">kg</span>
       </div>
@@ -6980,7 +7165,7 @@ function renderSetsTable(ex, logs, scheme, completed) {
   }
   const html = `<div class="sets-list">${rows}</div>
     <div class="text-xs muted" style="margin-top:-4px; margin-bottom:10px;">
-      ${lastLoad ? `Última carga: <b style="color:var(--text-2)">${lastLoad} kg</b> (auto-preenchida)` : "Toque no ✓ para concluir a série e iniciar o descanso."}
+      ${lastLoad ? `Carga anterior: <b style="color:var(--text-2)">${lastLoad} kg</b> — ajuste se necessário.` : "Toque no ✓ para concluir a série e iniciar o descanso."}
     </div>`;
   return html;
 }
@@ -7085,15 +7270,21 @@ function renderFeed() {
         Buscar
       </button>
     </div>
-    <p class="view-subtitle">Quem você segue · ${feed.length} post${feed.length!==1?'s':''}</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 14px">
-      <button class="stat-card" style="text-align:left;cursor:pointer" onclick="openSocialList('following')">
-        <div class="stat-value">${followingCount}</div>
-        <div class="stat-label">Seguindo</div>
+    <p class="view-subtitle" style="margin-bottom:10px">Quem você segue · ${feed.length} post${feed.length!==1?'s':''}</p>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;-webkit-overflow-scrolling:touch">
+      ${codes.map(c => `
+        <button onclick="setFeedFilter('${c}')" style="flex-shrink:0;padding:7px 14px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid ${filter===c?'var(--brand)':'var(--line)'};background:${filter===c?'var(--brand-soft)':'var(--bg-card)'};color:${filter===c?'var(--brand)':'var(--text-2)'};cursor:pointer">
+          ${c === "ALL" ? "Tudo" : c}
+        </button>`).join("")}
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button style="flex:1;background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:left;cursor:pointer" onclick="openSocialList('following')">
+        <div style="font-size:17px;font-weight:900;color:var(--text)">${followingCount}</div>
+        <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Seguindo</div>
       </button>
-      <button class="stat-card" style="text-align:left;cursor:pointer" onclick="openSocialList('followers')">
-        <div class="stat-value">${followersCount}</div>
-        <div class="stat-label">Seguidores</div>
+      <button style="flex:1;background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:left;cursor:pointer" onclick="openSocialList('followers')">
+        <div style="font-size:17px;font-weight:900;color:var(--text)">${followersCount}</div>
+        <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Seguidores</div>
       </button>
     </div>
     <div class="card" style="margin:0 0 14px;padding:12px">
@@ -7106,12 +7297,6 @@ function renderFeed() {
       </div>
       <input class="input" id="feed-people-search" placeholder="Nome ou email" oninput="onFeedPeopleSearch(this.value)" />
       <div id="feed-people-results" style="margin-top:10px"></div>
-    </div>
-    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:14px;-webkit-overflow-scrolling:touch">
-      ${codes.map(c => `
-        <button onclick="setFeedFilter('${c}')" style="flex-shrink:0;padding:7px 14px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid ${filter===c?'var(--brand)':'var(--line)'};background:${filter===c?'var(--brand-soft)':'var(--bg-card)'};color:${filter===c?'var(--brand)':'var(--text-2)'};cursor:pointer">
-          ${c === "ALL" ? "Tudo" : c}
-        </button>`).join("")}
     </div>
 
     ${pinned.length ? `
@@ -7211,13 +7396,36 @@ function canShareFeedWorkout(p) {
 
 function getFeedWorkoutSharePayload(p) {
   const workoutLabel = p.workout_name || (p.workout_code ? `Treino ${p.workout_code}` : "Treino");
+  const postDate = p.created_at ? new Date(p.created_at) : null;
+
+  // Hora do treino a partir do created_at do post
+  const workoutTime = postDate
+    ? postDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  // Grupos musculares: tenta pelo workout do state, se carregado
+  const CAT_LABEL_F = { chest:'Peito', back:'Costas', shoulder:'Ombros', biceps:'Bíceps',
+    triceps:'Tríceps', quad:'Quadríceps', hamstring:'Posterior', glute:'Glúteos',
+    calf:'Panturrilha', core:'Abdômen', mobility:'Mobilidade', cardio:'Cardio' };
+  const wData = p.workout_code ? STATE.workouts?.[p.workout_code] : null;
+  const muscleGroups = wData
+    ? [...new Set((wData.exercises||[]).map(e => {
+        const mg = (e.muscle_group||'').trim();
+        if (mg) return mg;
+        const c = (e.cat||'').trim().toLowerCase();
+        return CAT_LABEL_F[c] || c;
+      }).filter(Boolean))].slice(0, 6)
+    : [];
+
   return {
     name: workoutLabel,
     totalVolume: Number(p.total_volume_kg || 0),
     duration: Number(p.duration_seconds || 0),
     setsDone: Number(p.set_count || p.sets_done || p.set_count_done || 0),
     studentName: (p.student && p.student.full_name) || STATE.profile?.full_name || "",
-    dateLabel: p.created_at ? new Date(p.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : "",
+    dateLabel: postDate ? postDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : "",
+    workoutTime,
+    muscleGroups,
     source: "feed"
   };
 }
@@ -7299,9 +7507,72 @@ async function renderProfile() {
 
   // load history (students only)
   let historyHTML = "";
+  let performanceSummaryHTML = "";
   if (!isStaff) {
     el.innerHTML = `<div class="loading"><div class="spinner"></div>Carregando perfil...</div>`;
     const hist = await loadMyHistory(20);
+
+    // Calcular resumo de performance
+    if (hist.length > 0) {
+      const totalSessions = hist.length;
+      const totalVol = hist.reduce((s, r) => s + Number(r.total_volume_kg || 0), 0);
+      // Streak: dias consecutivos a partir de hoje para trás
+      const sortedDates = [...new Set(hist.map(h => h.date))].sort((a,b) => b>a?1:-1);
+      let streak = 0;
+      const todayD = todayISO();
+      let checkDate = todayD;
+      for (const d of sortedDates) {
+        if (d === checkDate) {
+          streak++;
+          const prev = new Date(checkDate + "T00:00:00");
+          prev.setDate(prev.getDate() - 1);
+          checkDate = prev.toISOString().slice(0,10);
+        } else if (d < checkDate) break;
+      }
+      // PR mais recente: maior carga registrada nos set_logs desta sessão mais recente com carga > 0
+      const lastSession = hist[0];
+      let prText = "";
+      if (lastSession) {
+        const { data: prLogs } = await sb.from("set_logs")
+          .select("load_kg, exercise_name")
+          .eq("session_id", lastSession.id)
+          .eq("done", true)
+          .not("load_kg", "is", null)
+          .order("load_kg", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (prLogs && prLogs.load_kg > 0) {
+          prText = `${prLogs.exercise_name} — ${prLogs.load_kg}kg`;
+        }
+      }
+      const volDisplay = totalVol >= 1000 ? `${(totalVol/1000).toFixed(1)}t` : `${Math.round(totalVol)}kg`;
+      performanceSummaryHTML = `
+        <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:4px">
+          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.7px;font-weight:800;margin-bottom:10px">Seu progresso</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:${prText?"12px":"0"}">
+            <div style="text-align:center">
+              <div style="font-size:22px;font-weight:900;color:${streak>0?"var(--brand)":"var(--text)"}">${streak > 0 ? "🔥" : "—"}</div>
+              <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:2px">${streak}</div>
+              <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:2px">sequência</div>
+            </div>
+            <div style="text-align:center;border-left:1px solid var(--line);border-right:1px solid var(--line)">
+              <div style="font-size:22px;font-weight:900;color:var(--text)">💪</div>
+              <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:2px">${totalSessions}</div>
+              <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:2px">treinos</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:22px;font-weight:900;color:var(--text)">⚡</div>
+              <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:2px">${volDisplay}</div>
+              <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:2px">volume total</div>
+            </div>
+          </div>
+          ${prText ? `<div style="margin-top:4px;padding:8px 10px;background:var(--brand-soft);border-radius:8px;font-size:12px;color:var(--brand);font-weight:700;display:flex;align-items:center;gap:6px">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            Última sessão: ${escape(prText)}
+          </div>` : ""}
+        </div>`;
+    }
+
     if (hist.length === 0) {
       historyHTML = `<div class="empty"><p>Sem treinos concluídos ainda. Bora começar!</p></div>`;
     } else {
@@ -7338,6 +7609,8 @@ async function renderProfile() {
         </div>
       </div>
     </div>
+
+    ${performanceSummaryHTML}
 
     <div class="section-title">Editar perfil</div>
     <div class="card">
@@ -7936,7 +8209,7 @@ function renderStudents() {
         <div class="insight-value">${countInactive}</div><div class="insight-label">inativos</div>
       </button>
       <button class="insight-card ${countOverdue ? 'is-danger' : ''}" onclick="setStudentTab('overdue')">
-        <div class="insight-value">${countOverdue}</div><div class="insight-label">devendo</div>
+        <div class="insight-value">${countOverdue}</div><div class="insight-label">em aberto</div>
       </button>
     </div>
     <div style="position:relative;margin-bottom:10px">
@@ -8112,14 +8385,46 @@ window.openNewStudentSheet = function() {
     <div class="form-group"><label class="form-label">Nome completo</label><input class="input" id="ns-name" placeholder="Nome" /></div>
     <div class="form-group"><label class="form-label">Email</label><input class="input" id="ns-email" type="email" placeholder="email@exemplo.com" /></div>
     <div class="form-group"><label class="form-label">Telefone</label><input class="input" id="ns-phone" type="tel" placeholder="(11) 99999-0000" /></div>
-    <div class="form-group"><label class="form-label">Senha temporária</label><input class="input" id="ns-pass" type="text" placeholder="Mínimo 6 caracteres" /></div>
+    <div class="form-group">
+      <label class="form-label">Senha temporária</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1;position:relative">
+          <input class="input" id="ns-pass" type="password" placeholder="Mínimo 6 caracteres" style="padding-right:44px" />
+          <button type="button" onclick="(function(){const i=document.getElementById('ns-pass');i.type=i.type==='password'?'text':'password';this.innerHTML=i.type==='password'?'<svg viewBox=\\'0 0 24 24\\' width=\\'18\\' height=\\'18\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\'><path d=\\'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z\\'/><circle cx=\\'12\\' cy=\\'12\\' r=\\'3\\'/></svg>':'<svg viewBox=\\'0 0 24 24\\' width=\\'18\\' height=\\'18\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\'><path d=\\'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94\\'/><path d=\\'M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19\\'/><line x1=\\'1\\' y1=\\'1\\' x2=\\'23\\' y2=\\'23\\'/></svg>'}).call(this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--text-3);cursor:pointer;padding:4px;display:flex;align-items:center">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <button type="button" onclick="(function(){const chars='ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';let p='';for(let i=0;i<8;i++)p+=chars[Math.floor(Math.random()*chars.length)];const inp=document.getElementById('ns-pass');inp.value=p;inp.type='text';showToast('Senha gerada: '+p,'success')})()" style="flex:0 0 auto;background:var(--bg-card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700;color:var(--text-2);cursor:pointer;white-space:nowrap">🎲 Gerar</button>
+      </div>
+    </div>
     <div class="ux-helper">Dica: o aluno será orientado a trocar a senha no primeiro acesso.</div>
+    <div style="border-top:1px solid var(--line);margin:12px 0 10px"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">💰 Plano mensal <span style="font-weight:400;opacity:.6">(opcional)</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Valor (R$)</label>
+        <input class="input" id="ns-plan-value" type="number" inputmode="decimal" placeholder="Ex: 250" min="0" />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Vence todo dia</label>
+        <input class="input" id="ns-plan-day" type="number" inputmode="numeric" placeholder="Ex: 10" min="1" max="31" />
+      </div>
+    </div>
     <label class="row-flex" style="margin-bottom:10px">
       <input type="checkbox" id="ns-seed" checked /> <span class="text-sm">Criar periodização padrão de 12 semanas</span>
     </label>
     <button class="btn-primary" onclick="submitNewStudent()">Criar aluno</button>
     <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Cancelar</button>
   `);
+  // Pré-preencher último valor de plano salvo
+  setTimeout(() => {
+    try {
+      const lv = localStorage.getItem("treinova_last_plan_value");
+      const ld = localStorage.getItem("treinova_last_plan_day");
+      if (lv) { const el = document.getElementById("ns-plan-value"); if (el) el.value = lv; }
+      if (ld) { const el = document.getElementById("ns-plan-day"); if (el) el.value = ld; }
+    } catch(e) {}
+  }, 60);
 };
 // Cliente Supabase isolado, sem persistir sessão — usado para criar contas
 // sem afetar o login do staff atual.
@@ -8152,6 +8457,8 @@ window.submitNewStudent = async function() {
   const phone = document.getElementById("ns-phone").value.trim();
   const pass = document.getElementById("ns-pass").value;
   const seedPer = document.getElementById("ns-seed").checked;
+  const planValue = parseFloat(document.getElementById("ns-plan-value")?.value || "") || null;
+  const planDay = parseInt(document.getElementById("ns-plan-day")?.value || "") || null;
   if (!name || !email || !pass || pass.length < 6) { showToast("Preencha tudo (senha 6+)", "error"); return; }
   setBusy(true);
   try {
@@ -8176,12 +8483,34 @@ window.submitNewStudent = async function() {
       const { error: seedErr } = await sb.rpc("seed_periodization_for_student", { p_student: studentId });
       if (seedErr) console.warn("seed periodização falhou:", seedErr);
     }
+
+    // 3) Plano mensal (opcional)
+    if (planValue && planDay) {
+      const dueDate = (() => {
+        const now = new Date();
+        const d = new Date(now.getFullYear(), now.getMonth(), planDay);
+        if (d <= now) d.setMonth(d.getMonth() + 1);
+        return d.toISOString().slice(0, 10);
+      })();
+      await sb.from("payments").insert({
+        student_id: studentId,
+        coach_id: STATE.profile.id,
+        amount: planValue,
+        due_date: dueDate,
+        status: "pending",
+        description: "Mensalidade"
+      }).catch(e => console.warn("[plan insert]", e));
+      // Salva valor padrão para próximos alunos
+      try { localStorage.setItem("treinova_last_plan_value", String(planValue)); } catch(e) {}
+      try { localStorage.setItem("treinova_last_plan_day", String(planDay)); } catch(e) {}
+    }
+
     await sb.from("follows").upsert(
       { follower_id: STATE.profile.id, following_id: studentId },
       { onConflict: "follower_id,following_id", ignoreDuplicates: true }
     ).catch(e => console.warn("[follow new student]", e));
 
-    showToast("Aluno criado", "success");
+    showToast("Aluno criado" + (planValue ? " com plano de R$ " + planValue.toFixed(2) : ""), "success");
     closeSheet();
     await loadStudents();
     renderStudents();
@@ -8284,6 +8613,141 @@ async function loadBlocksForDays(dayIds) {
   return map;
 }
 
+
+// ============== TEMPLATES DE PERIODIZACAO ==============
+
+window.openSavePeriodAsTemplateSheet = function(studentId) {
+  if (!STATE.profile || !["coach","admin"].includes(STATE.profile.role)) return;
+  openSheet(`
+    <h3>Salvar como template</h3>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 12px">Salva o ciclo atual deste aluno como um template reutilizável. Dá pra aplicar em outros alunos depois com 1 toque.</p>
+    <div class="form-group">
+      <label class="form-label">Nome do template</label>
+      <input class="input" id="tmpl-name" maxlength="60" placeholder="Ex.: Hipertrofia 12 semanas" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrição (opcional)</label>
+      <textarea class="input textarea" id="tmpl-desc" maxlength="200" placeholder="Ex.: ABCD com semana de deload na 4 e 8" style="min-height:60px"></textarea>
+    </div>
+    <button class="btn-primary" onclick="savePeriodAsTemplate('${studentId}')">Salvar template</button>
+    <button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')" style="margin-top:8px">Cancelar</button>
+  `);
+  setTimeout(() => document.getElementById("tmpl-name")?.focus(), 60);
+};
+
+window.savePeriodAsTemplate = async function(studentId) {
+  const nameEl = document.getElementById("tmpl-name");
+  const descEl = document.getElementById("tmpl-desc");
+  const name = (nameEl?.value || "").trim();
+  const desc = (descEl?.value || "").trim() || null;
+  if (!name) { showToast("Informe um nome para o template", "error"); nameEl?.focus(); return; }
+  if (STATE._savingTemplate) return;
+  STATE._savingTemplate = true;
+  try {
+    const { data, error } = await sb.rpc("save_period_as_template", {
+      p_student: studentId,
+      p_name: name,
+      p_description: desc
+    });
+    if (error) throw error;
+    showToast("Template salvo ✓", "success");
+    closeSheet();
+    openStudentPeriodSheet(studentId);
+  } catch(e) {
+    console.error("[savePeriodAsTemplate]", e);
+    showToast("Erro: " + (e.message || "tente novamente"), "error");
+  } finally {
+    STATE._savingTemplate = false;
+  }
+};
+
+window.openApplyTemplateSheet = async function(studentId) {
+  if (!STATE.profile || !["coach","admin"].includes(STATE.profile.role)) return;
+  openSheet(`<h3>Carregando templates…</h3><div class="loading"><div class="spinner"></div></div>`);
+  const myCoachId = STATE.profile.role === "coach" ? STATE.profile.id : null;
+  let q = sb.from("periodization_templates").select("*").order("created_at", { ascending: false });
+  if (myCoachId) q = q.eq("coach_id", myCoachId);
+  const { data: templates, error } = await q;
+  if (error) {
+    openSheet(`<h3>Templates</h3><div class="empty"><p>Erro: ${escape(error.message)}</p></div><button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')">Voltar</button>`);
+    return;
+  }
+  const list = (templates || []);
+  const today = todayISO();
+  const html = `
+    <h3>Aplicar template</h3>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 14px">Selecione um template e a data de início. As datas atuais a partir do início serão substituídas.</p>
+    ${list.length === 0 ? `
+      <div class="empty"><p>Você ainda não tem templates. Salve a periodização de um aluno como template para começar.</p></div>
+    ` : `
+      <div class="form-group">
+        <label class="form-label">Data de início</label>
+        <input class="input" id="apply-tmpl-date" type="date" value="${today}" />
+      </div>
+      <label class="row-flex" style="margin-bottom:12px;gap:8px"><input type="checkbox" id="apply-tmpl-replace" checked><span class="text-sm">Substituir periodização existente a partir desta data</span></label>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${list.map(t => `
+          <div class="card" style="padding:12px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+              <div style="min-width:0;flex:1">
+                <div class="fw-700 text-sm">${escape(t.name)}</div>
+                <div class="text-xs muted" style="margin-top:3px">${t.weeks_count} semana(s) · ${t.total_days} dias${t.description ? ' · ' + escape(t.description) : ''}</div>
+              </div>
+              <button class="mini-btn mini-btn-primary" onclick="applyTemplateToStudent('${t.id}','${studentId}','${escape(t.name).replace(/'/g, "&#39;")}')">Aplicar</button>
+              <button class="mini-btn mini-btn-danger" onclick="deletePeriodTemplate('${t.id}','${studentId}')" title="Excluir template">×</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `}
+    <button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')" style="margin-top:14px">Voltar</button>
+  `;
+  openSheet(html);
+};
+
+window.applyTemplateToStudent = async function(templateId, studentId, templateName) {
+  const dateEl = document.getElementById("apply-tmpl-date");
+  const replaceEl = document.getElementById("apply-tmpl-replace");
+  const startDate = dateEl?.value || todayISO();
+  const replace = replaceEl?.checked !== false;
+  const ok = await showConfirm({
+    title: `Aplicar "${templateName}"?`,
+    msg: replace
+      ? `O template será aplicado a partir de ${fmtDateBR(startDate)}, substituindo o que existir desta data em diante.`
+      : `O template será mesclado com o que já existe na periodização do aluno.`,
+    confirm: "Aplicar",
+    danger: replace
+  });
+  if (!ok) return;
+  if (STATE._applyingTemplate) return;
+  STATE._applyingTemplate = true;
+  try {
+    const { data, error } = await sb.rpc("apply_period_template", {
+      p_template: templateId,
+      p_student: studentId,
+      p_start_date: startDate,
+      p_replace: replace
+    });
+    if (error) throw error;
+    showToast(`Template aplicado · ${data || 0} dias gerados`, "success");
+    closeSheet();
+    openStudentPeriodSheet(studentId);
+  } catch(e) {
+    console.error("[applyTemplateToStudent]", e);
+    showToast("Erro: " + (e.message || "tente novamente"), "error");
+  } finally {
+    STATE._applyingTemplate = false;
+  }
+};
+
+window.deletePeriodTemplate = async function(templateId, studentId) {
+  if (!await showConfirm({ title: "Excluir template?", msg: "Esta ação não pode ser desfeita. As periodizações já aplicadas em alunos não são afetadas.", confirm: "Excluir", danger: true })) return;
+  const { error } = await sb.from("periodization_templates").delete().eq("id", templateId);
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast("Template removido", "success");
+  openApplyTemplateSheet(studentId);
+};
+
 window.openStudentPeriodSheet = async function(id) {
   openSheet(`<h3>Periodização</h3><div class="loading"><div class="spinner"></div></div>`);
   if (!_PRESETS.length) await loadPresets();
@@ -8301,6 +8765,8 @@ window.openStudentPeriodSheet = async function(id) {
     <div class="period-toolbar">
       <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ Semana</button>
       <button class="mini-btn" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line)" onclick="removePeriodWeek('${id}')">− Semana</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openApplyTemplateSheet('${id}')" title="Aplicar template salvo"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V7H4v14h4z"/><path d="M16 21V3h-4v18h4z"/><path d="M22 21V11h-4v10h4z"/></svg> Aplicar template</button>
+      ${(grouped.length > 0) ? `<button class="mini-btn mini-btn-ghost" onclick="openSavePeriodAsTemplateSheet('${id}')" title="Salvar este ciclo como template"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Salvar template</button>` : ''}
       <button class="mini-btn mini-btn-ghost" onclick="openPeriodConfig('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Configurar período</button>
       <button class="mini-btn mini-btn-ghost" onclick="openPresetEditor()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Tipos</button>
     </div>
@@ -9604,42 +10070,55 @@ window.createWorkoutType = async function() {
 
 window.deleteWorkoutType = async function(workoutId, code, name) {
   if (!["admin","coach"].includes(STATE.profile?.role)) {
-    showToast("Sem permissão para excluir treinos.", "error");
+    showToast("Sem permissão para remover treinos.", "error");
     return;
   }
   if (STATE._deletingWorkout) return;
-  // Aviso forte se houver alunos com sessoes desse codigo
-  const ok = await showConfirm({
-    title: `Excluir ${name || code}?`,
-    msg: "O tipo de treino e seus exercícios serão removidos. Sessões já concluídas dos alunos continuam no histórico.",
-    confirm: "Excluir",
-    cancel: "Cancelar",
-    danger: true
-  });
-  if (!ok) return;
   STATE._deletingWorkout = true;
   try {
     let wid = workoutId;
     if (!wid && code && STATE.workouts && STATE.workouts[code]) wid = STATE.workouts[code].id;
     if (!wid) {
-      // ultima tentativa: buscar pelo codigo
-      const { data } = await sb.from("workouts").select("id").eq("code", code).limit(1).maybeSingle();
+      const { data } = await sb.from("workouts").select("id, coach_id, is_global").eq("code", code).limit(1).maybeSingle();
       wid = data?.id;
     }
-    if (!wid) {
-      showToast("Treino não encontrado para excluir.", "error");
-      return;
+    if (!wid) { showToast("Treino não encontrado.", "error"); return; }
+
+    // Carrega metadata do workout para decidir entre HIDE e DELETE real
+    const { data: meta } = await sb.from("workouts").select("id, coach_id, is_global, name").eq("id", wid).maybeSingle();
+    const isAdmin = STATE.profile?.role === "admin";
+    const isOwner = meta && meta.coach_id && meta.coach_id === STATE.profile?.id;
+    const willHide = !isAdmin && !isOwner;  // coach removendo treino que nao eh dele
+
+    const ok = await showConfirm({
+      title: willHide ? `Remover ${name || code} da sua lista?` : `Excluir ${name || code}?`,
+      msg: willHide
+        ? "Este treino é global ou de outro professor — vamos esconder ele apenas da sua lista. Outros professores e o admin continuam vendo."
+        : "O tipo de treino e seus exercícios serão removidos. Sessões já concluídas dos alunos continuam no histórico.",
+      confirm: willHide ? "Remover" : "Excluir",
+      cancel: "Cancelar",
+      danger: true
+    });
+    if (!ok) return;
+
+    if (willHide) {
+      const { error } = await sb.from("coach_hidden_workouts").upsert({
+        coach_id: STATE.profile.id, workout_id: wid
+      }, { onConflict: "coach_id,workout_id" });
+      if (error) throw error;
+      showToast("Removido da sua lista", "success");
+    } else {
+      // delete real (admin ou dono): apaga exercises e o workout
+      await sb.from("exercises").delete().eq("workout_id", wid);
+      const { error } = await sb.from("workouts").delete().eq("id", wid);
+      if (error) throw error;
+      showToast("Treino excluído", "success");
     }
-    // apaga exercicios primeiro (defesa caso FK seja RESTRICT)
-    await sb.from("exercises").delete().eq("workout_id", wid);
-    const { error } = await sb.from("workouts").delete().eq("id", wid);
-    if (error) throw error;
-    showToast("Treino excluído", "success");
     await loadWorkouts();
     renderAdminWorkouts();
   } catch (e) {
     console.error("[deleteWorkoutType]", e);
-    showToast("Erro ao excluir: " + (e.message || "verifique permissões"), "error");
+    showToast("Erro: " + (e.message || "tente novamente"), "error");
   } finally {
     STATE._deletingWorkout = false;
   }
@@ -9826,8 +10305,38 @@ function _renderPickerFull() {
 }
 
 // Atualiza só a lista de resultados — Bug #20 fix: sem recriar o input
+// Helper: lê/salva exercícios recentes do picker (localStorage, por coach)
+function _getRecentPickerIds() {
+  try {
+    const key = `treinova_recent_exercises_${STATE.profile?.id || "coach"}`;
+    return JSON.parse(localStorage.getItem(key) || "[]");
+  } catch(e) { return []; }
+}
+function _saveRecentPickerId(libExId) {
+  try {
+    const key = `treinova_recent_exercises_${STATE.profile?.id || "coach"}`;
+    const arr = _getRecentPickerIds().filter(id => id !== libExId);
+    arr.unshift(libExId);
+    localStorage.setItem(key, JSON.stringify(arr.slice(0, 12)));
+  } catch(e) {}
+}
+
+function _pickerExerciseRow(e, ctx) {
+  const selected = ctx.selected && ctx.selected.has(e.id);
+  return `
+    <div class="list-row ${selected ? 'selected' : ''}" onclick="toggleExercisePick('${e.id}')" style="cursor:pointer;border-color:${selected ? 'var(--brand)' : 'var(--line)'};">
+      <div class="lr-avatar" style="overflow:hidden;">${getExThumb(e)}</div>
+      <div class="lr-info">
+        <div class="lr-name">${escape(e.name)}</div>
+        <div class="lr-sub">${escape(e.muscle_group || "")}${e.method ? " · " + escape(e.method) : ""}</div>
+      </div>
+      <div style="width:28px;height:28px;border-radius:999px;border:1px solid ${selected ? 'var(--brand)' : 'var(--line)'};display:grid;place-items:center;color:${selected ? 'var(--brand)' : 'var(--text-3)'}">${selected ? '✓' : '+'}</div>
+    </div>`;
+}
+
 function _renderPickerResults() {
   const ctx = STATE._pickerCtx || {};
+  const isSearching = !!(ctx.query || ctx.group !== "todos");
   const filter = (STATE.library || []).filter(e => {
     if (ctx.group !== "todos" && e.muscle_group !== ctx.group) return false;
     if (ctx.query && !e.name.toLowerCase().includes(ctx.query.toLowerCase())) return false;
@@ -9835,20 +10344,30 @@ function _renderPickerResults() {
   });
   const el = document.getElementById("ep-results");
   if (!el) return;
-  el.innerHTML = filter.length === 0
+
+  // Seção "Usados recentemente" — só aparece sem filtro ativo
+  let recentHtml = "";
+  if (!isSearching) {
+    const recentIds = _getRecentPickerIds();
+    const recents = recentIds
+      .map(id => (STATE.library || []).find(e => e.id === id))
+      .filter(Boolean)
+      .slice(0, 8);
+    if (recents.length > 0) {
+      recentHtml = `
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px;padding:0 2px">⚡ Usados recentemente</div>
+        ${recents.map(e => _pickerExerciseRow(e, ctx)).join("")}
+        <div style="height:1px;background:var(--line);margin:10px 0 8px"></div>
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px;padding:0 2px">📚 Biblioteca completa</div>`;
+    }
+  }
+
+  el.innerHTML = filter.length === 0 && !recentHtml
     ? `<div class="empty" style="padding:16px 0"><p>Nenhum exercício encontrado.</p></div>`
-    : filter.map(e => {
-      const selected = ctx.selected && ctx.selected.has(e.id);
-      return `
-        <div class="list-row ${selected ? 'selected' : ''}" onclick="toggleExercisePick('${e.id}')" style="cursor:pointer;border-color:${selected ? 'var(--brand)' : 'var(--line)'};">
-          <div class="lr-avatar" style="overflow:hidden;">${getExThumb(e)}</div>
-          <div class="lr-info">
-            <div class="lr-name">${escape(e.name)}</div>
-            <div class="lr-sub">${escape(e.muscle_group || "")}${e.method ? " · " + escape(e.method) : ""}</div>
-          </div>
-          <div style="width:28px;height:28px;border-radius:999px;border:1px solid ${selected ? 'var(--brand)' : 'var(--line)'};display:grid;place-items:center;color:${selected ? 'var(--brand)' : 'var(--text-3)'}">${selected ? '✓' : '+'}</div>
-        </div>`;
-    }).join("");
+    : recentHtml + (filter.length === 0
+        ? `<div class="empty" style="padding:8px 0"><p>Nenhum exercício encontrado.</p></div>`
+        : filter.map(e => _pickerExerciseRow(e, ctx)).join(""));
+
   const addBtn = document.getElementById("ep-add-selected");
   if (addBtn) {
     const count = ctx.selected ? ctx.selected.size : 0;
@@ -9925,6 +10444,8 @@ window.addSelectedExercisesToWorkout = async function() {
     const rows = selected.map((lib, idx) => buildWorkoutExerciseFromLibrary(lib, ctx, startPos + idx));
     const { error } = await sb.from("exercises").insert(rows);
     if (error) throw error;
+    // Registrar no histórico de recentes
+    [...selectedIds].reverse().forEach(id => _saveRecentPickerId(id));
     showToast(`${selected.length} exercício${selected.length > 1 ? "s" : ""} adicionado${selected.length > 1 ? "s" : ""}`, "success");
     await loadWorkouts();
     // Bug #22 fix: volta para o editor do workout correto (não fecha o sheet)
@@ -10511,6 +11032,7 @@ async function postLoginInit() {
 	  } else {
 	    // Tenta subscrever silenciosamente se já tem permissão
 	    ensureUserPushSubscription().catch((e) => console.warn("[postLogin push subscription]", e));
+	    try { maybeShowPushPromptSheet(); } catch(e) {}
 	    showInstallBannerIfPossible();
     // [UX-06] iOS não suporta beforeinstallprompt — exibir instrução manual
     showIOSInstallHintIfNeeded();
@@ -10936,6 +11458,64 @@ function showPushDiagnosticsModal(detail) {
 }
 
 /* ---------- ONBOARDING ---------- */
+
+window.maybeShowPushPromptSheet = function() {
+  try {
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
+    if (Notification.permission !== "default") return;
+    if (!STATE.profile || STATE.profile.status !== "approved") return;
+    const KEY = "treinova_push_prompt_v1";
+    const saved = localStorage.getItem(KEY);
+    if (saved) {
+      try {
+        const ts = JSON.parse(saved).at;
+        if (Date.now() - new Date(ts).getTime() < 7 * 86400000) return;
+      } catch(e) {}
+    }
+    const remember = (status) => {
+      try { localStorage.setItem(KEY, JSON.stringify({ at: new Date().toISOString(), status })); } catch(e) {}
+    };
+    setTimeout(() => {
+      if (document.querySelector("#push-prompt-overlay")) return;
+      const overlay = document.createElement("div");
+      overlay.id = "push-prompt-overlay";
+      overlay.innerHTML = `
+        <style>
+          #push-prompt-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99980;display:flex;align-items:flex-end;animation:fadeIn .2s}
+          #push-prompt-overlay .pp-card{background:var(--bg-card);border-top-left-radius:22px;border-top-right-radius:22px;padding:24px 22px calc(20px + env(safe-area-inset-bottom,0px));width:100%;max-width:520px;margin:0 auto;animation:slideUp .25s}
+          #push-prompt-overlay .pp-icon{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,var(--brand),var(--brand-2));display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 10px 30px rgba(0,180,255,.25)}
+          #push-prompt-overlay .pp-title{text-align:center;font-size:19px;font-weight:900;color:var(--text);margin-bottom:6px}
+          #push-prompt-overlay .pp-sub{text-align:center;font-size:13px;color:var(--text-2);line-height:1.45;margin-bottom:18px}
+          #push-prompt-overlay .pp-btn{width:100%;padding:14px;border-radius:12px;border:0;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:8px}
+          #push-prompt-overlay .pp-prim{background:var(--brand);color:var(--brand-on)}
+          #push-prompt-overlay .pp-ghost{background:transparent;color:var(--text-2);border:1px solid var(--line)}
+        </style>
+        <div class="pp-card">
+          <div class="pp-icon">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          </div>
+          <div class="pp-title">Quer ser avisado quando o descanso acabar?</div>
+          <div class="pp-sub">Recebe um toque no celular no fim do descanso, mesmo com o app fechado ou tela bloqueada.</div>
+          <button class="pp-btn pp-prim" id="pp-allow">Ativar notificações</button>
+          <button class="pp-btn pp-ghost" id="pp-deny">Agora não</button>
+        </div>`;
+      document.body.appendChild(overlay);
+      document.getElementById("pp-allow").addEventListener("click", async () => {
+        overlay.remove();
+        remember("requested");
+        try { await requestPushPermission(); } catch(e) {}
+      });
+      document.getElementById("pp-deny").addEventListener("click", () => {
+        overlay.remove();
+        remember("denied_soft");
+      });
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) { overlay.remove(); remember("dismissed"); }
+      });
+    }, 1200);
+  } catch(e) { console.warn("[maybeShowPushPromptSheet]", e); }
+};
+
 function showOnboarding() {
   if (document.getElementById("onb-overlay")) return;
   const profile = STATE.profile;
@@ -12052,7 +12632,13 @@ function closeChatThread() {
 window.closeChatThread = closeChatThread;
 
 window.deleteConversation = async function(otherUserId) {
-  if (!await showConfirm({ title: "Excluir conversa?", msg: "Toda a conversa será apagada. Esta ação não pode ser desfeita.", confirm: "Excluir", danger: true })) return;
+  // Busca nome do contato para exibir na confirmação
+  const thread = (STATE.chatThreads || []).find(t => {
+    const oid = t.a === STATE.profile.id ? t.b : t.a;
+    return oid === otherUserId;
+  });
+  const contactName = thread?.other?.full_name || "esta pessoa";
+  if (!await showConfirm({ title: "Excluir conversa?", msg: `Toda a conversa com ${contactName} será apagada permanentemente. Esta ação não pode ser desfeita.`, confirm: "Excluir conversa", danger: true })) return;
   const me = STATE.profile.id;
   const { data: deletedCount, error: rpcError } = await sb.rpc("delete_conversation_with_user", { p_other_user_id: otherUserId });
   if (rpcError) {
@@ -12544,36 +13130,122 @@ async function renderAero() {
 }
 
 let AERO_SECS = 0;
+// Cronometro do aerobio agora usa timestamp como fonte de verdade — garante
+// continuidade quando o app vai para background (iOS/Android suspendem
+// setInterval). Persiste em localStorage para sobreviver a reload.
+const AERO_KEY = "treinova_aero_timer_v1";
+let AERO_START_TS = 0;       // epoch ms quando iniciou
+let AERO_PAUSED_AT = 0;      // epoch ms quando pausou (0 = rodando)
+let AERO_PAUSED_ACCUM = 0;   // total ms acumulado em pausas
+function aeroPersist() {
+  try {
+    if (!AERO_START_TS) { localStorage.removeItem(AERO_KEY); return; }
+    localStorage.setItem(AERO_KEY, JSON.stringify({
+      startTs: AERO_START_TS,
+      pausedAt: AERO_PAUSED_AT,
+      pausedAccum: AERO_PAUSED_ACCUM
+    }));
+  } catch(e) {}
+}
+function aeroRestore() {
+  try {
+    const raw = localStorage.getItem(AERO_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    AERO_START_TS = Number(s.startTs) || 0;
+    AERO_PAUSED_AT = Number(s.pausedAt) || 0;
+    AERO_PAUSED_ACCUM = Number(s.pausedAccum) || 0;
+  } catch(e) {}
+}
+function aeroComputeSecs() {
+  if (!AERO_START_TS) return 0;
+  const now = AERO_PAUSED_AT || Date.now();
+  const ms = now - AERO_START_TS - AERO_PAUSED_ACCUM;
+  return Math.max(0, Math.floor(ms / 1000));
+}
 function aeroDisplay() {
+  AERO_SECS = aeroComputeSecs();
   const m = Math.floor(AERO_SECS/60), s = AERO_SECS%60;
   const el = document.getElementById("aero-display");
   if (el) el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  // Atualiza visibilidade dos botoes
+  const startBtn = document.getElementById("aero-start");
+  const pauseBtn = document.getElementById("aero-pause");
+  const isRunning = AERO_START_TS && !AERO_PAUSED_AT;
+  if (startBtn) startBtn.style.display = isRunning ? "none" : "block";
+  if (pauseBtn) pauseBtn.style.display = isRunning ? "block" : "none";
+  if (startBtn && AERO_START_TS && AERO_PAUSED_AT) startBtn.textContent = "Continuar";
+  else if (startBtn) startBtn.textContent = "Iniciar";
 }
 function aeroStart() {
-  if (AERO_TIMER) return;
-  AERO_TIMER = setInterval(()=>{ AERO_SECS++; aeroDisplay(); }, 1000);
-  document.getElementById("aero-start").style.display = "none";
-  document.getElementById("aero-pause").style.display = "block";
-}
-function aeroPause() {
-  if (AERO_TIMER) { clearInterval(AERO_TIMER); AERO_TIMER = null; }
-  document.getElementById("aero-start").style.display = "block";
-  document.getElementById("aero-pause").style.display = "none";
-}
-function aeroReset() {
-  aeroPause();
-  AERO_SECS = 0;
+  if (AERO_START_TS && !AERO_PAUSED_AT) return; // ja rodando
+  if (AERO_PAUSED_AT) {
+    // retomar
+    AERO_PAUSED_ACCUM += Date.now() - AERO_PAUSED_AT;
+    AERO_PAUSED_AT = 0;
+  } else {
+    // iniciar do zero
+    AERO_START_TS = Date.now();
+    AERO_PAUSED_AT = 0;
+    AERO_PAUSED_ACCUM = 0;
+  }
+  aeroPersist();
+  if (AERO_TIMER) clearInterval(AERO_TIMER);
+  AERO_TIMER = setInterval(aeroDisplay, 1000);
   aeroDisplay();
 }
+function aeroPause() {
+  if (!AERO_START_TS || AERO_PAUSED_AT) return; // ja pausado / nao iniciado
+  AERO_PAUSED_AT = Date.now();
+  if (AERO_TIMER) { clearInterval(AERO_TIMER); AERO_TIMER = null; }
+  aeroPersist();
+  aeroDisplay();
+}
+function aeroReset() {
+  if (AERO_TIMER) { clearInterval(AERO_TIMER); AERO_TIMER = null; }
+  AERO_START_TS = 0;
+  AERO_PAUSED_AT = 0;
+  AERO_PAUSED_ACCUM = 0;
+  AERO_SECS = 0;
+  aeroPersist();
+  aeroDisplay();
+}
+// Restaura estado ao abrir a pagina e re-sincroniza display ao voltar do background
+aeroRestore();
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    if (AERO_START_TS && !AERO_PAUSED_AT) {
+      if (!AERO_TIMER) AERO_TIMER = setInterval(aeroDisplay, 1000);
+      aeroDisplay();
+    }
+  }
+});
+window.addEventListener("pageshow", () => {
+  if (AERO_START_TS && !AERO_PAUSED_AT && !AERO_TIMER) {
+    AERO_TIMER = setInterval(aeroDisplay, 1000);
+  }
+  aeroDisplay();
+});
 function fmtSec(s){ const m=Math.floor(s/60), ss=s%60; const h=Math.floor(m/60), mm=m%60; return h?`${h}h${String(mm).padStart(2,'0')}`:`${mm}min ${String(ss).padStart(2,'0')}s`; }
 window.aeroStart = aeroStart; window.aeroPause = aeroPause; window.aeroReset = aeroReset;
 
 async function saveAeroLog() {
+  if (STATE._savingAeroLog) return;   // guard contra duplo toque
+  STATE._savingAeroLog = true;
+  const btn = document.querySelector('button[onclick="saveAeroLog()"]');
+  const origText = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
+
   const modality = document.getElementById("aero-modality").value;
   const intensity = document.getElementById("aero-int").value;
   const dist = document.getElementById("aero-dist").value;
   const hr = document.getElementById("aero-hr").value;
-  if (AERO_SECS === 0 && !dist) { showToast("Inicie o cronômetro ou informe distância", "error"); return; }
+  if (AERO_SECS === 0 && !dist) {
+    showToast("Inicie o cronômetro ou informe distância", "error");
+    STATE._savingAeroLog = false;
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+    return;
+  }
   const { error } = await sb.from("aero_logs").insert({
     student_id: STATE.profile.id,
     modality, intensity,
@@ -12581,7 +13253,12 @@ async function saveAeroLog() {
     distance_km: dist ? Number(dist) : null,
     hr_avg: hr ? Number(hr) : null
   });
-  if (error) { showToast(error.message, "error"); return; }
+  STATE._savingAeroLog = false;
+  if (error) {
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+    showToast(error.message, "error");
+    return;
+  }
   showToast("Aeróbio registrado ✓", "success");
   aeroReset();
   await renderAero();
@@ -12722,6 +13399,35 @@ window.fireConfetti = fireConfetti;
 function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
   const wname = STATE.selectedWorkout && STATE.workouts[STATE.selectedWorkout]?.name || "Treino";
   const setsDone = (STATE.setLogs || []).filter(s => s.done).length;
+
+  // Coleta grupos musculares do treino atual
+  // cat é o código inglês ("chest","back"…), muscle_group é o nome em PT ("Peito","Costas"…)
+  const CAT_LABEL = { chest:'Peito', back:'Costas', shoulder:'Ombros', biceps:'Bíceps',
+    triceps:'Tríceps', quad:'Quadríceps', hamstring:'Posterior', glute:'Glúteos',
+    calf:'Panturrilha', core:'Abdômen', mobility:'Mobilidade', cardio:'Cardio' };
+  const WData = STATE.workouts[STATE.selectedWorkout];
+  const rawCats = WData ? [...new Set((WData.exercises||[]).map(e => {
+    // prefere muscle_group (já em PT), senão converte cat pelo mapa
+    const mg = (e.muscle_group||'').trim();
+    if (mg) return mg;
+    const c = (e.cat||'').trim().toLowerCase();
+    return CAT_LABEL[c] || c;
+  }).filter(Boolean))] : [];
+  const muscleGroups = rawCats.slice(0, 6);
+
+  // Hora do treino (HH:MM)
+  const now = new Date();
+  const workoutTime = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const dateLabel = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  // Guarda meta no escopo global para o onclick do botão de compartilhar
+  window._shareWorkoutMeta = {
+    muscleGroups,
+    workoutTime,
+    dateLabel,
+    studentName: STATE.profile?.full_name || ''
+  };
+
   const overlay = document.createElement("div");
   overlay.id = "wc-overlay";
   overlay.innerHTML = `
@@ -12736,10 +13442,11 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
       #wc-overlay .wc-stat{background:var(--bg-card);border:1px solid var(--line);border-radius:10px;padding:10px}
       #wc-overlay .wc-val{font-size:20px;font-weight:900;color:var(--brand)}
       #wc-overlay .wc-lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
-      #wc-overlay .wc-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      #wc-overlay .wc-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
       #wc-overlay .wc-btn{padding:13px;border-radius:10px;font-weight:700;border:0;cursor:pointer;font-size:13px}
       #wc-overlay .wc-share{background:var(--brand);color:var(--brand-on)}
-      #wc-overlay .wc-cont{background:var(--bg-card);color:var(--text);border:1px solid var(--line)}
+      #wc-overlay .wc-share2{background:var(--bg-card);color:var(--brand);border:1.5px solid var(--brand)}
+      #wc-overlay .wc-cont{background:var(--bg-card);color:var(--text);border:1px solid var(--line);width:100%;margin-top:0}
     </style>
     <div class="wc-card">
       <div class="wc-emoji"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
@@ -12760,33 +13467,42 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
         </div>
       </div>
       <div class="wc-buttons">
-        <button class="wc-btn wc-share" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone})"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Compartilhar</button>
-        <button class="wc-btn wc-cont" onclick="document.getElementById('wc-overlay').remove();navTo('feed')">Ver feed</button>
+        <button class="wc-btn wc-share" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone}, window._shareWorkoutMeta||{}, 'post')"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/></svg> Post</button>
+        <button class="wc-btn wc-share2" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone}, window._shareWorkoutMeta||{}, 'stories')"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/></svg> Stories</button>
       </div>
+      <button class="wc-btn wc-cont" onclick="document.getElementById('wc-overlay').remove();navTo('feed')">Ver feed</button>
+      ${("Notification" in window && Notification.permission === "default") ? `
+      <div id="wc-push-bar" style="margin-top:14px;padding:12px 14px;border-radius:12px;background:var(--brand-soft);border:1px solid rgba(0,180,255,.25);display:flex;align-items:center;gap:10px;text-align:left">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:800;color:var(--brand)">Quer lembrete do próximo treino?</div>
+          <div style="font-size:11px;color:var(--text-2);margin-top:2px">Ative e nunca perca um dia.</div>
+        </div>
+        <button onclick="requestPushPermission().then(()=>document.getElementById('wc-push-bar')?.remove())" style="background:var(--brand);color:var(--brand-on);border:0;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:800;flex-shrink:0;cursor:pointer">Ativar</button>
+      </div>` : ""}
     </div>`;
   document.body.appendChild(overlay);
 }
 window.showWorkoutCompleteModal = showWorkoutCompleteModal;
 
-async function shareWorkout(totalVolume, duration, name, setsDone, meta = {}) {
+async function shareWorkout(totalVolume, duration, name, setsDone, meta = {}, format = "post") {
   try {
-    const blob = await generateWorkoutCard(name, totalVolume, duration, setsDone, meta);
-    if (blob && navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'treino.png', { type: 'image/png' })] })) {
-      const file = new File([blob], 'treino.png', { type: 'image/png' });
+    const blob = await generateWorkoutCard(name, totalVolume, duration, setsDone, meta, format);
+    const fname = format === "stories" ? "treino-stories.png" : "treino-post.png";
+    if (blob && navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], fname, { type: 'image/png' })] })) {
+      const file = new File([blob], fname, { type: 'image/png' });
       await navigator.share({ files: [file], title: meta.source === "feed" ? "Meu treino no Treinova" : "Treino concluído 💪" });
       return;
     }
     if (blob) {
-      // Fallback: abre a imagem em nova aba para o usuário salvar
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = "treino.png"; a.click();
+      a.href = url; a.download = fname; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 3000);
       showToast("Imagem salva — compartilhe onde quiser 📤", "success");
       return;
     }
   } catch(e) { console.warn("shareWorkout:", e); }
-  // Último fallback: texto
   const text = `${meta.source === "feed" ? "Meu treino no Treinova" : "Acabei o treino de hoje 💪"}\n${name}\n${setsDone} séries · ${Math.round(totalVolume)}kg · ${Math.floor(duration/60)}min\n#Treinova`;
   try {
     await navigator.clipboard.writeText(text);
@@ -12794,25 +13510,57 @@ async function shareWorkout(totalVolume, duration, name, setsDone, meta = {}) {
   } catch(e) { showToast("Compartilhamento não suportado", "error"); }
 }
 
-async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta = {}) {
+async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta = {}, format = "post") {
   try {
-    const W = 1080, H = 1350;
+    const W = 1080, H = format === "stories" ? 1920 : 1350;
+    const sc = H / 1350;
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
 
-    // ---------- helpers ----------
-    const brand = (STATE.branding && STATE.branding.brand_color) || "#13baf2";
+    // ---------- data ----------
+    const brand = (STATE.branding && (STATE.branding.primary_color || STATE.branding.brand_color)) || "#13baf2";
     const appName = ((STATE.branding && STATE.branding.app_name) || "TREINOVA").toUpperCase();
     const handleName = ((STATE.branding && STATE.branding.app_name) || "treinova").toLowerCase().replace(/\s+/g, "");
     const studentName = meta.studentName || STATE.profile?.full_name || "";
     const firstName = (studentName.split(" ")[0] || "").trim();
     const isFeed = meta.source === "feed";
     const dateLabel = meta.dateLabel || new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+    const workoutTime = meta.workoutTime || "";
+    const muscleGroups = Array.isArray(meta.muscleGroups) ? meta.muscleGroups : [];
     const minutes = Math.max(0, Math.floor(Number(duration || 0) / 60));
     const volKg = Math.round(Number(totalVolume || 0));
     const sets  = Math.max(0, Number(setsDone || 0));
 
+    // ---------- load images ----------
+    const logoUrl = STATE.branding?.logo_url || null;
+    let logoImg = null;
+    if (logoUrl) {
+      try {
+        logoImg = await new Promise((res) => {
+          const img = new Image(); img.crossOrigin = "anonymous";
+          img.onload = () => res(img); img.onerror = () => res(null);
+          img.src = logoUrl; setTimeout(() => res(null), 4000);
+        });
+      } catch(e) { logoImg = null; }
+    }
+    const treinovaIconUrl = (window.location.origin || "") + "/assets/apple-touch-icon.png";
+    let treinovaLogoImg = null;
+    try {
+      treinovaLogoImg = await new Promise((res) => {
+        const img = new Image(); img.crossOrigin = "anonymous";
+        img.onload = () => res(img);
+        img.onerror = () => {
+          const img2 = new Image(); img2.crossOrigin = "anonymous";
+          img2.onload = () => res(img2); img2.onerror = () => res(null);
+          img2.src = (window.location.origin || "") + "/assets/icon-192.png";
+          setTimeout(() => res(null), 3000);
+        };
+        img.src = treinovaIconUrl; setTimeout(() => res(null), 4000);
+      });
+    } catch(e) { treinovaLogoImg = null; }
+
+    // ---------- utils ----------
     const hexToRgb = (hex) => {
       const h = String(hex || "").replace("#", "").trim();
       const v = h.length === 3 ? h.split("").map(c=>c+c).join("") : h.padEnd(6,"0");
@@ -12820,310 +13568,361 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     };
     const rgba = (hex, a) => { const [r,g,b] = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; };
     const mix = (hex, target, t) => {
-      const [r1,g1,b1] = hexToRgb(hex);
-      const [r2,g2,b2] = hexToRgb(target);
-      const m = (a,b) => Math.round(a + (b-a) * t);
+      const [r1,g1,b1] = hexToRgb(hex); const [r2,g2,b2] = hexToRgb(target);
+      const m = (a,b) => Math.round(a + (b-a)*t);
       return `rgb(${m(r1,r2)},${m(g1,g2)},${m(b1,b2)})`;
     };
     const roundRect = (x, y, w, h, r) => {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.arcTo(x + w, y, x + w, y + h, r);
-      ctx.arcTo(x + w, y + h, x, y + h, r);
-      ctx.arcTo(x, y + h, x, y, r);
-      ctx.arcTo(x, y, x + w, y, r);
-      ctx.closePath();
+      ctx.beginPath(); ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r);     ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
     };
-    const wrapText = (text, font, maxWidth, maxLines) => {
+    const wrapText = (text, font, maxW, maxLines) => {
       ctx.font = font;
       const words = String(text || "Treino").split(/\s+/).filter(Boolean);
       const lines = []; let line = "";
       for (const word of words) {
         const test = line ? `${line} ${word}` : word;
-        if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+        if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = word; }
         else line = test;
       }
       if (line) lines.push(line);
       if (lines.length > maxLines) {
-        const last = lines.slice(maxLines - 1).join(" ");
-        let trimmed = last;
-        while (ctx.measureText(trimmed + "…").width > maxWidth && trimmed.length > 0) {
-          trimmed = trimmed.slice(0, -1);
-        }
-        return [...lines.slice(0, maxLines - 1), (trimmed + "…").trim()];
+        let trimmed = lines.slice(maxLines-1).join(" ");
+        while (ctx.measureText(trimmed+"…").width > maxW && trimmed.length > 0) trimmed = trimmed.slice(0,-1);
+        return [...lines.slice(0,maxLines-1), (trimmed+"…").trim()];
       }
       return lines;
     };
 
-    const drawDumbbell = (cx, cy, size, color) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.fillStyle = color;
-      const u = size / 24;
-      ctx.fillRect(-7*u, -1.4*u, 14*u, 2.8*u);
-      ctx.fillRect(-10*u, -5*u, 3*u, 10*u);
-      ctx.fillRect(-12*u, -3.5*u, 2*u, 7*u);
-      ctx.fillRect(7*u, -5*u, 3*u, 10*u);
-      ctx.fillRect(10*u, -3.5*u, 2*u, 7*u);
+    // ---------- icon helpers ----------
+    const drawDumbbell = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy); ctx.fillStyle = color;
+      const u = sz/24;
+      ctx.fillRect(-7*u,-1.4*u,14*u,2.8*u);
+      ctx.fillRect(-10*u,-5*u,3*u,10*u); ctx.fillRect(-12*u,-3.5*u,2*u,7*u);
+      ctx.fillRect(7*u,-5*u,3*u,10*u);  ctx.fillRect(10*u,-3.5*u,2*u,7*u);
       ctx.restore();
     };
-    const drawClock = (cx, cy, size, color) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = size * 0.10;
-      ctx.lineCap = "round";
-      ctx.beginPath(); ctx.arc(0, 0, size * 0.46, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -size*0.30); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(size*0.22, size*0.04); ctx.stroke();
-      ctx.beginPath(); ctx.arc(0, 0, size*0.05, 0, Math.PI*2); ctx.fill();
+    const drawClock = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy);
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = sz*0.10; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.arc(0,0,sz*0.46,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-sz*0.30); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(sz*0.22,sz*0.04); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,sz*0.06,0,Math.PI*2); ctx.fill();
       ctx.restore();
     };
-    const drawFlame = (cx, cy, size, color) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.fillStyle = color;
-      const u = size / 24;
-      ctx.beginPath();
-      ctx.moveTo(0, -10*u);
-      ctx.bezierCurveTo(7*u, -4*u, 8*u, 2*u, 6*u, 6*u);
-      ctx.bezierCurveTo(5*u, 8*u, 3*u, 10*u, 0, 10*u);
-      ctx.bezierCurveTo(-3*u, 10*u, -7*u, 7*u, -7*u, 2*u);
-      ctx.bezierCurveTo(-7*u, -2*u, -3*u, -3*u, -2*u, -7*u);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = rgba("#ffffff", 0.55);
-      ctx.beginPath();
-      ctx.moveTo(0, -3*u);
-      ctx.bezierCurveTo(3*u, 0, 3.5*u, 4*u, 1.5*u, 7*u);
-      ctx.bezierCurveTo(0, 8*u, -2*u, 7*u, -2.5*u, 5*u);
-      ctx.bezierCurveTo(-3*u, 3*u, -1*u, 1*u, 0, -3*u);
-      ctx.closePath();
-      ctx.fill();
+    const drawFlame = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy); ctx.fillStyle = color;
+      const u = sz/24;
+      ctx.beginPath(); ctx.moveTo(0,-10*u);
+      ctx.bezierCurveTo(7*u,-4*u,8*u,2*u,6*u,6*u); ctx.bezierCurveTo(5*u,8*u,3*u,10*u,0,10*u);
+      ctx.bezierCurveTo(-3*u,10*u,-7*u,7*u,-7*u,2*u); ctx.bezierCurveTo(-7*u,-2*u,-3*u,-3*u,-2*u,-7*u);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = rgba("#ffffff",0.50);
+      ctx.beginPath(); ctx.moveTo(0,-3*u);
+      ctx.bezierCurveTo(3*u,0,3.5*u,4*u,1.5*u,7*u); ctx.bezierCurveTo(0,8*u,-2*u,7*u,-2.5*u,5*u);
+      ctx.bezierCurveTo(-3*u,3*u,-1*u,1*u,0,-3*u); ctx.closePath(); ctx.fill();
       ctx.restore();
     };
-    const drawCheck = (cx, cy, size, color) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = size * 0.18;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.beginPath();
-      ctx.moveTo(-size*0.36, 0);
-      ctx.lineTo(-size*0.08, size*0.30);
-      ctx.lineTo(size*0.40, -size*0.30);
-      ctx.stroke();
+    const drawChart = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy);
+      ctx.strokeStyle = color; ctx.lineWidth = sz*0.12; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      const u = sz/24;
+      ctx.beginPath(); ctx.moveTo(-10*u,6*u); ctx.lineTo(-4*u,-2*u); ctx.lineTo(2*u,4*u); ctx.lineTo(10*u,-8*u); ctx.stroke();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(10*u,-8*u,sz*0.11,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    };
+    const drawInstagram = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy);
+      const r = sz*0.46;
+      ctx.strokeStyle = color; ctx.lineWidth = sz*0.09; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      roundRect(-r,-r,r*2,r*2,r*0.48); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,r*0.50,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(r*0.52,-r*0.52,r*0.13,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    };
+    const drawPerson = (cx, cy, sz, color) => {
+      ctx.save(); ctx.translate(cx,cy); ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(0,-sz*0.28,sz*0.20,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0,sz*0.18,sz*0.32,Math.PI,0); ctx.closePath(); ctx.fill();
       ctx.restore();
     };
 
-    // ---------- background ----------
-    ctx.fillStyle = "#06090f";
-    ctx.fillRect(0, 0, W, H);
-    const baseGrad = ctx.createLinearGradient(0, 0, W, H);
-    baseGrad.addColorStop(0, "#0a1322");
-    baseGrad.addColorStop(0.55, "#0a0f1a");
-    baseGrad.addColorStop(1, "#05080e");
-    ctx.fillStyle = baseGrad;
-    ctx.fillRect(0, 0, W, H);
+    // ============================================================
+    // BACKGROUND — aggressive dark neon
+    // ============================================================
+    ctx.fillStyle = "#030917"; ctx.fillRect(0,0,W,H);
 
-    const glow1 = ctx.createRadialGradient(W*0.85, H*0.05, 0, W*0.85, H*0.05, W*0.95);
-    glow1.addColorStop(0, rgba(brand, 0.42));
-    glow1.addColorStop(0.45, rgba(brand, 0.10));
-    glow1.addColorStop(1, "transparent");
-    ctx.fillStyle = glow1;
-    ctx.fillRect(0, 0, W, H);
-    const glow2 = ctx.createRadialGradient(W*0.10, H*0.95, 0, W*0.10, H*0.95, W*0.85);
-    glow2.addColorStop(0, rgba(mix(brand, "#000814", 0.45), 0.32));
-    glow2.addColorStop(1, "transparent");
-    ctx.fillStyle = glow2;
-    ctx.fillRect(0, 0, W, H);
+    // 4 radial glow pools
+    const g1 = ctx.createRadialGradient(W*0.88,H*0.07,0,W*0.88,H*0.07,W*0.82);
+    g1.addColorStop(0,rgba(brand,0.58)); g1.addColorStop(0.38,rgba(brand,0.13)); g1.addColorStop(1,"transparent");
+    ctx.fillStyle=g1; ctx.fillRect(0,0,W,H);
+    const g2 = ctx.createRadialGradient(W*0.05,H*0.94,0,W*0.05,H*0.94,W*0.62);
+    g2.addColorStop(0,rgba(brand,0.30)); g2.addColorStop(0.5,rgba(brand,0.06)); g2.addColorStop(1,"transparent");
+    ctx.fillStyle=g2; ctx.fillRect(0,0,W,H);
+    const g3 = ctx.createRadialGradient(W*0.45,H*0.44,0,W*0.45,H*0.44,W*0.52);
+    g3.addColorStop(0,rgba(brand,0.06)); g3.addColorStop(1,"transparent");
+    ctx.fillStyle=g3; ctx.fillRect(0,0,W,H);
+    const g4 = ctx.createRadialGradient(W*0.78,H*0.74,0,W*0.78,H*0.74,W*0.42);
+    g4.addColorStop(0,rgba(brand,0.16)); g4.addColorStop(1,"transparent");
+    ctx.fillStyle=g4; ctx.fillRect(0,0,W,H);
 
-    ctx.fillStyle = rgba("#ffffff", 0.045);
-    for (let y = 60; y < H; y += 40) {
-      for (let x = 60; x < W; x += 40) {
-        ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI*2); ctx.fill();
-      }
+    // Dot grid
+    ctx.fillStyle = rgba("#ffffff",0.025);
+    for (let gy=40;gy<H;gy+=52) for (let gx=40;gx<W;gx+=52) { ctx.beginPath(); ctx.arc(gx,gy,1,0,Math.PI*2); ctx.fill(); }
+
+    // Curved energy arc beams
+    ctx.save();
+    ctx.shadowBlur=55; ctx.shadowColor=rgba(brand,0.90);
+    const drawArc=(p0x,p0y,cp1x,cp1y,cp2x,cp2y,p1x,p1y,alpha,lw)=>{
+      ctx.strokeStyle=rgba(brand,alpha); ctx.lineWidth=lw;
+      ctx.beginPath(); ctx.moveTo(p0x,p0y); ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,p1x,p1y); ctx.stroke();
+    };
+    drawArc(W,H*0.02, W*0.85,H*0.18, W*0.55,H*0.30, W*0.08,H*0.55, 0.55,3);
+    drawArc(0,H*0.93,  W*0.20,H*0.80, W*0.55,H*0.88, W,H*0.74,     0.28,2);
+    drawArc(W*0.70,0,  W*0.95,H*0.24, W*0.76,H*0.50, W*0.28,H*0.62,0.20,1.5);
+    ctx.restore();
+
+    // ============================================================
+    // HEADER — logo + app name + badge
+    // ============================================================
+    const PAD = 82;
+    const HEADER_H = Math.round(152*sc);
+    // header bg
+    const hGrd = ctx.createLinearGradient(0,0,W,HEADER_H);
+    hGrd.addColorStop(0,rgba(brand,0.24)); hGrd.addColorStop(1,"rgba(3,9,23,0)");
+    ctx.fillStyle=hGrd; ctx.fillRect(0,0,W,HEADER_H);
+    // bottom separator
+    const sepGrd = ctx.createLinearGradient(0,0,W,0);
+    sepGrd.addColorStop(0,rgba(brand,0)); sepGrd.addColorStop(0.3,rgba(brand,0.70));
+    sepGrd.addColorStop(0.7,rgba(brand,0.70)); sepGrd.addColorStop(1,rgba(brand,0));
+    ctx.strokeStyle=sepGrd; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(0,HEADER_H); ctx.lineTo(W,HEADER_H); ctx.stroke();
+
+    // Logo tile
+    const tileS=Math.round(76*sc), tileX=PAD, tileY=Math.round((HEADER_H-tileS)/2);
+    if (logoImg) {
+      ctx.save(); roundRect(tileX,tileY,tileS,tileS,Math.round(tileS*0.18)); ctx.clip();
+      ctx.drawImage(logoImg,tileX,tileY,tileS,tileS); ctx.restore();
+      roundRect(tileX,tileY,tileS,tileS,Math.round(tileS*0.18));
+      ctx.strokeStyle=rgba(brand,0.42); ctx.lineWidth=2; ctx.stroke();
+    } else {
+      roundRect(tileX,tileY,tileS,tileS,Math.round(tileS*0.18));
+      const tGrd=ctx.createLinearGradient(tileX,tileY,tileX+tileS,tileY+tileS);
+      tGrd.addColorStop(0,brand); tGrd.addColorStop(1,mix(brand,"#000814",0.4));
+      ctx.fillStyle=tGrd; ctx.fill();
+      ctx.fillStyle="#ffffff"; ctx.font=`900 ${Math.round(44*sc)}px -apple-system,system-ui,sans-serif`;
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText("T",tileX+tileS/2,tileY+tileS/2+2); ctx.textBaseline="alphabetic";
     }
+    ctx.textAlign="left";
+    ctx.fillStyle="#ffffff"; ctx.font=`900 ${Math.round(33*sc)}px -apple-system,system-ui,sans-serif`;
+    ctx.fillText(appName,tileX+tileS+18,tileY+Math.round(36*sc));
+    ctx.fillStyle=rgba("#f4f7ff",0.44); ctx.font=`600 ${Math.round(17*sc)}px -apple-system,system-ui,sans-serif`;
+    ctx.fillText("PERSONAL TRAINER",tileX+tileS+18,tileY+Math.round(60*sc));
+
+    // Badge
+    const pillTxt = isFeed ? "DO FEED" : "CONCLUÍDO";
+    ctx.font=`800 ${Math.round(17*sc)}px -apple-system,system-ui,sans-serif`;
+    const pTW=ctx.measureText(pillTxt).width;
+    const pH=Math.round(40*sc), pW=pTW+Math.round(46*sc);
+    const pX=W-PAD-pW, pY=tileY+(tileS-pH)/2;
+    roundRect(pX,pY,pW,pH,pH/2);
+    ctx.fillStyle=rgba(brand,0.15); ctx.fill();
+    ctx.strokeStyle=rgba(brand,0.68); ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle=brand; ctx.textAlign="left"; ctx.textBaseline="middle";
+    ctx.fillText(pillTxt,pX+Math.round(20*sc),pY+pH/2+1); ctx.textBaseline="alphabetic";
+
+    // ============================================================
+    // HEADLINE — "TREINO" huge neon + "COMPARTILHADO/CONCLUÍDO" white
+    // ============================================================
+    const heroTop = HEADER_H + Math.round(44*sc);
+    const tFontSz = Math.round(110*sc);
     ctx.save();
-    ctx.translate(W*0.78, -120);
-    ctx.rotate(-0.45);
-    const sheen = ctx.createLinearGradient(0, 0, 0, 600);
-    sheen.addColorStop(0, rgba("#ffffff", 0.0));
-    sheen.addColorStop(0.5, rgba("#ffffff", 0.06));
-    sheen.addColorStop(1, rgba("#ffffff", 0.0));
-    ctx.fillStyle = sheen;
-    ctx.fillRect(-160, 0, 320, 1700);
+    ctx.shadowColor=rgba(brand,0.85); ctx.shadowBlur=38;
+    ctx.fillStyle=brand; ctx.font=`900 ${tFontSz}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+    ctx.fillText("TREINO",PAD,heroTop+Math.round(tFontSz*0.82));
     ctx.restore();
 
-    const barX = 80;
-    const barTop = 220;
-    const barBot = H - 220;
-    const barW = 6;
-    const barGrad = ctx.createLinearGradient(0, barTop, 0, barBot);
-    barGrad.addColorStop(0, rgba(brand, 0.0));
-    barGrad.addColorStop(0.18, rgba(brand, 0.95));
-    barGrad.addColorStop(0.82, rgba(brand, 0.95));
-    barGrad.addColorStop(1, rgba(brand, 0.0));
-    ctx.fillStyle = barGrad;
-    ctx.fillRect(barX, barTop, barW, barBot - barTop);
+    // Underline
+    ctx.font=`900 ${tFontSz}px -apple-system,system-ui,sans-serif`;
+    const treinoW=ctx.measureText("TREINO").width;
+    const uY=heroTop+Math.round(tFontSz*0.82)+Math.round(9*sc);
+    const uGrd=ctx.createLinearGradient(PAD,uY,PAD+treinoW,uY);
+    uGrd.addColorStop(0,brand); uGrd.addColorStop(0.65,rgba(brand,0.45)); uGrd.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle=uGrd; ctx.fillRect(PAD,uY,treinoW,Math.round(5*sc));
 
-    // ---------- HEADER ----------
-    const PAD = 96;
-    const tileX = PAD, tileY = 88, tileS = 96;
-    roundRect(tileX, tileY, tileS, tileS, 24);
-    const tileGrad = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS);
-    tileGrad.addColorStop(0, brand);
-    tileGrad.addColorStop(1, mix(brand, "#000814", 0.45));
-    ctx.fillStyle = tileGrad; ctx.fill();
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    const tileSheen = ctx.createLinearGradient(tileX, tileY, tileX+tileS, tileY+tileS*0.65);
-    tileSheen.addColorStop(0, rgba("#ffffff", 0.32));
-    tileSheen.addColorStop(1, rgba("#ffffff", 0));
-    roundRect(tileX, tileY, tileS, tileS, 24);
-    ctx.fillStyle = tileSheen; ctx.fill();
-    ctx.restore();
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "900 56px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("T", tileX + tileS/2, tileY + tileS/2 + 4);
-    ctx.textBaseline = "alphabetic";
+    // "COMPARTILHADO" / "CONCLUÍDO"
+    const wFontSz = Math.round(84*sc);
+    const wText = isFeed ? "COMPARTILHADO" : "CONCLUÍDO";
+    ctx.fillStyle="#ffffff"; ctx.font=`900 ${wFontSz}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+    const wLineY = uY + Math.round(16*sc) + Math.round(wFontSz*0.88);
+    ctx.fillText(wText,PAD,wLineY);
 
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#f4f7ff";
-    ctx.font = "900 38px -apple-system, system-ui, sans-serif";
-    ctx.fillText(appName, tileX + tileS + 22, tileY + 44);
-    ctx.fillStyle = rgba("#f4f7ff", 0.55);
-    ctx.font = "700 20px -apple-system, system-ui, sans-serif";
-    ctx.fillText("APP DE TREINO PERSONAL", tileX + tileS + 22, tileY + 76);
+    // ============================================================
+    // DATE/TIME + PERSON PILL + WORKOUT NAME + MUSCLES
+    // ============================================================
+    let cursor = wLineY + Math.round(34*sc);
 
-    const pillText = isFeed ? "DO FEED" : "CONCLUÍDO";
-    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
-    const pillTW = ctx.measureText(pillText).width;
-    const pillH = 56;
-    const pillW = pillTW + 84;
-    const pillX = W - PAD - pillW;
-    const pillY = tileY + (tileS - pillH)/2;
-    roundRect(pillX, pillY, pillW, pillH, pillH/2);
-    ctx.fillStyle = rgba(brand, 0.18);
-    ctx.fill();
-    ctx.strokeStyle = rgba(brand, 0.65);
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    drawCheck(pillX + 30, pillY + pillH/2, 26, brand);
-    ctx.fillStyle = brand;
-    ctx.textAlign = "left";
-    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
-    ctx.textBaseline = "middle";
-    ctx.fillText(pillText, pillX + 56, pillY + pillH/2 + 1);
-    ctx.textBaseline = "alphabetic";
+    // date/time
+    if (workoutTime || dateLabel) {
+      const dtStr = workoutTime ? `${String(dateLabel).toUpperCase()} · ${workoutTime}` : String(dateLabel).toUpperCase();
+      ctx.fillStyle=rgba("#f4f7ff",0.38); ctx.font=`700 ${Math.round(20*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+      ctx.fillText(dtStr,PAD,cursor);
+      cursor += Math.round(32*sc);
+    }
 
-    // ---------- HERO ----------
-    ctx.fillStyle = rgba("#f4f7ff", 0.45);
-    ctx.font = "800 22px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(dateLabel.toUpperCase(), PAD, 308);
-
-    ctx.fillStyle = brand;
-    ctx.font = "900 48px -apple-system, system-ui, sans-serif";
-    ctx.fillText(isFeed ? "TREINO COMPARTILHADO" : "TREINO CONCLUÍDO", PAD, 372);
-
-    ctx.fillStyle = "#ffffff";
-    const titleFont = "900 96px -apple-system, system-ui, sans-serif";
-    const titleLines = wrapText(wname, titleFont, W - PAD*2 - 20, 3);
-    ctx.font = titleFont;
-    titleLines.forEach((line, i) => {
-      ctx.fillText(line, PAD, 472 + i * 104);
-    });
-
+    // Student name pill
     if (firstName || studentName) {
-      ctx.fillStyle = rgba("#f4f7ff", 0.72);
-      ctx.font = "600 28px -apple-system, system-ui, sans-serif";
-      const who = studentName || firstName;
-      ctx.fillText(`Por ${who}`, PAD, 472 + titleLines.length * 104 + 30);
+      const who = (firstName || studentName).toUpperCase();
+      ctx.font=`800 ${Math.round(23*sc)}px -apple-system,system-ui,sans-serif`;
+      const nW=ctx.measureText(who).width, nH=Math.round(46*sc);
+      const iconR=Math.round(13*sc), nPad=Math.round(12*sc);
+      const totalPW=iconR*2+nPad+nW+nPad;
+      roundRect(PAD,cursor,totalPW,nH,nH/2);
+      ctx.fillStyle=rgba("#ffffff",0.09); ctx.fill();
+      ctx.strokeStyle=rgba("#ffffff",0.18); ctx.lineWidth=1.5; ctx.stroke();
+      drawPerson(PAD+iconR,cursor+nH/2,iconR*0.95,rgba("#f4f7ff",0.68));
+      ctx.fillStyle="#ffffff"; ctx.textBaseline="middle"; ctx.textAlign="left";
+      ctx.fillText(who,PAD+iconR*2+nPad,cursor+nH/2); ctx.textBaseline="alphabetic";
+      cursor += nH + Math.round(16*sc);
     }
 
-    // ---------- STATS ----------
-    const statY = 858;
-    const statH = 224;
-    roundRect(PAD, statY, W - PAD*2, statH, 32);
-    const statGrad = ctx.createLinearGradient(PAD, statY, PAD, statY+statH);
-    statGrad.addColorStop(0, rgba("#ffffff", 0.07));
-    statGrad.addColorStop(1, rgba("#ffffff", 0.025));
-    ctx.fillStyle = statGrad; ctx.fill();
-    ctx.strokeStyle = rgba("#ffffff", 0.10);
-    ctx.lineWidth = 2; ctx.stroke();
+    // Workout name
+    const wnameFSz = Math.round(60*sc);
+    const wnFont = `900 ${wnameFSz}px -apple-system,system-ui,sans-serif`;
+    const wnLines = wrapText(wname, wnFont, W-PAD*2, 2);
+    const wnLineH = Math.round(wnameFSz*1.14);
+    ctx.font=wnFont; ctx.fillStyle="#ffffff"; ctx.textAlign="left";
+    wnLines.forEach((line,i) => ctx.fillText(line,PAD,cursor+wnLineH*(i+1)-Math.round(6*sc)));
+    cursor += wnLineH*wnLines.length + Math.round(12*sc);
 
-    const colW = (W - PAD*2) / 3;
-    const stats = [
-      { label: "SÉRIES", value: String(sets), draw: drawDumbbell },
-      { label: "VOLUME", value: `${volKg.toLocaleString("pt-BR")} kg`, draw: drawFlame },
-      { label: "TEMPO",  value: `${minutes} min`, draw: drawClock },
+    // Muscle group pills
+    if (muscleGroups.length > 0) {
+      cursor += Math.round(8*sc);
+      const mgFont=`700 ${Math.round(18*sc)}px -apple-system,system-ui,sans-serif`;
+      ctx.font=mgFont;
+      const mgH=Math.round(38*sc), gapX=8, gapY=8;
+      let mgX=PAD, mgY=cursor;
+      muscleGroups.forEach(lbl => {
+        const tw=ctx.measureText(lbl).width, pw=tw+Math.round(24*sc);
+        if (mgX+pw>W-PAD && mgX>PAD) { mgX=PAD; mgY+=mgH+gapY; }
+        roundRect(mgX,mgY,pw,mgH,mgH/2);
+        ctx.fillStyle=rgba(brand,0.15); ctx.fill();
+        ctx.strokeStyle=rgba(brand,0.42); ctx.lineWidth=1.5; ctx.stroke();
+        ctx.fillStyle=rgba("#f4f7ff",0.88); ctx.textBaseline="middle"; ctx.textAlign="left";
+        ctx.fillText(lbl,mgX+Math.round(12*sc),mgY+mgH/2); ctx.textBaseline="alphabetic";
+        mgX+=pw+gapX;
+      });
+      cursor = mgY + mgH;
+    }
+
+    // ============================================================
+    // 3 SEPARATE STAT CARDS
+    // ============================================================
+    const STAT_GAP = Math.round(16*sc);
+    const STAT_H   = Math.round(214*sc);
+    const statCardW = Math.round((W - PAD*2 - STAT_GAP*2) / 3);
+    const statTop = Math.max(cursor + Math.round(38*sc), Math.round(920*sc));
+
+    const statDefs = [
+      { label:"SÉRIES", value:String(sets),                       draw:drawDumbbell },
+      { label:"VOLUME", value:`${volKg.toLocaleString("pt-BR")}kg`, draw:drawFlame },
+      { label:"TEMPO",  value:`${minutes}min`,                    draw:drawClock },
     ];
 
-    stats.forEach((s, i) => {
-      const cx = PAD + colW * i + colW/2;
-      s.draw(cx, statY + 64, 56, brand);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "900 60px -apple-system, system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(s.value, cx, statY + 154);
-      ctx.fillStyle = rgba("#f4f7ff", 0.55);
-      ctx.font = "900 20px -apple-system, system-ui, sans-serif";
-      ctx.fillText(s.label, cx, statY + 192);
+    statDefs.forEach((s,i) => {
+      const sx=PAD+i*(statCardW+STAT_GAP), sy=statTop;
+      // card bg
+      roundRect(sx,sy,statCardW,STAT_H,Math.round(20*sc));
+      const cGrd=ctx.createLinearGradient(sx,sy,sx,sy+STAT_H);
+      cGrd.addColorStop(0,"rgba(255,255,255,0.075)"); cGrd.addColorStop(1,"rgba(255,255,255,0.020)");
+      ctx.fillStyle=cGrd; ctx.fill();
+      ctx.strokeStyle=rgba(brand,0.24); ctx.lineWidth=1.5; ctx.stroke();
+
+      // Radial glow behind icon
+      const iconCX=sx+statCardW/2, iconCY=sy+Math.round(64*sc);
+      const glowR=Math.round(44*sc);
+      const glowG=ctx.createRadialGradient(iconCX,iconCY,0,iconCX,iconCY,glowR);
+      glowG.addColorStop(0,rgba(brand,0.38)); glowG.addColorStop(0.55,rgba(brand,0.10)); glowG.addColorStop(1,"transparent");
+      ctx.fillStyle=glowG; ctx.beginPath(); ctx.arc(iconCX,iconCY,glowR,0,Math.PI*2); ctx.fill();
+
+      // Icon
+      s.draw(iconCX,iconCY,Math.round(40*sc),brand);
+
+      // Value
+      ctx.fillStyle="#ffffff"; ctx.font=`900 ${Math.round(50*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="center";
+      ctx.fillText(s.value,iconCX,sy+Math.round(144*sc));
+
+      // Label
+      ctx.fillStyle=rgba("#f4f7ff",0.44); ctx.font=`800 ${Math.round(15*sc)}px -apple-system,system-ui,sans-serif`;
+      ctx.fillText(s.label,iconCX,sy+Math.round(178*sc));
     });
-    ctx.strokeStyle = rgba("#ffffff", 0.10);
-    ctx.lineWidth = 1.5;
-    for (let i = 1; i < 3; i++) {
-      const x = PAD + colW * i;
-      ctx.beginPath();
-      ctx.moveTo(x, statY + 36);
-      ctx.lineTo(x, statY + statH - 36);
-      ctx.stroke();
+
+    // ============================================================
+    // PERFORMANCE / MOTIVATION STRIP
+    // ============================================================
+    const perfY = statTop + STAT_H + Math.round(16*sc);
+    const perfH = Math.round(88*sc);
+    roundRect(PAD,perfY,W-PAD*2,perfH,Math.round(18*sc));
+    const pGrd2=ctx.createLinearGradient(PAD,perfY,W-PAD,perfY);
+    pGrd2.addColorStop(0,rgba(brand,0.22)); pGrd2.addColorStop(1,rgba(brand,0.05));
+    ctx.fillStyle=pGrd2; ctx.fill();
+    ctx.strokeStyle=rgba(brand,0.42); ctx.lineWidth=1.5; ctx.stroke();
+
+    const chartSz=Math.round(30*sc);
+    drawChart(PAD+chartSz+Math.round(6*sc),perfY+perfH/2,chartSz,brand);
+
+    ctx.fillStyle="#ffffff"; ctx.font=`900 ${Math.round(24*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+    ctx.fillText(isFeed?"Performance em destaque.":"Mais um na conta. 💪", PAD+Math.round(56*sc), perfY+Math.round(36*sc));
+    ctx.fillStyle=rgba("#f4f7ff",0.55); ctx.font=`600 ${Math.round(16*sc)}px -apple-system,system-ui,sans-serif`;
+    ctx.fillText(isFeed?"Acompanhe a evolução no app.":"Disciplina vira resultado. Bora! 🔥", PAD+Math.round(56*sc), perfY+Math.round(64*sc));
+
+    // ============================================================
+    // FOOTER
+    // ============================================================
+    const footerY = H - Math.round(88*sc);
+    ctx.strokeStyle=rgba("#ffffff",0.07); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(PAD,footerY); ctx.lineTo(W-PAD,footerY); ctx.stroke();
+
+    const ftIconSz=Math.round(27*sc), ftTxtY=footerY+Math.round(35*sc);
+
+    // IG icon + @handle
+    drawInstagram(PAD+ftIconSz/2, footerY+Math.round(24*sc), ftIconSz, rgba("#f4f7ff",0.55));
+    ctx.fillStyle=rgba("#f4f7ff",0.55); ctx.font=`700 ${Math.round(18*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+    ctx.fillText(`@${handleName}`, PAD+ftIconSz+Math.round(10*sc), ftTxtY);
+
+    // Treinova logo + "Powered by TREINOVA"
+    const pbTxt="Powered by TREINOVA";
+    ctx.font=`600 ${Math.round(17*sc)}px -apple-system,system-ui,sans-serif`;
+    const pbW=ctx.measureText(pbTxt).width;
+    const ftLogoS=Math.round(29*sc), ftLogoGap=9;
+    const ftLogoX=W-PAD-ftLogoS-ftLogoGap-pbW, ftLogoY=footerY+Math.round(9*sc);
+    if (treinovaLogoImg) {
+      ctx.save();
+      roundRect(ftLogoX,ftLogoY,ftLogoS,ftLogoS,Math.round(ftLogoS*0.22));
+      ctx.clip(); ctx.drawImage(treinovaLogoImg,ftLogoX,ftLogoY,ftLogoS,ftLogoS); ctx.restore();
+    } else {
+      roundRect(ftLogoX,ftLogoY,ftLogoS,ftLogoS,7);
+      const fGrd=ctx.createLinearGradient(ftLogoX,ftLogoY,ftLogoX+ftLogoS,ftLogoY+ftLogoS);
+      fGrd.addColorStop(0,"#13baf2"); fGrd.addColorStop(1,"#0a6e99");
+      ctx.fillStyle=fGrd; ctx.fill();
+      ctx.fillStyle="#ffffff"; ctx.font=`900 ${Math.round(15*sc)}px -apple-system,system-ui,sans-serif`;
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText("T",ftLogoX+ftLogoS/2,ftLogoY+ftLogoS/2+1); ctx.textBaseline="alphabetic";
     }
+    ctx.fillStyle=rgba("#f4f7ff",0.50); ctx.font=`600 ${Math.round(17*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
+    ctx.fillText(pbTxt, ftLogoX+ftLogoS+ftLogoGap, ftTxtY);
 
-    // ---------- QUOTE ----------
-    const quoteY = 1130;
-    const quoteH = 116;
-    roundRect(PAD, quoteY, W - PAD*2, quoteH, 28);
-    const qGrad = ctx.createLinearGradient(PAD, quoteY, W - PAD, quoteY);
-    qGrad.addColorStop(0, rgba(brand, 0.22));
-    qGrad.addColorStop(1, rgba(brand, 0.06));
-    ctx.fillStyle = qGrad; ctx.fill();
-    ctx.strokeStyle = rgba(brand, 0.55);
-    ctx.lineWidth = 2; ctx.stroke();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "900 32px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(isFeed ? "Performance no feed." : "Mais um na conta. 💪", PAD + 32, quoteY + 50);
-    ctx.fillStyle = rgba("#f4f7ff", 0.70);
-    ctx.font = "600 22px -apple-system, system-ui, sans-serif";
-    ctx.fillText(isFeed ? "Acompanhe a evolução do aluno no Treinova." : "Disciplina vira progresso. Vamos pro próximo.", PAD + 32, quoteY + 86);
-
-    // ---------- FOOTER ----------
-    ctx.strokeStyle = rgba("#ffffff", 0.10);
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(PAD, H - 110); ctx.lineTo(W - PAD, H - 110); ctx.stroke();
-
-    ctx.fillStyle = rgba("#f4f7ff", 0.62);
-    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(`@${handleName}`.toUpperCase(), PAD, H - 60);
-    ctx.fillStyle = brand;
-    ctx.font = "900 22px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(`#${appName}`, W - PAD, H - 60);
-
-    return await new Promise(res => canvas.toBlob(res, "image/png"));
+    return await new Promise(res => canvas.toBlob(res,"image/png"));
   } catch(e) {
     console.warn("generateWorkoutCard:", e);
     return null;
   }
 }
+
 window.shareWorkout = shareWorkout;
 
 /* ---------- TERMOS / PRIVACIDADE MODAIS ---------- */

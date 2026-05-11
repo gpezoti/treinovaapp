@@ -24,7 +24,7 @@ const checks = [
   {
     name: "barra fixa de treino mostra feedback de progresso",
     pass: html.includes("wfb-hint") &&
-      html.includes("Marque a 1ª série") &&
+      html.includes("Pode concluir a qualquer hora") &&
       html.includes("Progresso salvo") &&
       html.includes("Pronto para finalizar"),
   },
