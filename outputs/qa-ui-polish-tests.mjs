@@ -41,6 +41,13 @@ const checks = [
     name: "estado vazio de alunos explica proximas acoes",
     pass: html.includes("Adicione um aluno ou compartilhe o link de cadastro."),
   },
+  {
+    name: "erros tecnicos sao convertidos em mensagens acionaveis",
+    pass: html.includes("function userFacingErrorMessage(msg)") &&
+      html.includes("kind === \"error\" ? userFacingErrorMessage(msg) : msg") &&
+      html.includes("Serviço temporariamente indisponível. Tente novamente em instantes.") &&
+      !html.includes("<small>${escapeHtml(error.message||'')}</small>"),
+  },
 ];
 
 const failed = checks.filter((check) => !check.pass);

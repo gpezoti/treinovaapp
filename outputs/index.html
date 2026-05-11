@@ -1792,9 +1792,20 @@ function avatarHTML(p) {
   if (p && p.avatar_url) return `<img src="${escape(p.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`;
   return escape((p && p.avatar_emoji) || "💪");
 }
+function userFacingErrorMessage(msg) {
+  const raw = String(msg == null ? "" : msg).trim();
+  if (!raw) return "Não foi possível concluir. Tente novamente.";
+  if (/duplicate key|violates unique constraint|23505/i.test(raw)) return "Este cadastro já existe. Revise os dados e tente novamente.";
+  if (/row-level|rls|policy|permission denied|unauthorized|forbidden|sem permissão/i.test(raw)) return "Você não tem permissão para esta ação.";
+  if (/non-2xx|edge function|functions? returned|failed to fetch|network|timeout|load failed/i.test(raw)) return "Serviço temporariamente indisponível. Tente novamente em instantes.";
+  if (/column .* does not exist|relation .* does not exist|syntax error|invalid input|violates foreign key|not-null/i.test(raw)) return "Não foi possível salvar agora. Recarregue o app e tente novamente.";
+  if (/JWT|token|session|expired|não autenticado|nao autenticado/i.test(raw)) return "Sua sessão expirou. Entre novamente.";
+  if (raw.length > 140) return "Não foi possível concluir. Tente novamente.";
+  return raw.replace(/^Erro:\s*/i, "");
+}
 function showToast(msg, kind) {
   const t = document.getElementById("toast");
-  t.textContent = msg;
+  t.textContent = kind === "error" ? userFacingErrorMessage(msg) : msg;
   t.classList.remove("error","success"); t.classList.add("show");
   if (kind) t.classList.add(kind);
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2200);
@@ -8669,7 +8680,7 @@ window.openApplyTemplateSheet = async function(studentId) {
   if (myCoachId) q = q.eq("coach_id", myCoachId);
   const { data: templates, error } = await q;
   if (error) {
-    openSheet(`<h3>Templates</h3><div class="empty"><p>Erro: ${escape(error.message)}</p></div><button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')">Voltar</button>`);
+    openSheet(`<h3>Templates</h3><div class="empty"><p>${escape(userFacingErrorMessage(error.message))}</p></div><button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')">Voltar</button>`);
     return;
   }
   const list = (templates || []);
@@ -12524,7 +12535,7 @@ async function openChatThread(otherUserId) {
     const list = document.getElementById("ct-list");
     if (error) {
       console.warn("chat load error:", error);
-      if (list) list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3)">Não foi possível carregar as mensagens.<br><small>${escapeHtml(error.message||'')}</small></div>`;
+      if (list) list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3)">Não foi possível carregar as mensagens.<br><small>Tente novamente em instantes.</small></div>`;
       return;
     }
     const rawData = [...(sent.data||[]), ...(recv.data||[])].sort((a,b) => a.created_at.localeCompare(b.created_at));
