@@ -146,8 +146,8 @@ serve(async (req) => {
       const phone = String(body.phone || "").trim();
       const coachId = caller.role === "coach" ? caller.id : (body.coach_id || null);
 
-      if (!fullName || !email.includes("@") || password.length < 6) {
-        return json({ error: "Nome, email válido e senha 6+ são obrigatórios." }, 400);
+      if (!fullName || !email.includes("@") || password.length < 8) {
+        return json({ error: "Nome, email válido e senha 8+ são obrigatórios." }, 400);
       }
       if (caller.role === "admin" && coachId) {
         const { data: coach } = await sbAdmin
@@ -186,8 +186,8 @@ serve(async (req) => {
       const email = String(body.email || "").trim().toLowerCase();
       const password = String(body.password || "");
       const fullName = String(body.full_name || "").trim();
-      if (!fullName || !email.includes("@") || password.length < 6) {
-        return json({ error: "Nome, email válido e senha 6+ são obrigatórios." }, 400);
+      if (!fullName || !email.includes("@") || password.length < 8) {
+        return json({ error: "Nome, email válido e senha 8+ são obrigatórios." }, 400);
       }
 
       const created = await createAuthUserOrReuseProfile({ email, password, fullName, role: "coach" });
@@ -270,8 +270,8 @@ serve(async (req) => {
       if (!["coach", "student"].includes(role)) {
         return json({ error: "Papel inválido." }, 400);
       }
-      if (password && password.length < 6) {
-        return json({ error: "A nova senha precisa ter pelo menos 6 caracteres." }, 400);
+      if (password && password.length < 8) {
+        return json({ error: "A nova senha precisa ter pelo menos 8 caracteres." }, 400);
       }
 
       const authPatch: Record<string, unknown> = {
