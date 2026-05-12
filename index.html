@@ -2511,9 +2511,13 @@ async function loadLastLoads() {
 
 async function loadOrCreateSession(date, workoutCode, intensity) {
   // procura sessão do dia
-  const { data: existing } = await sb.from("sessions")
+  const { data: existing, error: existingError } = await sb.from("sessions")
     .select("*").eq("student_id", STATE.profile.id)
     .eq("date", date).eq("workout_code", workoutCode).maybeSingle();
+  if (existingError) {
+    console.error("[workout] Falha ao buscar sessão", existingError);
+    throw existingError;
+  }
   if (existing) {
     STATE.currentSession = existing;
   } else {
@@ -2522,7 +2526,10 @@ async function loadOrCreateSession(date, workoutCode, intensity) {
       student_id: STATE.profile.id, date, workout_code: workoutCode,
       workout_id: w ? w.id : null, intensity, status: "in_progress"
     }).select().single();
-    if (error) { console.error(error); return null; }
+    if (error) {
+      console.error("[workout] Falha ao iniciar sessão", error);
+      throw error;
+    }
     STATE.currentSession = data;
   }
   await loadSetLogs();
@@ -7010,8 +7017,19 @@ async function renderWorkout() {
 async function startWorkoutSession(date, code, intensity) {
   const el = document.getElementById("view-workout");
   if (el) el.innerHTML = `<div class="loading"><div class="spinner"></div>Iniciando treino...</div>`;
-  await loadOrCreateSession(date, code, intensity);
-  await renderWorkout();
+  try {
+    const session = await loadOrCreateSession(date, code, intensity);
+    if (!session) throw new Error("Sessão não criada.");
+    await renderWorkout();
+  } catch (e) {
+    console.error("[workout] Não foi possível iniciar treino", e);
+    const msg = String(e?.message || e || "");
+    const friendly = msg.includes("is_payment_ok") || msg.includes("permission denied")
+      ? "Permissão de treino corrigida no banco. Atualize o app e tente novamente."
+      : "Não foi possível iniciar o treino. Atualize o app e tente novamente.";
+    showToast(friendly, "error");
+    await renderWorkout();
+  }
 }
 
 function initWorkoutFinishSlider({ allDone, doneCount, totalTarget }) {

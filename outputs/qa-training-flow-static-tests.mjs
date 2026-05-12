@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const recoverySql = readFileSync(new URL("../sql/student_workout_session_recovery_2026_05_06.sql", import.meta.url), "utf8");
+const paymentRlsSql = readFileSync(new URL("../supabase/migrations/20260512125000_restore_rls_payment_function_execute.sql", import.meta.url), "utf8");
 
 const checks = [
   ["custom workout validates code format", /Use apenas letras, números, _ ou - no código/.test(html)],
@@ -18,8 +19,11 @@ const checks = [
   ["student can restart completed workout today", /restartCompletedWorkout/.test(html) && /Reiniciar treino de hoje/.test(html)],
   ["student can delete completed workout today", /deleteTodayCompletedWorkout/.test(html) && /Apagar treino concluído/.test(html)],
   ["completed workout recovery uses safe RPC", /manage_my_workout_session/.test(html) && /mutateCompletedWorkoutSessionDirect/.test(html)],
+  ["workout start surfaces session creation errors", /Falha ao iniciar sessão/.test(html) && /Não foi possível iniciar treino/.test(html)],
   ["recovery SQL restricts to own today session", /student_id = auth\.uid\(\)/.test(recoverySql) && /date = current_date/.test(recoverySql)],
   ["recovery SQL supports reopen restart delete", /'reopen', 'restart', 'delete'/.test(recoverySql) && /delete from public\.set_logs/.test(recoverySql)],
+  ["payment RLS helper can be executed by authenticated users", /grant execute on function public\.is_payment_ok\(uuid\) to authenticated, service_role/.test(paymentRlsSql)],
+  ["payment RLS helper is scoped to current user", /uid = auth\.uid\(\)/.test(paymentRlsSql)],
   ["premium illustration fallback exists", /EXERCISE_ILLUSTRATION_PROMPTS/.test(html)]
 ];
 
