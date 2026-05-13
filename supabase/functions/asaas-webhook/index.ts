@@ -73,7 +73,7 @@ serve(async (req) => {
       update.paid_at = payment.paymentDate ? new Date(`${payment.paymentDate}T12:00:00Z`).toISOString() : new Date().toISOString();
       update.method = paymentMethod(payment.billingType);
     } else if (event === "PAYMENT_CREATED" || event === "PAYMENT_UPDATED" || event === "PAYMENT_PENDING" || event === "PAYMENT_RESTORED") {
-      update.status = "pending";
+      if (our.status !== "paid") update.status = "pending";
       update.method = paymentMethod(payment.billingType);
     } else if (event === "PAYMENT_OVERDUE") {
       update.status = "overdue";
