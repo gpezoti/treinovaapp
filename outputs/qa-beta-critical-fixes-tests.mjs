@@ -39,6 +39,9 @@ assert.match(asaasEdge, /https:\/\/api\.asaas\.com\/v3/, "edge function must def
 assert.match(asaasEdge, /normalizeBillingType/, "edge function must validate billing types");
 assert.match(asaasEdge, /fetchExistingCharge/, "edge function must reuse existing Asaas charges");
 assert.match(asaasEdge, /payment\.asaas_id/, "edge function must detect existing Asaas charge before creating another one");
+assert.match(asaasEdge, /e\?\.status === 404/, "edge function must clear stale sandbox charge ids when production cannot find them");
+has("getFunctionInvokeErrorMessage", "Asaas frontend must show Edge Function response details");
+has("STATE._lastAsaasError", "Asaas sheet must preserve the real gateway/function error");
 
 // Student financial modal/back and layout.
 has('onclick="closeSheet(); renderPayments();"', "financial sheet back must close the modal");

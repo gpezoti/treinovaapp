@@ -12227,16 +12227,38 @@ async function exportStudentPDF(studentId) {
 window.exportStudentPDF = exportStudentPDF;
 
 /* ---------- ASAAS (criar cobrança via Edge Function) ---------- */
+async function getFunctionInvokeErrorMessage(error) {
+  const fallback = error?.message || String(error || "Erro desconhecido");
+  const ctx = error?.context || error?.cause?.context;
+  if (!ctx) return fallback;
+  try {
+    const res = typeof ctx.clone === "function" ? ctx.clone() : ctx;
+    if (typeof res.json === "function") {
+      const payload = await res.json();
+      return payload?.error || payload?.message || fallback;
+    }
+  } catch(e) {}
+  try {
+    const res = typeof ctx.clone === "function" ? ctx.clone() : ctx;
+    if (typeof res.text === "function") {
+      const text = await res.text();
+      return text || fallback;
+    }
+  } catch(e) {}
+  return fallback;
+}
 async function createAsaasCharge({ paymentId, billingType="PIX" }) {
   // A-04 FIX: prevenir double-call
   if (STATE._creatingCharge) return null;
   STATE._creatingCharge = true;
+  STATE._lastAsaasError = "";
   try {
     const { data, error } = await withTimeout(sb.functions.invoke("asaas-create-charge", {
       body: { payment_id: paymentId, billing_type: billingType }
     }), 25000, "asaas-create-charge timeout");
     if (error) {
-      const msg = error.message || String(error);
+      const msg = await getFunctionInvokeErrorMessage(error);
+      STATE._lastAsaasError = msg;
       // Mensagem amigável para erros comuns
       if (msg.includes("404") || msg.includes("not found") || msg.toLowerCase().includes("function")) {
         showToast("Edge Function não encontrada. Configure asaas-create-charge no Supabase.", "error");
@@ -12247,9 +12269,14 @@ async function createAsaasCharge({ paymentId, billingType="PIX" }) {
       }
       return null;
     }
-    if (data && data.error) { showToast(data.error, "error"); return null; }
+    if (data && data.error) {
+      STATE._lastAsaasError = data.error;
+      showToast(data.error, "error");
+      return null;
+    }
     return data;
   } catch(e) {
+    STATE._lastAsaasError = e.message || String(e);
     showToast("Erro de conexão com Asaas: " + (e.message||e), "error");
     return null;
   } finally {
@@ -12309,7 +12336,8 @@ async function openAsaasSheet(paymentId) {
     const result = await createAsaasCharge({ paymentId, billingType: type });
     pixBtn.disabled = false; bolBtn.disabled = false;
     if (!result) {
-      r.innerHTML = `<div style="margin-top:12px;padding:12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-size:13px">Não foi possível gerar a cobrança. Verifique se a Edge Function está publicada e se a chave ASAAS_API_KEY está configurada.</div>`;
+      const detail = STATE._lastAsaasError ? `<div style="margin-top:8px;color:var(--text-2);font-size:12px;line-height:1.4;word-break:break-word">${escapeHtml(STATE._lastAsaasError)}</div>` : "";
+      r.innerHTML = `<div style="margin-top:12px;padding:12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-size:13px">Não foi possível gerar a cobrança.${detail}</div>`;
       return;
     }
     if (type === "PIX" && result.pix_qr) {

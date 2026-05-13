@@ -53,7 +53,10 @@ async function asaasFetch(path: string, init: RequestInit = {}) {
   }
   if (!res.ok) {
     const detail = data?.errors?.[0]?.description || data?.message || raw || res.statusText;
-    throw new Error(`Asaas HTTP ${res.status}: ${detail}`);
+    const err = new Error(`Asaas HTTP ${res.status}: ${detail}`) as Error & { status?: number; payload?: unknown };
+    err.status = res.status;
+    err.payload = data;
+    throw err;
   }
   return data;
 }
@@ -85,10 +88,27 @@ function validatePaymentForCharge(payment: any) {
 async function fetchExistingCharge(payment: any, billingType: string) {
   if (!payment.asaas_id) return null;
 
-  const charge = await asaasFetch(`/payments/${encodeURIComponent(payment.asaas_id)}`);
+  let charge: any;
+  try {
+    charge = await asaasFetch(`/payments/${encodeURIComponent(payment.asaas_id)}`);
+  } catch (e: any) {
+    if (e?.status === 404) {
+      await sbAdmin.from("payments").update({
+        asaas_id: null,
+        invoice_url: null,
+        boleto_url: null,
+        pix_qr: null,
+        pix_copy_paste: null,
+        external_reference: null,
+      }).eq("id", payment.id);
+      return null;
+    }
+    throw e;
+  }
   const updatePayload: any = {
     invoice_url: charge.invoiceUrl || payment.invoice_url || null,
     boleto_url: charge.bankSlipUrl || payment.boleto_url || null,
+    method: billingType.toLowerCase(),
     external_reference: payment.external_reference || payment.id,
   };
 
@@ -235,6 +255,7 @@ serve(async (req) => {
     const updatePayload: any = {
       asaas_id:           charge.id,
       invoice_url:        charge.invoiceUrl || null,
+      method:             billingType.toLowerCase(),
       external_reference: payment.id,
     };
 
