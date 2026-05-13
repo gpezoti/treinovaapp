@@ -32,6 +32,22 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function asaasErrorResponse(e: any) {
+  const message = e?.message || String(e);
+  const lower = message.toLowerCase();
+
+  if (lower.includes("pix não está disponível") || lower.includes("pix nao esta disponivel")) {
+    return json({
+      error: "PIX ainda não está liberado na conta Asaas. Use boleto por enquanto ou conclua a aprovação da conta no Asaas.",
+      code: "ASAAS_PIX_UNAVAILABLE",
+      fallback_billing_type: "BOLETO",
+      original_error: message,
+    }, 400);
+  }
+
+  return json({ error: message }, 500);
+}
+
 async function asaasFetch(path: string, init: RequestInit = {}) {
   if (!ASAAS_API_KEY) {
     throw new Error("ASAAS_API_KEY não configurada na Edge Function.");
@@ -285,6 +301,6 @@ serve(async (req) => {
 
   } catch (e: any) {
     console.error("[asaas-create-charge]", e);
-    return json({ error: e.message || String(e) }, 500);
+    return asaasErrorResponse(e);
   }
 });

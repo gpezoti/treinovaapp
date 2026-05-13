@@ -12247,7 +12247,7 @@ async function getFunctionInvokeErrorMessage(error) {
   } catch(e) {}
   return fallback;
 }
-async function createAsaasCharge({ paymentId, billingType="PIX" }) {
+async function createAsaasCharge({ paymentId, billingType="PIX", silent=false }) {
   // A-04 FIX: prevenir double-call
   if (STATE._creatingCharge) return null;
   STATE._creatingCharge = true;
@@ -12260,24 +12260,27 @@ async function createAsaasCharge({ paymentId, billingType="PIX" }) {
       const msg = await getFunctionInvokeErrorMessage(error);
       STATE._lastAsaasError = msg;
       // Mensagem amigável para erros comuns
-      if (msg.includes("404") || msg.includes("not found") || msg.toLowerCase().includes("function")) {
-        showToast("Edge Function não encontrada. Configure asaas-create-charge no Supabase.", "error");
-      } else if (msg.includes("ASAAS") || msg.includes("apiKey") || msg.includes("api_key") || msg.includes("ASAAS_API_KEY")) {
-        showToast("Chave Asaas não configurada. Adicione ASAAS_API_KEY nas variáveis da Edge Function.", "error");
-      } else {
-        showToast("Erro: " + msg, "error");
+      if (!silent) {
+        if (msg.includes("404") || msg.includes("not found") || msg.toLowerCase().includes("function")) {
+          showToast("Edge Function não encontrada. Configure asaas-create-charge no Supabase.", "error");
+        } else if (msg.includes("ASAAS") || msg.includes("apiKey") || msg.includes("api_key") || msg.includes("ASAAS_API_KEY")) {
+          showToast("Chave Asaas não configurada. Adicione ASAAS_API_KEY nas variáveis da Edge Function.", "error");
+        } else {
+          showToast("Erro: " + msg, "error");
+        }
       }
       return null;
     }
     if (data && data.error) {
       STATE._lastAsaasError = data.error;
-      showToast(data.error, "error");
+      STATE._lastAsaasCode = data.code || "";
+      if (!silent) showToast(data.error, "error");
       return null;
     }
     return data;
   } catch(e) {
     STATE._lastAsaasError = e.message || String(e);
-    showToast("Erro de conexão com Asaas: " + (e.message||e), "error");
+    if (!silent) showToast("Erro de conexão com Asaas: " + (e.message||e), "error");
     return null;
   } finally {
     STATE._creatingCharge = false;
@@ -12333,11 +12336,23 @@ async function openAsaasSheet(paymentId) {
     const bolBtn = document.getElementById("ax-btn-bol");
     pixBtn.disabled = true; bolBtn.disabled = true;
     r.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-2);display:flex;align-items:center;justify-content:center;gap:8px"><div class="spinner" style="width:18px;height:18px"></div> Gerando cobrança…</div>`;
-    const result = await createAsaasCharge({ paymentId, billingType: type });
+    STATE._lastAsaasCode = "";
+    const result = await createAsaasCharge({ paymentId, billingType: type, silent: true });
     pixBtn.disabled = false; bolBtn.disabled = false;
     if (!result) {
-      const detail = STATE._lastAsaasError ? `<div style="margin-top:8px;color:var(--text-2);font-size:12px;line-height:1.4;word-break:break-word">${escapeHtml(STATE._lastAsaasError)}</div>` : "";
-      r.innerHTML = `<div style="margin-top:12px;padding:12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-size:13px">Não foi possível gerar a cobrança.${detail}</div>`;
+      const isPixUnavailable = type === "PIX" && STATE._lastAsaasCode === "ASAAS_PIX_UNAVAILABLE";
+      const title = isPixUnavailable ? "PIX aguardando aprovação no Asaas." : "Não foi possível gerar a cobrança.";
+      const detailText = isPixUnavailable
+        ? "Use boleto por enquanto. Para liberar PIX, conclua o cadastro/aprovação da conta no painel do Asaas."
+        : STATE._lastAsaasError;
+      const detail = detailText ? `<div style="margin-top:8px;color:var(--text-2);font-size:12px;line-height:1.4;word-break:break-word">${escapeHtml(detailText)}</div>` : "";
+      r.innerHTML = `<div style="margin-top:12px;padding:12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-size:13px">${escapeHtml(title)}${detail}</div>`;
+      if (isPixUnavailable) {
+        pixBtn.disabled = true;
+        pixBtn.textContent = "PIX indisponível";
+        bolBtn.textContent = "Gerar boleto agora";
+        bolBtn.focus?.();
+      }
       return;
     }
     if (type === "PIX" && result.pix_qr) {
