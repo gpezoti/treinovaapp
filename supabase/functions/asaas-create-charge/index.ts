@@ -36,6 +36,14 @@ function asaasErrorResponse(e: any) {
   const message = e?.message || String(e);
   const lower = message.toLowerCase();
 
+  if (lower.includes("cpf ou cnpj") || lower.includes("cpf/cnpj") || lower.includes("cpfcnpj")) {
+    return json({
+      error: "Informe o CPF ou CNPJ do cliente para gerar cobrança no Asaas.",
+      code: "ASAAS_PAYER_TAX_ID_REQUIRED",
+      original_error: message,
+    }, 400);
+  }
+
   if (lower.includes("pix não está disponível") || lower.includes("pix nao esta disponivel")) {
     return json({
       error: "PIX ainda não está liberado na conta Asaas. Use boleto por enquanto ou conclua a aprovação da conta no Asaas.",
@@ -101,6 +109,52 @@ function validatePaymentForCharge(payment: any) {
   }
 }
 
+function normalizeCpfCnpj(value: unknown) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function validatePayerForAsaas(profile: any) {
+  const cpfCnpj = normalizeCpfCnpj(profile?.cpf_cnpj);
+  if (!cpfCnpj) {
+    return {
+      ok: false,
+      response: json({
+        error: "Informe o CPF ou CNPJ do cliente para gerar cobrança no Asaas.",
+        code: "ASAAS_PAYER_TAX_ID_REQUIRED",
+        payer_id: profile?.id || null,
+        payer_name: profile?.full_name || profile?.email || "Cliente",
+      }, 400),
+    };
+  }
+  if (![11, 14].includes(cpfCnpj.length)) {
+    return {
+      ok: false,
+      response: json({
+        error: "CPF/CNPJ do cliente inválido. Use 11 dígitos para CPF ou 14 para CNPJ.",
+        code: "ASAAS_PAYER_TAX_ID_INVALID",
+        payer_id: profile?.id || null,
+      }, 400),
+    };
+  }
+  return { ok: true, cpfCnpj };
+}
+
+async function syncCustomerCpfCnpj(customerId: string, profile: any) {
+  const cpfCnpj = normalizeCpfCnpj(profile?.cpf_cnpj);
+  if (!cpfCnpj) return;
+  await asaasFetch(`/customers/${encodeURIComponent(customerId)}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      name:              profile.full_name || profile.email || "Cliente",
+      email:             profile.email || undefined,
+      phone:             profile.phone || undefined,
+      mobilePhone:       profile.phone || undefined,
+      cpfCnpj,
+      externalReference: profile.id,
+    }),
+  });
+}
+
 async function fetchExistingCharge(payment: any, billingType: string) {
   if (!payment.asaas_id) return null;
 
@@ -152,13 +206,17 @@ async function fetchExistingCharge(payment: any, billingType: string) {
 }
 
 async function ensureCustomer(profile: any): Promise<string> {
-  if (profile.asaas_customer_id) return profile.asaas_customer_id;
+  if (profile.asaas_customer_id) {
+    await syncCustomerCpfCnpj(profile.asaas_customer_id, profile);
+    return profile.asaas_customer_id;
+  }
 
   // Tenta buscar por email primeiro
   const search = await asaasFetch(`/customers?email=${encodeURIComponent(profile.email || "")}`);
   if (search.data?.length) {
     const id = search.data[0].id;
     await sbAdmin.from("profiles").update({ asaas_customer_id: id }).eq("id", profile.id);
+    await syncCustomerCpfCnpj(id, profile);
     return id;
   }
 
@@ -170,7 +228,7 @@ async function ensureCustomer(profile: any): Promise<string> {
       email:             profile.email,
       phone:             profile.phone || undefined,
       mobilePhone:       profile.phone || undefined,
-      cpfCnpj:           profile.cpf_cnpj || undefined,
+      cpfCnpj:           normalizeCpfCnpj(profile.cpf_cnpj),
       externalReference: profile.id,
     }),
   });
@@ -213,7 +271,7 @@ serve(async (req) => {
     }
 
     // 3. Ler payload
-    const { payment_id, billing_type } = await req.json();
+    const { payment_id, billing_type, payer_cpf_cnpj } = await req.json();
     if (!payment_id) return json({ error: "payment_id obrigatório" }, 400);
     const billingType = normalizeBillingType(billing_type);
 
@@ -244,6 +302,23 @@ serve(async (req) => {
     if (!isOwner && !isAdmin) {
       return json({ error: "Sem permissão para este pagamento" }, 403);
     }
+
+    const incomingCpfCnpj = normalizeCpfCnpj(payer_cpf_cnpj);
+    if (incomingCpfCnpj) {
+      if (![11, 14].includes(incomingCpfCnpj.length)) {
+        return json({
+          error: "CPF/CNPJ do cliente inválido. Use 11 dígitos para CPF ou 14 para CNPJ.",
+          code: "ASAAS_PAYER_TAX_ID_INVALID",
+          payer_id: payer.id,
+        }, 400);
+      }
+      await sbAdmin.from("profiles").update({ cpf_cnpj: incomingCpfCnpj }).eq("id", payer.id);
+      payer.cpf_cnpj = incomingCpfCnpj;
+      payment.user = payer;
+    }
+
+    const payerValidation = validatePayerForAsaas(payer);
+    if (!payerValidation.ok) return payerValidation.response;
 
     const existing = await fetchExistingCharge(payment, billingType);
     if (existing) return json(existing);

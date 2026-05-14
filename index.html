@@ -12235,6 +12235,7 @@ async function getFunctionInvokeErrorMessage(error) {
     const res = typeof ctx.clone === "function" ? ctx.clone() : ctx;
     if (typeof res.json === "function") {
       const payload = await res.json();
+      STATE._lastAsaasCode = payload?.code || "";
       return payload?.error || payload?.message || fallback;
     }
   } catch(e) {}
@@ -12247,14 +12248,15 @@ async function getFunctionInvokeErrorMessage(error) {
   } catch(e) {}
   return fallback;
 }
-async function createAsaasCharge({ paymentId, billingType="PIX", silent=false }) {
+async function createAsaasCharge({ paymentId, billingType="PIX", silent=false, payerCpfCnpj="" }) {
   // A-04 FIX: prevenir double-call
   if (STATE._creatingCharge) return null;
   STATE._creatingCharge = true;
   STATE._lastAsaasError = "";
+  STATE._lastAsaasCode = "";
   try {
     const { data, error } = await withTimeout(sb.functions.invoke("asaas-create-charge", {
-      body: { payment_id: paymentId, billing_type: billingType }
+      body: { payment_id: paymentId, billing_type: billingType, payer_cpf_cnpj: payerCpfCnpj }
     }), 25000, "asaas-create-charge timeout");
     if (error) {
       const msg = await getFunctionInvokeErrorMessage(error);
@@ -12292,7 +12294,7 @@ async function openAsaasSheet(paymentId) {
   if (pErr || !p) { showToast("Pagamento não encontrado", "error"); return; }
   const payerId = p.user_id || p.payer_id;
   const { data: payer } = payerId
-    ? await sb.from("profiles").select("full_name,email,phone").eq("id", payerId).maybeSingle()
+    ? await sb.from("profiles").select("full_name,email,phone,cpf_cnpj").eq("id", payerId).maybeSingle()
     : { data: null };
   p.user = payer || {};
   if (!p) { showToast("Pagamento não encontrado", "error"); return; }
@@ -12311,6 +12313,9 @@ async function openAsaasSheet(paymentId) {
       #asaas-overlay .ax-qr{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:16px;padding:12px;background:var(--bg-card);border-radius:10px}
       #asaas-overlay .ax-qr img{max-width:200px}
       #asaas-overlay .ax-copy{padding:8px 12px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;font-family:monospace;font-size:11px;word-break:break-all;cursor:pointer}
+      #asaas-overlay .ax-doc{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+      #asaas-overlay .ax-doc input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg-2);color:var(--text);font-size:15px}
+      #asaas-overlay .ax-doc button{background:var(--brand);color:var(--brand-on)}
     </style>
     <div class="ax-card">
       <h3>Cobrança via Asaas</h3>
@@ -12341,17 +12346,64 @@ async function openAsaasSheet(paymentId) {
     pixBtn.disabled = false; bolBtn.disabled = false;
     if (!result) {
       const isPixUnavailable = type === "PIX" && STATE._lastAsaasCode === "ASAAS_PIX_UNAVAILABLE";
+      const needsTaxId = STATE._lastAsaasCode === "ASAAS_PAYER_TAX_ID_REQUIRED" || STATE._lastAsaasCode === "ASAAS_PAYER_TAX_ID_INVALID";
       const title = isPixUnavailable ? "PIX aguardando aprovação no Asaas." : "Não foi possível gerar a cobrança.";
       const detailText = isPixUnavailable
         ? "Use boleto por enquanto. Para liberar PIX, conclua o cadastro/aprovação da conta no painel do Asaas."
+        : needsTaxId
+          ? "O Asaas exige CPF ou CNPJ do cliente para gerar cobrança. Informe abaixo uma vez e eu salvo no cadastro."
         : STATE._lastAsaasError;
       const detail = detailText ? `<div style="margin-top:8px;color:var(--text-2);font-size:12px;line-height:1.4;word-break:break-word">${escapeHtml(detailText)}</div>` : "";
-      r.innerHTML = `<div style="margin-top:12px;padding:12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-size:13px">${escapeHtml(title)}${detail}</div>`;
+      const taxIdForm = needsTaxId ? `
+        <div class="ax-doc">
+          <input id="ax-tax-id" inputmode="numeric" autocomplete="off" placeholder="CPF ou CNPJ do cliente" value="${escapeHtml(p.user?.cpf_cnpj || "")}">
+          <button id="ax-save-tax-id">Salvar e gerar cobrança</button>
+        </div>` : "";
+      r.innerHTML = `<div style="margin-top:12px;padding:12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-size:13px">${escapeHtml(title)}${detail}${taxIdForm}</div>`;
       if (isPixUnavailable) {
         pixBtn.disabled = true;
         pixBtn.textContent = "PIX indisponível";
         bolBtn.textContent = "Gerar boleto agora";
         bolBtn.focus?.();
+      }
+      if (needsTaxId) {
+        const input = document.getElementById("ax-tax-id");
+        const saveBtn = document.getElementById("ax-save-tax-id");
+        input?.focus();
+        saveBtn.onclick = async () => {
+          const digits = (input.value || "").replace(/\D/g, "");
+          if (![11, 14].includes(digits.length)) {
+            showToast("Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos.", "error");
+            return;
+          }
+          p.user.cpf_cnpj = digits;
+          saveBtn.disabled = true;
+          saveBtn.textContent = "Salvando...";
+          STATE._lastAsaasCode = "";
+          const retry = await createAsaasCharge({ paymentId, billingType: type, silent: true, payerCpfCnpj: digits });
+          saveBtn.disabled = false;
+          if (!retry) {
+            STATE._lastAsaasError = STATE._lastAsaasError || "Não foi possível salvar o CPF/CNPJ.";
+            gen(type);
+            return;
+          }
+          if (type === "PIX" && retry.pix_qr) {
+            r.innerHTML = `
+              <div class="ax-qr">
+                <img src="data:image/png;base64,${retry.pix_qr}" alt="QR Code PIX">
+                <div style="font-size:13px;color:var(--text-2)">Aponte a câmera ou copie:</div>
+                <div class="ax-copy" id="ax-pix-code">${escapeHtml(retry.pix_copy_paste||'')}</div>
+              </div>`;
+            document.getElementById("ax-pix-code").onclick = () => {
+              navigator.clipboard.writeText(retry.pix_copy_paste||'');
+              showToast("Código copiado", "success");
+            };
+          } else if (retry.boleto_url) {
+            r.innerHTML = `<a href="${retry.boleto_url}" target="_blank" style="display:block;margin-top:12px;padding:14px;background:var(--brand);color:var(--brand-on);text-align:center;border-radius:10px;font-weight:700;text-decoration:none">Abrir boleto</a>`;
+          } else if (retry.invoice_url) {
+            r.innerHTML = `<a href="${retry.invoice_url}" target="_blank" style="display:block;margin-top:12px;padding:14px;background:var(--brand);color:var(--brand-on);text-align:center;border-radius:10px;font-weight:700;text-decoration:none">Abrir cobrança</a>`;
+          }
+        };
       }
       return;
     }
