@@ -87,10 +87,17 @@ async function asaasFetch(path: string, init: RequestInit = {}) {
 
 function normalizeBillingType(value: unknown) {
   const billingType = String(value || "PIX").trim().toUpperCase();
-  if (!["PIX", "BOLETO"].includes(billingType)) {
-    throw new Error("Forma de cobrança inválida. Use PIX ou BOLETO.");
+  if (!["PIX", "BOLETO", "UNDEFINED"].includes(billingType)) {
+    throw new Error("Forma de cobrança inválida. Use PIX, BOLETO ou UNDEFINED.");
   }
   return billingType;
+}
+
+function paymentMethodForDb(billingType: string) {
+  if (billingType === "PIX") return "pix";
+  if (billingType === "BOLETO") return "boleto";
+  if (billingType === "UNDEFINED") return "asaas";
+  return billingType.toLowerCase();
 }
 
 function validatePaymentForCharge(payment: any) {
@@ -175,16 +182,17 @@ async function fetchExistingCharge(payment: any, billingType: string) {
     }
     throw e;
   }
+  const actualBillingType = charge.billingType || billingType;
   const updatePayload: any = {
     invoice_url: charge.invoiceUrl || payment.invoice_url || null,
     boleto_url: charge.bankSlipUrl || payment.boleto_url || null,
-    method: billingType.toLowerCase(),
+    method: paymentMethodForDb(actualBillingType),
     external_reference: payment.external_reference || payment.id,
   };
 
   let pixQr = payment.pix_qr || null;
   let pixCopyPaste = payment.pix_copy_paste || null;
-  if (billingType === "PIX" && (!pixQr || !pixCopyPaste)) {
+  if (actualBillingType === "PIX" && (!pixQr || !pixCopyPaste)) {
     const pix = await asaasFetch(`/payments/${encodeURIComponent(payment.asaas_id)}/pixQrCode`);
     pixQr = pix.encodedImage || null;
     pixCopyPaste = pix.payload || null;
@@ -211,13 +219,15 @@ async function ensureCustomer(profile: any): Promise<string> {
     return profile.asaas_customer_id;
   }
 
-  // Tenta buscar por email primeiro
-  const search = await asaasFetch(`/customers?email=${encodeURIComponent(profile.email || "")}`);
-  if (search.data?.length) {
-    const id = search.data[0].id;
-    await sbAdmin.from("profiles").update({ asaas_customer_id: id }).eq("id", profile.id);
-    await syncCustomerCpfCnpj(id, profile);
-    return id;
+  // Tenta buscar por email primeiro quando o cadastro tiver email valido.
+  if (profile.email) {
+    const search = await asaasFetch(`/customers?email=${encodeURIComponent(profile.email)}`);
+    if (search.data?.length) {
+      const id = search.data[0].id;
+      await sbAdmin.from("profiles").update({ asaas_customer_id: id }).eq("id", profile.id);
+      await syncCustomerCpfCnpj(id, profile);
+      return id;
+    }
   }
 
   // Cria novo customer no Asaas
@@ -234,6 +244,31 @@ async function ensureCustomer(profile: any): Promise<string> {
   });
   await sbAdmin.from("profiles").update({ asaas_customer_id: cust.id }).eq("id", profile.id);
   return cust.id;
+}
+
+async function notifyPaymentChargeCreated(payment: any, url?: string | null) {
+  if (!payment?.user_id) return;
+  const { data: existing } = await sbAdmin
+    .from("notifications")
+    .select("id")
+    .eq("user_id", payment.user_id)
+    .eq("kind", "payment_charge_created")
+    .eq("related_id", payment.id)
+    .limit(1);
+  if (existing && existing.length > 0) return;
+
+  const value = Number(payment.amount || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const dueDate = String(payment.due_date || "").split("-").reverse().join("/");
+  await sbAdmin.from("notifications").insert({
+    user_id: payment.user_id,
+    kind: "payment_charge_created",
+    title: "Cobrança disponível",
+    body: url
+      ? `Sua cobrança de ${value} vence em ${dueDate}. Abra a cobrança para pagar pelo Asaas.`
+      : `Sua cobrança de ${value} vence em ${dueDate}.`,
+    related_id: payment.id,
+    related_kind: "payment",
+  });
 }
 
 serve(async (req) => {
@@ -321,7 +356,10 @@ serve(async (req) => {
     if (!payerValidation.ok) return payerValidation.response;
 
     const existing = await fetchExistingCharge(payment, billingType);
-    if (existing) return json(existing);
+    if (existing) {
+      await notifyPaymentChargeCreated(payment, existing.invoice_url || existing.boleto_url || null);
+      return json(existing);
+    }
 
     // =========================================================================
     // Fluxo normal: criar/buscar customer no Asaas e gerar cobrança
@@ -346,7 +384,7 @@ serve(async (req) => {
     const updatePayload: any = {
       asaas_id:           charge.id,
       invoice_url:        charge.invoiceUrl || null,
-      method:             billingType.toLowerCase(),
+      method:             paymentMethodForDb(billingType),
       external_reference: payment.id,
     };
 
@@ -364,6 +402,7 @@ serve(async (req) => {
     }
 
     await sbAdmin.from("payments").update(updatePayload).eq("id", payment.id);
+    await notifyPaymentChargeCreated(payment, charge.invoiceUrl || boletoUrl || null);
 
     return json({
       ok:              true,

@@ -6096,7 +6096,7 @@ function paymentAccessHTML(p) {
   const invoice = p.invoice_url || p.boleto_url || null;
   const pix = p.pix_copy_paste || null;
   return `
-    ${invoice ? `<a href="${escape(invoice)}" target="_blank" class="mini-btn mini-btn-primary" style="text-decoration:none;margin-top:4px">Abrir cobrança</a>` : ""}
+    ${invoice ? `<a href="${escape(invoice)}" target="_blank" class="mini-btn mini-btn-primary" style="text-decoration:none;margin-top:4px">Pagar no Asaas</a>` : ""}
     ${pix ? `<button class="mini-btn mini-btn-ghost" data-pix="${escape(pix)}" onclick="copyPaymentPix(this.dataset.pix)" style="margin-top:4px">Copiar PIX</button>` : ""}
   `;
 }
@@ -6140,7 +6140,9 @@ function paymentMethodLabel(method) {
   if (!m) return "Método não informado";
   if (m === "pix") return "PIX";
   if (m === "boleto") return "Boleto";
+  if (m === "asaas" || m === "undefined") return "Asaas";
   if (m === "credit_card") return "Cartão de crédito";
+  if (m === "credit") return "Crédito";
   if (m === "cash") return "Dinheiro";
   if (m === "transfer") return "Transferência";
   return escape(method);
@@ -12308,6 +12310,7 @@ async function openAsaasSheet(paymentId) {
       #asaas-overlay .ax-row{display:flex;gap:10px;margin-top:12px}
       #asaas-overlay button{flex:1;padding:12px;border-radius:10px;border:0;font-weight:700;cursor:pointer}
       #asaas-overlay .ax-pix{background:#32BCAD;color:#fff}
+      #asaas-overlay .ax-link{background:var(--brand);color:var(--brand-on)}
       #asaas-overlay .ax-bol{background:#444;color:#fff}
       #asaas-overlay .ax-cancel{background:transparent;border:1px solid var(--line);color:var(--text-2)}
       #asaas-overlay .ax-qr{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:16px;padding:12px;background:var(--bg-card);border-radius:10px}
@@ -12324,6 +12327,12 @@ async function openAsaasSheet(paymentId) {
         Vencimento: ${formatBR(p.due_date)} · R$ ${Number(p.amount).toFixed(2)}
       </div>
       <div id="ax-result"></div>
+      <div style="margin:10px 0 0;padding:10px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text-2);font-size:12px;line-height:1.4">
+        Link Asaas abre a página segura para o aluno escolher cartão, boleto ou PIX quando liberado na conta.
+      </div>
+      <div class="ax-row">
+        <button class="ax-link" id="ax-btn-link">Link Asaas</button>
+      </div>
       <div class="ax-row">
         <button class="ax-pix" id="ax-btn-pix">Gerar PIX</button>
         <button class="ax-bol" id="ax-btn-bol">Gerar Boleto</button>
@@ -12337,13 +12346,14 @@ async function openAsaasSheet(paymentId) {
 
   async function gen(type) {
     const r = document.getElementById("ax-result");
+    const linkBtn = document.getElementById("ax-btn-link");
     const pixBtn = document.getElementById("ax-btn-pix");
     const bolBtn = document.getElementById("ax-btn-bol");
-    pixBtn.disabled = true; bolBtn.disabled = true;
+    linkBtn.disabled = true; pixBtn.disabled = true; bolBtn.disabled = true;
     r.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-2);display:flex;align-items:center;justify-content:center;gap:8px"><div class="spinner" style="width:18px;height:18px"></div> Gerando cobrança…</div>`;
     STATE._lastAsaasCode = "";
     const result = await createAsaasCharge({ paymentId, billingType: type, silent: true });
-    pixBtn.disabled = false; bolBtn.disabled = false;
+    linkBtn.disabled = false; pixBtn.disabled = false; bolBtn.disabled = false;
     if (!result) {
       const isPixUnavailable = type === "PIX" && STATE._lastAsaasCode === "ASAAS_PIX_UNAVAILABLE";
       const needsTaxId = STATE._lastAsaasCode === "ASAAS_PAYER_TAX_ID_REQUIRED" || STATE._lastAsaasCode === "ASAAS_PAYER_TAX_ID_INVALID";
@@ -12421,9 +12431,10 @@ async function openAsaasSheet(paymentId) {
     } else if (type === "BOLETO" && result.boleto_url) {
       r.innerHTML = `<a href="${result.boleto_url}" target="_blank" style="display:block;margin-top:12px;padding:14px;background:var(--brand);color:var(--brand-on);text-align:center;border-radius:10px;font-weight:700;text-decoration:none">📄 Abrir boleto</a>`;
     } else if (result.invoice_url) {
-      r.innerHTML = `<a href="${result.invoice_url}" target="_blank" style="display:block;margin-top:12px;padding:14px;background:var(--brand);color:var(--brand-on);text-align:center;border-radius:10px;font-weight:700;text-decoration:none">🔗 Abrir cobrança</a>`;
+      r.innerHTML = `<a href="${result.invoice_url}" target="_blank" style="display:block;margin-top:12px;padding:14px;background:var(--brand);color:var(--brand-on);text-align:center;border-radius:10px;font-weight:700;text-decoration:none">Abrir cobrança segura</a>`;
     }
   }
+  document.getElementById("ax-btn-link").onclick = () => gen("UNDEFINED");
   document.getElementById("ax-btn-pix").onclick = () => gen("PIX");
   document.getElementById("ax-btn-bol").onclick = () => gen("BOLETO");
 }
