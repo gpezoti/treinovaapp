@@ -4953,6 +4953,17 @@ function renderHeaderBell() {
   }
 }
 
+function notificationIcon(kind) {
+  const icons = {
+    payment_overdue: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`,
+    payment_charge_created: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`,
+    payment_received: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`,
+    period_reminder_7d: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+    period_due_today: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  };
+  return icons[kind] || `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
+}
+
 window.openNotificationsSheet = function() {
   const list = STATE.notifications || [];
   const html = `
@@ -4964,13 +4975,10 @@ window.openNotificationsSheet = function() {
 	    </div>
 	    ${renderPushSubscriptionCardHTML()}
 	    ${list.length === 0 ? `<div class="empty"><p>Sem notificações</p></div>` : list.map(n => {
-      const icon = n.kind === 'payment_overdue' ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' :
-                   n.kind === 'period_reminder_7d' ? 'calendar_emoji' :
-                   n.kind === 'period_due_today' ? '⏰' :
-                   n.kind === 'payment_received' ? 'check_emoji' : 'bell_emoji';
+      const icon = notificationIcon(n.kind);
       return `<div class="card mb-8" style="${n.read_at ? 'opacity:0.6' : 'border-color:var(--brand)'}; cursor:pointer;" onclick="onNotifClick('${n.id}','${n.kind}','${n.related_id || ''}')">
         <div class="row-flex" style="align-items:flex-start;">
-          <div style="font-size:22px;">${icon}</div>
+          <div style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:var(--brand);flex-shrink:0;">${icon}</div>
           <div style="flex:1; min-width:0;">
             <div class="fw-700 text-sm">${escape(n.title)}</div>
             ${n.body ? `<div class="text-xs muted" style="margin-top:4px; line-height:1.4;">${escape(n.body)}</div>` : ''}
@@ -5027,7 +5035,7 @@ window.onNotifClick = async function(id, kind, relatedId) {
   renderHeaderBell();
   closeSheet();
   // Navega para o lugar relevante
-  if (kind === 'payment_overdue') {
+  if (kind === 'payment_overdue' || kind === 'payment_charge_created' || kind === 'payment_received') {
     if (STATE.profile.role === 'coach' || STATE.profile.role === 'admin') {
       navTo('payments');
     } else {
