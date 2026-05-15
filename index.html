@@ -68,6 +68,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 #app { max-width: 520px; margin: 0 auto; min-height: 100vh; padding-top: var(--safe-top);
   padding-bottom: calc(96px + var(--safe-bottom)); position: relative; overflow-x: hidden; }
+.desktop-sidebar { display: none; }
 .app-header { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 12px;
   padding: 12px 16px; padding-top: calc(12px + var(--safe-top));
   background: color-mix(in srgb, var(--bg) 92%, transparent);
@@ -425,6 +426,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .bn-item svg { width: 22px; height: 22px; }
 .bn-item.active { background: var(--brand-soft); color: var(--brand); }
 .bn-item:active { transform: scale(0.95); }
+.desktop-nav { display: flex; flex-direction: column; gap: 6px; }
+.desktop-nav-item { position: relative; min-height: 48px; display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 12px 14px; border-radius: 12px; color: var(--text-2); font-size: 14px; font-weight: 700;
+  text-align: left; border: 1px solid transparent; transition: all .15s ease; }
+.desktop-nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.desktop-nav-item:hover { color: var(--text); background: var(--bg-card); border-color: var(--line); }
+.desktop-nav-item.active { color: var(--brand); background: linear-gradient(135deg, var(--brand-soft), var(--bg-card)); border-color: color-mix(in srgb, var(--brand) 38%, var(--line)); }
+.desktop-nav-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 10px; line-height: 1;
+  font-weight: 900; background: var(--red); color: #fff; }
+.desktop-sidebar-meta { margin-top: auto; padding: 14px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--bg-card); color: var(--text-3); font-size: 12px; line-height: 1.45; }
 .segmented-scroll { display:flex; gap:8px; overflow-x:auto; padding:2px 2px 8px; margin:0 -2px 10px; scrollbar-width:none; scroll-snap-type:x proximity; }
 .segmented-scroll::-webkit-scrollbar { display:none; }
 .segmented-scroll button { flex:0 0 auto; scroll-snap-align:start; min-height:42px; }
@@ -669,6 +682,106 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
   .set-row { grid-template-columns: 30px 1fr 88px 42px; gap: 7px; padding: 8px; }
 }
 
+@media (min-width: 900px) {
+  :root[data-layout="desktop"] body {
+    min-height: 100vh;
+  }
+  :root[data-layout="desktop"] #app {
+    width: min(1440px, 100%);
+    max-width: none;
+    min-height: 100vh;
+    display: grid !important;
+    grid-template-columns: 252px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    column-gap: 0;
+    margin: 0 auto;
+    padding-top: 0;
+    padding-bottom: 0;
+    overflow: visible;
+  }
+  :root[data-layout="desktop"] .desktop-sidebar {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 22px 16px;
+    border-right: 1px solid var(--line);
+    background: color-mix(in srgb, var(--bg-2) 90%, transparent);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+  :root[data-layout="desktop"] .desktop-sidebar .brand {
+    padding: 2px 2px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  :root[data-layout="desktop"] .desktop-sidebar .brand-logo {
+    width: 40px;
+    height: 40px;
+  }
+  :root[data-layout="desktop"] .app-header {
+    grid-column: 2;
+    grid-row: 1;
+    padding-inline: 28px;
+  }
+  :root[data-layout="desktop"] .app-header .brand {
+    display: none;
+  }
+  :root[data-layout="desktop"] #app-skeleton,
+  :root[data-layout="desktop"] .view {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  :root[data-layout="desktop"] .view {
+    width: min(1120px, 100%);
+    padding: 24px 28px 32px;
+  }
+  :root[data-layout="desktop"] .view-title {
+    font-size: 26px;
+  }
+  :root[data-layout="desktop"] .view-subtitle {
+    max-width: 62ch;
+  }
+  :root[data-layout="desktop"] .bottom-nav {
+    display: none;
+  }
+  :root[data-layout="desktop"] .sheet-overlay {
+    align-items: center;
+    padding: 24px;
+  }
+  :root[data-layout="desktop"] .sheet {
+    border-radius: 22px;
+    max-width: 620px;
+    border: 1px solid var(--line);
+    animation: fadein .2s ease;
+  }
+  :root[data-layout="desktop"] .sheet-handle {
+    display: none;
+  }
+  :root[data-layout="desktop"] .beta-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  :root[data-layout="desktop"] .finance-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  :root[data-layout="desktop"] .action-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  :root[data-layout="desktop"] .stats-row {
+    max-width: 720px;
+  }
+  :root[data-layout="desktop"] .sheet-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  :root[data-layout="desktop"] .auth-page {
+    max-width: 440px;
+    margin: 0 auto;
+  }
+}
+
 /* History */
 .hist-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; }
@@ -819,6 +932,21 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       <svg id="icon-theme" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     </button>
   </header>
+
+  <aside class="desktop-sidebar" id="desktop-sidebar">
+    <div class="brand">
+      <div class="brand-logo" id="desktop-brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="" onerror="this.style.display='none'"></div>
+      <div class="brand-name">
+        <span id="desktop-brand-name-text">TREINOVA</span>
+        <small id="desktop-header-sub"></small>
+      </div>
+    </div>
+    <nav class="desktop-nav" id="desktop-nav"></nav>
+    <div class="desktop-sidebar-meta">
+      Layout desktop ativo.<br>
+      Os mesmos dados e permissões do app mobile.
+    </div>
+  </aside>
 
   <!-- Skeleton de carregamento — visível até renderCurrentView() ser chamado -->
   <div id="app-skeleton" style="padding:16px;animation:pulse 1.4s ease-in-out infinite">
@@ -1931,9 +2059,13 @@ function applyBranding(b) {
   updateFavicon();
   // Header do app (pós-login): sempre usa o branding corrente do usuário
   const logoEl = document.getElementById('brand-logo');
+  const desktopLogoEl = document.getElementById('desktop-brand-logo');
   const nameEl = document.getElementById('brand-name-text');
+  const desktopNameEl = document.getElementById('desktop-brand-name-text');
   if (logoEl) logoEl.innerHTML = brandLogoHTML();
+  if (desktopLogoEl) desktopLogoEl.innerHTML = brandLogoHTML();
   if (nameEl) nameEl.textContent = STATE.branding.app_name.toUpperCase();
+  if (desktopNameEl) desktopNameEl.textContent = STATE.branding.app_name.toUpperCase();
   // Auth page: NÃO atualiza aqui — a tela de login usa sempre o branding Treinova
   // (applyAuthBranding() é responsável exclusiva pelos elementos auth-brand-*)
 }
@@ -1980,6 +2112,25 @@ function applyTheme(theme) {
 function toggleTheme() {
   applyTheme(STATE.theme === 'light' ? 'dark' : 'light');
 }
+
+function resolveLayoutMode() {
+  let forced = null;
+  try { forced = localStorage.getItem("layout-mode"); } catch(e) {}
+  if (forced === "desktop" || forced === "mobile") return forced;
+  return window.matchMedia?.("(min-width: 900px) and (pointer: fine)")?.matches ? "desktop" : "mobile";
+}
+
+function applyLayoutMode() {
+  document.documentElement.dataset.layout = resolveLayoutMode();
+}
+
+window.setLayoutMode = function(mode) {
+  try {
+    if (mode === "desktop" || mode === "mobile") localStorage.setItem("layout-mode", mode);
+    else localStorage.removeItem("layout-mode");
+  } catch(e) {}
+  applyLayoutMode();
+};
 
 // Branding regras:
 // - Não autenticado: marca Treinova fixa (definida no HTML da auth-page).
@@ -5089,6 +5240,8 @@ function renderBlockedScreen() {
   // Esconder nav para não exibir opções inacessíveis
   const bnBar = document.getElementById("bn-bar");
   if (bnBar) bnBar.style.display = "none";
+  const desktopSidebar = document.getElementById("desktop-sidebar");
+  if (desktopSidebar) desktopSidebar.style.display = "none";
 }
 
 function navTo(view) {
@@ -5120,7 +5273,7 @@ function navTo(view) {
   if (target) target.classList.add("active");
 
   // Destaque no bottom nav: sub-views ficam sem item ativo (ou home ativo)
-  document.querySelectorAll(".bn-item").forEach(b => b.classList.toggle("active", b.dataset.nav === view));
+  document.querySelectorAll(".bn-item, .desktop-nav-item").forEach(b => b.classList.toggle("active", b.dataset.nav === view));
 
   // Nav bar: só oculta quando a barra "deslize para concluir" estiver visível
   // (ou seja, quando o treino foi explicitamente iniciado pelo usuário)
@@ -5163,66 +5316,90 @@ function prepareWorkoutDeepLinkFromRestTimer() {
 }
 
 function updateFeedBadge() {
-  const badge = document.getElementById("feed-nav-badge");
-  if (!badge) return;
   const n = STATE.feedUnread || 0;
-  badge.textContent = n > 0 ? n : "";
-  badge.style.display = n > 0 ? "flex" : "none";
+  document.querySelectorAll(".feed-nav-badge").forEach(badge => {
+    badge.textContent = n > 0 ? n : "";
+    badge.style.display = n > 0 ? "flex" : "none";
+  });
 }
 window.updateFeedBadge = updateFeedBadge;
 
-function renderBottomNav() {
-  const bar = document.getElementById("bn-bar");
+function getAppNavItems() {
   const role = STATE.profile && STATE.profile.role;
   const isAdmin = role === "admin";
   const isCoach = role === "coach";
-  bar.classList.remove("cols-4","cols-5");
-  let items;
   if (isAdmin) {
-    bar.classList.add("cols-5");
-    items = [
+    return [
       { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
       { id: "trainers", label: "Treinadores", svg: `<path d="M2 16h20M6 16V8m12 8V8M4 8l8-4 8 4"/>` },
       { id: "payments", label: "Financeiro", svg: `<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>` },
       { id: "students", label: "Alunos", svg: `<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a7 7 0 0 1 14 0v1"/><circle cx="17" cy="9" r="3"/><path d="M22 21v-1a5 5 0 0 0-5-5"/>` },
       { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
     ];
-  } else if (isCoach) {
-    bar.classList.add("cols-5");
-    items = [
+  }
+  if (isCoach) {
+    return [
       { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
       { id: "workout", label: "Treinar", svg: `<path d="M6.5 6.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/><path d="M17.5 6.5h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-2"/><line x1="6.5" y1="9" x2="6.5" y2="15"/><line x1="17.5" y1="9" x2="17.5" y2="15"/><line x1="6.5" y1="12" x2="17.5" y2="12"/><circle cx="6.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="16.5" r="1.5"/><circle cx="17.5" cy="7.5" r="1.5"/><circle cx="17.5" cy="16.5" r="1.5"/>` },
       { id: "students", label: "Alunos", svg: `<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a7 7 0 0 1 14 0v1"/><circle cx="17" cy="9" r="3"/><path d="M22 21v-1a5 5 0 0 0-5-5"/>` },
       { id: "admin-workouts", label: "Biblioteca", svg: `<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>` },
       { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
     ];
-  } else {
-    bar.classList.add("cols-5");
-    items = [
-      { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
-      { id: "calendar", label: "Agenda", svg: `<rect x="3" y="4.5" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>` },
-      { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/><path d="M17.5 6.5h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-2"/><line x1="6.5" y1="9" x2="6.5" y2="15"/><line x1="17.5" y1="9" x2="17.5" y2="15"/><line x1="6.5" y1="12" x2="17.5" y2="12"/><circle cx="6.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="16.5" r="1.5"/><circle cx="17.5" cy="7.5" r="1.5"/><circle cx="17.5" cy="16.5" r="1.5"/>` },
-      { id: "feed", label: "Feed", svg: `<path d="M4 4h16v4H4zM4 11h16v4H4zM4 18h10v4H4z"/>` },
-      { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
-    ];
   }
+  return [
+    { id: "home", label: "Hoje", svg: `<path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>` },
+    { id: "calendar", label: "Agenda", svg: `<rect x="3" y="4.5" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>` },
+    { id: "workout", label: "Treino", svg: `<path d="M6.5 6.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/><path d="M17.5 6.5h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-2"/><line x1="6.5" y1="9" x2="6.5" y2="15"/><line x1="17.5" y1="9" x2="17.5" y2="15"/><line x1="6.5" y1="12" x2="17.5" y2="12"/><circle cx="6.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="16.5" r="1.5"/><circle cx="17.5" cy="7.5" r="1.5"/><circle cx="17.5" cy="16.5" r="1.5"/>` },
+    { id: "feed", label: "Feed", svg: `<path d="M4 4h16v4H4zM4 11h16v4H4zM4 18h10v4H4z"/>` },
+    { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
+  ];
+}
+
+function navBadgeHTML(itemId, finBadge, feedBadge, desktop = false) {
+  if (itemId === "payments" && finBadge > 0) {
+    return desktop
+      ? `<span class="desktop-nav-badge">${finBadge}</span>`
+      : `<span style="position:absolute;top:2px;right:4px;min-width:16px;height:16px;background:var(--red);color:#fff;font-size:9px;font-weight:900;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 4px;line-height:1">${finBadge}</span>`;
+  }
+  if (itemId === "feed") {
+    if (desktop) {
+      return `<span class="desktop-nav-badge feed-nav-badge" style="${feedBadge > 0 ? "" : "display:none"}">${feedBadge > 0 ? feedBadge : ""}</span>`;
+    }
+    return `<span class="feed-nav-badge" style="${feedBadge > 0 ? "display:flex;" : "display:none;"}position:absolute;top:2px;right:4px;min-width:16px;height:16px;background:var(--red);color:#fff;font-size:9px;font-weight:900;border-radius:999px;align-items:center;justify-content:center;padding:0 4px;line-height:1">${feedBadge > 0 ? feedBadge : ""}</span>`;
+  }
+  return "";
+}
+
+function renderDesktopNav(items, finBadge, feedBadge) {
+  const desktopNav = document.getElementById("desktop-nav");
+  const desktopSidebar = document.getElementById("desktop-sidebar");
+  if (!desktopNav || !desktopSidebar) return;
+  desktopSidebar.style.display = "";
+  desktopNav.innerHTML = items.map(it => `
+    <button class="desktop-nav-item ${STATE.view === it.id ? "active" : ""}" data-nav="${it.id}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${it.svg}</svg>
+      <span>${it.label}</span>
+      ${navBadgeHTML(it.id, finBadge, feedBadge, true)}
+    </button>`).join("");
+  desktopNav.querySelectorAll(".desktop-nav-item").forEach(b => b.addEventListener("click", () => navTo(b.dataset.nav)));
+}
+
+function renderBottomNav() {
+  const bar = document.getElementById("bn-bar");
+  const items = getAppNavItems();
+  bar.classList.remove("cols-4","cols-5");
+  bar.classList.add(items.length === 4 ? "cols-4" : "cols-5");
   const finBadge  = (STATE.coachPayments || []).filter(x => x.is_overdue).length;
   const feedBadge = STATE.feedUnread || 0;
   bar.innerHTML = items.map(it => {
-    const badge = (it.id === 'payments' && finBadge > 0)
-      ? `<span style="position:absolute;top:2px;right:4px;min-width:16px;height:16px;background:var(--red);color:#fff;font-size:9px;font-weight:900;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 4px;line-height:1">${finBadge}</span>`
-      : (it.id === 'feed' && feedBadge > 0)
-      ? `<span id="feed-nav-badge" style="position:absolute;top:2px;right:4px;min-width:16px;height:16px;background:var(--red);color:#fff;font-size:9px;font-weight:900;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 4px;line-height:1">${feedBadge}</span>`
-      : it.id === 'feed'
-      ? `<span id="feed-nav-badge" style="display:none;position:absolute;top:2px;right:4px;min-width:16px;height:16px;background:var(--red);color:#fff;font-size:9px;font-weight:900;border-radius:999px;align-items:center;justify-content:center;padding:0 4px;line-height:1"></span>`
-      : '';
     return `<button class="bn-item ${STATE.view === it.id ? "active" : ""}" data-nav="${it.id}" style="position:relative">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${it.svg}</svg>
-      ${badge}
+      ${navBadgeHTML(it.id, finBadge, feedBadge)}
       ${it.label}
     </button>`;
   }).join("");
   bar.querySelectorAll(".bn-item").forEach(b => b.addEventListener("click", () => navTo(b.dataset.nav)));
+  renderDesktopNav(items, finBadge, feedBadge);
 }
 
 /* =============================================================================
@@ -10799,6 +10976,10 @@ async function boot() {
   const doneBoot = () => { _BOOT_DONE = true; clearTimeout(safetyTimer); };
 
   try {
+    applyLayoutMode();
+    window.addEventListener("resize", applyLayoutMode);
+    window.matchMedia?.("(min-width: 900px) and (pointer: fine)")?.addEventListener?.("change", applyLayoutMode);
+
     let pref = null;
     try { pref = localStorage.getItem('theme-pref'); } catch(e){}
     applyTheme(pref || 'dark');
@@ -10904,8 +11085,10 @@ async function postSignIn() {
   _POST_SIGN_IN_RUNNING = true;
 
   const headerSub = document.getElementById("header-sub");
+  const desktopHeaderSub = document.getElementById("desktop-header-sub");
   showApp();
   headerSub.textContent = "";  // limpo — skeleton cuida do loading visual
+  if (desktopHeaderSub) desktopHeaderSub.textContent = "";
 
   try {
     const profile = await loadProfile();
@@ -10916,6 +11099,7 @@ async function postSignIn() {
     }
     const roleLabel = profile.role === "admin" ? "Admin · " : profile.role === "coach" ? "Professor · " : "Aluno · ";
     headerSub.textContent = roleLabel + (profile.full_name || profile.email);
+    if (desktopHeaderSub) desktopHeaderSub.textContent = roleLabel + (profile.full_name || profile.email);
 
   // === GRUPO 1: loaders independentes — executam em paralelo ===
   // (branding, workouts, library, follows, presets, blocks, periodização, cargas)
