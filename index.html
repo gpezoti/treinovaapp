@@ -6196,6 +6196,7 @@ async function runAdminTrainerAction(action, body) {
         p_status: body.status || "approved",
         p_role: body.role || "coach",
         p_password: body.password || null,
+        p_asaas_wallet_id: body.asaas_wallet_id || null,
       });
 
   if (rpc.error) throw new Error(rpc.error.message || msg);
