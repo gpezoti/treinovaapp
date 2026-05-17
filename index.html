@@ -889,7 +889,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   </div>
   <div style="text-align:center; margin-top:20px; padding:0 4px;">
     <p style="font-size:12px; color:var(--text-3); line-height:1.5; margin:0;">
-      Novo por aqui? Seu professor já criou seu acesso.<br>
+      Novo por aqui? Seu treinador já criou seu acesso.<br>
       Use o e-mail e senha que ele cadastrou para você.
     </p>
   </div>
@@ -1709,7 +1709,7 @@ function getExerciseImageUrl(ex) {
 }
 
 // Retorna HTML de imagem para um exercício.
-// Prioridade: imagem própria do professor → biblioteca com mesmo nome → asset específico por nome → placeholder neutro.
+// Prioridade: imagem própria do treinador → biblioteca com mesmo nome → asset específico por nome → placeholder neutro.
 function getExThumb(ex) {
   const url = getExerciseImageUrl(ex || {});
   const fallback = getMissingExerciseImageUrl(ex || {});
@@ -1871,7 +1871,8 @@ const STATE = {
   theme: "dark",         // dark | light
   timer: { id:null, running:false, paused:false, status:"idle", secondsLeft:0, secondsTotal:0,
            startedAt:null, startTimestamp:null, pausedAt:null, pausedRemaining:null,
-           raf:null, onDone:null, label:"Próxima série", exerciseName:"Próxima série" }
+           raf:null, onDone:null, label:"Próxima série", exerciseName:"Próxima série",
+           focusExercisePosition:null }
 };
 
 let _PULL_TO_REFRESH_BOUND = false;
@@ -2737,8 +2738,8 @@ async function loadFeed() {
     .order("created_at", { ascending: false }).limit(50);
   // Feed social:
   // - Admin: tudo
-  // - Aluno/Professor: próprio + quem segue
-  // - Professor também mantém fallback dos próprios alunos enquanto o auto-follow é sincronizado.
+  // - Aluno/Treinador: próprio + quem segue
+  // - Treinador também mantém fallback dos próprios alunos enquanto o auto-follow é sincronizado.
   if (STATE.profile) {
     if (STATE.profile.role !== "admin") {
       const ids = new Set([STATE.profile.id, ...((STATE.follows && STATE.follows.following) || []).map(f => f.following_id)]);
@@ -3163,13 +3164,14 @@ window.confirmSerieDone = async function(skipTimer) {
   const timerCurIdx = timerExercises.findIndex(e => e.position === exPos);
   const timerNextEx = timerExercises[timerCurIdx + 1];
   const timerLabel = timerNextEx && isLastEx ? timerNextEx.name : nextLabel;
+  const timerFocusPos = timerNextEx && isLastEx ? timerNextEx.position : exPos;
 
   if (!skipTimer) {
     closeSerieModal();  // fecha imediatamente — sem esperar o push de servidor
     await startTimer(pauseSec, timerLabel, () => {
       if (navigator.vibrate) navigator.vibrate([200,100,200]);
       if (isLastEx) setTimeout(autoAdvanceExercise, 600);
-    });
+    }, { focusExercisePosition: timerFocusPos });
   } else {
     closeSerieModal();
     showToast("Timer pulado", null);
@@ -3380,7 +3382,7 @@ window.deleteTodayCompletedWorkout = async function() {
 
 async function approveStudent(id, status) {
   if (STATE.profile?.role !== "coach") {
-    showToast("Apenas professores podem aprovar, recusar ou reativar alunos.", "error");
+    showToast("Apenas treinadores podem aprovar, recusar ou reativar alunos.", "error");
     return false;
   }
   const patch = { status };
@@ -3625,7 +3627,7 @@ function setupRealtime() {
         // Fallback: checar role na lista de feed já carregada
         const postAuthor = STATE.feed && STATE.feed.find(p => p.id === payload.new?.id);
         if ((postAuthor && postAuthor.student?.role === 'coach') || isCoachPost) {
-          showToast('Novo post do professor no Feed', 'info');
+          showToast('Novo post do treinador no Feed', 'info');
         }
       }
     })
@@ -3945,6 +3947,7 @@ function bindAppResumeHandlers() {
    ============================================================================= */
 const RING_CIRC = 2 * Math.PI * 45;
 const REST_TIMER_KEY = "treinova_rest_timer_v2";
+const REST_TIMER_LAST_CONTEXT_KEY = "treinova_rest_timer_last_context_v1";
 let _wakeLock = null;
 let _TIMER_CLEANUP_HANDLE = null;
 let _REST_TIMER_FINISHING = false;
@@ -3975,7 +3978,8 @@ function resetTimerState() {
     raf: null,
     onDone: null,
     label: "Próxima série",
-    exerciseName: "Próxima série"
+    exerciseName: "Próxima série",
+    focusExercisePosition: null
   };
 }
 function clearPersistedTimer() {
@@ -3985,6 +3989,30 @@ function clearPersistedTimer() {
     localStorage.removeItem("timer_duration");
     localStorage.removeItem("timer_label");
   } catch(e) {}
+}
+function rememberLastFinishedRestTimerContext(state) {
+  try {
+    if (!state || typeof state !== "object") return;
+    localStorage.setItem(REST_TIMER_LAST_CONTEXT_KEY, JSON.stringify({
+      ...state,
+      finishedAt: new Date().toISOString()
+    }));
+  } catch(e) {}
+}
+function readLastFinishedRestTimerContext() {
+  try {
+    const raw = localStorage.getItem(REST_TIMER_LAST_CONTEXT_KEY);
+    if (!raw) return null;
+    const state = JSON.parse(raw);
+    const finishedAt = new Date(state.finishedAt || 0).getTime();
+    if (!finishedAt || Date.now() - finishedAt > 6 * 60 * 60 * 1000) {
+      localStorage.removeItem(REST_TIMER_LAST_CONTEXT_KEY);
+      return null;
+    }
+    return state;
+  } catch(e) {
+    return null;
+  }
 }
 function readPersistedTimer() {
   try {
@@ -4001,6 +4029,8 @@ function readPersistedTimer() {
         duration,
         exerciseName: String(state.exerciseName || state.label || "Próxima série"),
         label: String(state.label || state.exerciseName || "Próxima série"),
+        sessionId: state.sessionId ? String(state.sessionId) : null,
+        focusExercisePosition: Number.isFinite(Number(state.focusExercisePosition)) ? Number(state.focusExercisePosition) : null,
         status: state.status === "paused" ? "paused" : "running",
         pausedAt: state.pausedAt ? Number(state.pausedAt) : null,
         pausedRemaining: Number.isFinite(Number(state.pausedRemaining)) ? Number(state.pausedRemaining) : null,
@@ -4042,6 +4072,10 @@ function persistTimerState(extra = {}) {
       selectedDate: STATE.selectedDate || todayISO(),
       selectedWorkout: STATE.selectedWorkout || null,
       selectedIntensity: STATE.selectedIntensity || null,
+      sessionId: STATE.currentSession?.id || null,
+      focusExercisePosition: Number.isFinite(Number(STATE.timer.focusExercisePosition))
+        ? Number(STATE.timer.focusExercisePosition)
+        : null,
       notified: false,
       ...extra
     };
@@ -4076,6 +4110,9 @@ function hydrateTimerFromPersisted(state, onDone) {
   STATE.timer.pausedRemaining = state.pausedRemaining || null;
   STATE.timer.label = state.label || "Próxima série";
   STATE.timer.exerciseName = state.exerciseName || STATE.timer.label;
+  STATE.timer.focusExercisePosition = Number.isFinite(Number(state.focusExercisePosition))
+    ? Number(state.focusExercisePosition)
+    : null;
   STATE.timer.onDone = onDone || STATE.timer.onDone || null;
   if (state.selectedDate) STATE.selectedDate = state.selectedDate;
   if (state.selectedWorkout) STATE.selectedWorkout = state.selectedWorkout;
@@ -4321,6 +4358,7 @@ function reconcileTimerAfterLifecycle(reason = "resume") {
       _releaseWakeLock();
       cancelBackgroundRestNotification();
       markPersistedTimerNotified(saved);
+      rememberLastFinishedRestTimerContext(saved);
       notifyRestFinished(saved.exerciseName || saved.label).catch(()=>{});
       clearPersistedTimer();
       document.getElementById("timer-bar")?.classList.add("active","done");
@@ -4370,7 +4408,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-async function startTimer(sec, label, onDone) {
+async function startTimer(sec, label, onDone, options = {}) {
   cancelTimer();
   _acquireWakeLock();
   const exerciseName = label || "Próxima série";
@@ -4388,6 +4426,9 @@ async function startTimer(sec, label, onDone) {
   STATE.timer.label = label || "Próxima série";
   STATE.timer.exerciseName = exerciseName;
   STATE.timer.onDone = onDone || null;
+  STATE.timer.focusExercisePosition = Number.isFinite(Number(options.focusExercisePosition))
+    ? Number(options.focusExercisePosition)
+    : null;
   persistTimerState();
   document.getElementById("timer-bar").classList.add("active");
   document.getElementById("timer-fs")?.classList.remove("done");
@@ -4639,7 +4680,7 @@ let _sheetInHistory = false;
 let _studentSelected = new Set();   // ids selecionados em bulk
 let _studentSearch = "";            // busca de alunos
 let _studentTab = "all";            // aba ativa: all | active | inactive | overdue
-let _coachFinanceTab = "mine";      // aba ativa no financeiro do professor: mine | receivables
+let _coachFinanceTab = "mine";      // aba ativa no financeiro do treinador: mine | receivables
 let _trainerSelected = new Set();
 let _periodScrollTop = 0;           // preservar scroll da sheet de periodização
 let _editingStudentId = null;       // aluno sendo editado na periodização
@@ -4830,7 +4871,7 @@ async function mergeAdminPaymentProfiles(rows) {
     .eq("role", "coach")
     .order("full_name");
   if (error) {
-    console.warn("[payments] fallback professores", error);
+    console.warn("[payments] fallback treinadores", error);
     return rows;
   }
   (data || []).forEach(p => {
@@ -4872,7 +4913,7 @@ async function loadAdminProfessorPayments(coachId) {
     .eq("user_id", coachId)
     .order("due_date", { ascending: false });
   if (error) {
-    console.error("[payments] Falha ao carregar pagamentos do professor", error);
+    console.error("[payments] Falha ao carregar pagamentos do treinador", error);
     throw error;
   }
   return data || [];
@@ -4908,7 +4949,7 @@ function renderCoachFinanceTabs() {
     { id: "mine", label: "Minha mensalidade", sub: ownOpen ? `${ownOpen} em aberto` : "Tudo em dia" },
     { id: "receivables", label: "Recebimentos", sub: receivablesOpen ? `${receivablesOpen} aluno(s)` : "Alunos" }
   ];
-  return `<div class="coach-finance-tabs" role="tablist" aria-label="Financeiro do professor">
+  return `<div class="coach-finance-tabs" role="tablist" aria-label="Financeiro do treinador">
     ${tabs.map(t => `<button type="button" role="tab" aria-selected="${_coachFinanceTab === t.id ? 'true' : 'false'}" class="coach-finance-tab ${_coachFinanceTab === t.id ? 'active' : ''}" onclick="setCoachFinanceTab('${t.id}')">
       <span class="coach-finance-tab-label">${t.label}</span>
       <span class="coach-finance-tab-sub">${t.sub}</span>
@@ -5241,7 +5282,7 @@ function renderBlockedScreen() {
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:32px 20px">
         <div style="margin-bottom:16px"><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
         <h2 style="font-size:20px;font-weight:800;margin-bottom:8px">Acesso suspenso</h2>
-        <p style="color:var(--text-2);max-width:280px;line-height:1.5">Sua conta foi temporariamente bloqueada pelo professor.<br>Entre em contato para regularizar seu acesso.</p>
+        <p style="color:var(--text-2);max-width:280px;line-height:1.5">Sua conta foi temporariamente bloqueada pelo treinador.<br>Entre em contato para regularizar seu acesso.</p>
         <button class="btn-ghost" style="margin-top:24px" onclick="signOut()">Sair da conta</button>
       </div>`;
   }
@@ -5307,18 +5348,38 @@ window.navTo = navTo;
 
 function prepareWorkoutDeepLinkFromRestTimer() {
   try {
-    const saved = typeof readPersistedTimer === "function" ? readPersistedTimer() : null;
+    const saved = typeof readPersistedTimer === "function"
+      ? (readPersistedTimer() || readLastFinishedRestTimerContext())
+      : null;
     if (saved) {
       hydrateTimerFromPersisted(saved);
       if (saved.selectedDate) STATE.selectedDate = saved.selectedDate;
       if (saved.selectedWorkout) STATE.selectedWorkout = saved.selectedWorkout;
       if (saved.selectedIntensity) STATE.selectedIntensity = saved.selectedIntensity;
+      STATE._resumeWorkoutFromRestTimer = {
+        sessionId: saved.sessionId || null,
+        date: saved.selectedDate || STATE.selectedDate || todayISO(),
+        workoutCode: saved.selectedWorkout || STATE.selectedWorkout || null,
+        intensity: saved.selectedIntensity || STATE.selectedIntensity || "yellow",
+        focusExercisePosition: Number.isFinite(Number(saved.focusExercisePosition))
+          ? Number(saved.focusExercisePosition)
+          : null,
+      };
       return true;
     }
     if (STATE.currentSession && STATE.currentSession.workout_code) {
       STATE.selectedDate = STATE.currentSession.date || STATE.selectedDate || todayISO();
       STATE.selectedWorkout = STATE.currentSession.workout_code;
       STATE.selectedIntensity = STATE.currentSession.intensity || STATE.selectedIntensity || "yellow";
+      STATE._resumeWorkoutFromRestTimer = {
+        sessionId: STATE.currentSession.id || null,
+        date: STATE.selectedDate,
+        workoutCode: STATE.selectedWorkout,
+        intensity: STATE.selectedIntensity,
+        focusExercisePosition: Number.isFinite(Number(STATE.timer?.focusExercisePosition))
+          ? Number(STATE.timer.focusExercisePosition)
+          : null,
+      };
       return true;
     }
   } catch(e) {
@@ -5429,14 +5490,14 @@ function renderHome() {
       <div class="greeting-card">
         <div class="greeting-eyebrow">Aguardando aprovação</div>
         <div class="greeting-title">Quase lá, ${escape(firstName(STATE.profile.full_name))}!</div>
-        <div class="greeting-sub">Seu cadastro foi enviado ao professor. Você receberá acesso assim que for aprovado.</div>
+        <div class="greeting-sub">Seu cadastro foi enviado ao treinador. Você receberá acesso assim que for aprovado.</div>
       </div>
       <div class="empty">
         <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="32" r="22"/><path d="M32 22v12l8 4"/></svg>
         <h3>Conta em análise</h3>
-        <p>Seu professor está revisando seu acesso. Assim que aprovar, seus treinos aparecem aqui.</p>
+        <p>Seu treinador está revisando seu acesso. Assim que aprovar, seus treinos aparecem aqui.</p>
         <div class="empty-actions">
-          ${STATE.profile.coach_id ? `<button class="btn-ghost" style="width:auto" onclick="openChatThread('${STATE.profile.coach_id}')">Falar com professor</button>` : ""}
+          ${STATE.profile.coach_id ? `<button class="btn-ghost" style="width:auto" onclick="openChatThread('${STATE.profile.coach_id}')">Falar com treinador</button>` : ""}
         </div>
       </div>`;
     return;
@@ -5446,9 +5507,9 @@ function renderHome() {
     el.innerHTML = `<div class="empty">
       <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="32" r="22"/><path d="M22 32h20"/></svg>
       <h3>Acesso pausado</h3>
-      <p>Sua conta foi temporariamente pausada. Fale com seu professor para regularizar.</p>
+      <p>Sua conta foi temporariamente pausada. Fale com seu treinador para regularizar.</p>
       <div class="empty-actions">
-        ${coachId ? `<button class="btn-primary" style="width:auto" onclick="openChatThread('${coachId}')">Falar com professor</button>` : ""}
+        ${coachId ? `<button class="btn-primary" style="width:auto" onclick="openChatThread('${coachId}')">Falar com treinador</button>` : ""}
         <button class="btn-ghost" style="width:auto" onclick="navTo('payments')">Ver mensalidades</button>
       </div>
     </div>`;
@@ -5466,9 +5527,9 @@ function renderHome() {
       <div class="today-card intensity-off">
         <div class="today-eyebrow">Hoje · ${fmtFullDateBR(today)}</div>
         <div class="today-title">Sem treino programado</div>
-        <div class="today-meta">Seu próximo passo é receber uma periodização do professor.</div>
+        <div class="today-meta">Seu próximo passo é receber uma periodização do treinador.</div>
         <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-          ${STATE.profile.coach_id ? `<button class="btn-primary" style="width:auto" onclick="openChatThread('${STATE.profile.coach_id}')">Falar com professor</button>` : ""}
+          ${STATE.profile.coach_id ? `<button class="btn-primary" style="width:auto" onclick="openChatThread('${STATE.profile.coach_id}')">Falar com treinador</button>` : ""}
           <button class="btn-ghost" style="width:auto" onclick="navTo('calendar')">Ver calendário</button>
         </div>
       </div>`;
@@ -5627,7 +5688,7 @@ window.onDayClick = function(iso) {
         ▶ Fazer este treino agora
       </button>
       <button class="btn-ghost" onclick="closeSheet();navTo('chat')" style="margin-bottom:8px">
-        💬 Avisar o professor
+        💬 Avisar o treinador
       </button>
       <button class="btn-ghost" onclick="closeSheet()">Fechar</button>
     `);
@@ -5658,7 +5719,7 @@ function renderSelfTrainingCard({ emptyCta = true } = {}) {
       <div class="today-card intensity-flex">
         <div class="today-eyebrow">Meu treino</div>
         <div class="today-title">Monte seu próprio ciclo</div>
-        <div class="today-meta">Professor também treina: crie sua periodização e use o app como aluno.</div>
+        <div class="today-meta">Treinador também treina: crie sua periodização e use o app como aluno.</div>
         <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <button class="btn-primary" onclick="openStudentPeriodSheet('${STATE.profile.id}')">Configurar ciclo</button>
           <button class="btn-ghost" onclick="navTo('admin-workouts')">Meus treinos</button>
@@ -6083,7 +6144,7 @@ window.removeTrainer = async function(id, email) {
 window.openNewTrainerSheet = function() {
   openSheet(`
     <h3>Novo treinador</h3>
-    <p>O usuário receberá uma conta com role <b>coach</b>. Ele vai entrar com o email e senha que você definir.</p>
+    <p>O usuário receberá uma conta de <b>treinador</b>. Ele vai entrar com o email e senha que você definir.</p>
     <div class="form-group"><label class="form-label">Nome completo</label><input class="input" id="nt-name" placeholder="Nome" /></div>
     <div class="form-group"><label class="form-label">Email</label><input class="input" id="nt-email" type="email" placeholder="email@exemplo.com" /></div>
     <div class="form-group"><label class="form-label">Senha temporária</label><input class="input" id="nt-pass" type="text" placeholder="Mínimo 8 caracteres" /></div>
@@ -6212,10 +6273,10 @@ async function renderPayments() {
   const taxaPagamento = items.length > 0
     ? Math.round(((items.length - overdueCount) / items.length) * 100) : 100;
 
-  const title = isAdmin ? "Financeiro · Professores" : isCoach ? "Financeiro" : "Financeiro · Alunos";
+  const title = isAdmin ? "Financeiro · Treinadores" : isCoach ? "Financeiro" : "Financeiro · Alunos";
   const idKey = isAdmin ? "coach_id" : "student_id";
   const subtitle = isAdmin
-    ? `${items.length} professor(es) · ${overdueCount} em atraso`
+    ? `${items.length} treinador(es) · ${overdueCount} em atraso`
     : isCoach && _coachFinanceTab === "mine"
       ? "Acompanhe sua mensalidade, vencimentos e histórico."
       : `${items.length} aluno(s) · ${overdueCount} em atraso`;
@@ -6261,7 +6322,7 @@ async function renderPayments() {
       <div class="card card-lg" style="border-color:var(--green);background:linear-gradient(135deg,var(--green-soft,#e8f8f0),var(--bg-card))">
         <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--green);font-weight:700;margin-bottom:6px"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Este mês</div>
         <div style="font-size:22px;font-weight:900;color:var(--text)">${fmtMoney(totalReceita)}</div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:3px">${items.filter(x=>!x.is_overdue&&x.paid_count>0).length} ${isAdmin ? 'professores' : 'alunos'} em dia</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:3px">${items.filter(x=>!x.is_overdue&&x.paid_count>0).length} ${isAdmin ? 'treinadores' : 'alunos'} em dia</div>
       </div>
       <div class="card card-lg" style="border-color:${overdueCount>0?'var(--red)':'var(--line)'};background:${overdueCount>0?'linear-gradient(135deg,var(--red-soft,#fde8e8),var(--bg-card))':'var(--bg-card)'};cursor:${overdueCount>0?'pointer':'default'}"
            onclick="${overdueCount>0?"document.getElementById('overdue-section')&&document.getElementById('overdue-section').scrollIntoView({behavior:'smooth'})":''}" >
@@ -6272,7 +6333,7 @@ async function renderPayments() {
       <div class="card card-lg">
         <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:700;margin-bottom:6px"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Em aberto</div>
         <div style="font-size:22px;font-weight:900;color:var(--orange,#e67e22)">${fmtMoney(totalEmAberto)}</div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:3px">${items.filter(x=>x.open_count>0).length} ${isAdmin ? 'professores' : 'alunos'} pendentes</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:3px">${items.filter(x=>x.open_count>0).length} ${isAdmin ? 'treinadores' : 'alunos'} pendentes</div>
       </div>
       <div class="card card-lg">
         <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:700;margin-bottom:6px"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Taxa pgto</div>
@@ -6417,7 +6478,7 @@ async function renderStudentFinance(el) {
       </div>
 
       <div class="section-title">Pendentes e vencimentos</div>
-      ${pending.length === 0 ? `<div class="shortcut-empty"><div class="title">Nenhuma pendência</div><div class="sub">Quando seu professor criar uma mensalidade, ela aparecerá aqui.</div></div>` : `<div class="finance-list">${pending.map(studentFinanceItem).join("")}</div>`}
+      ${pending.length === 0 ? `<div class="shortcut-empty"><div class="title">Nenhuma pendência</div><div class="sub">Quando seu treinador criar uma mensalidade, ela aparecerá aqui.</div></div>` : `<div class="finance-list">${pending.map(studentFinanceItem).join("")}</div>`}
 
       <div class="section-title">Histórico de pagamentos</div>
       ${history.length === 0 ? `<div class="shortcut-empty"><div class="title">Sem histórico ainda</div><div class="sub">Pagamentos confirmados aparecerão nesta lista.</div></div>` : `<div class="finance-list">${history.map(studentFinanceItem).join("")}</div>`}
@@ -6547,7 +6608,7 @@ function renderPaymentSheetList(filter) {
   const html = `
     <h3>Pagamentos · ${escape(name)}</h3>
     <button class="btn-primary" onclick="openNewPaymentSheet('${safeId}','${safeName}')" style="margin-bottom:12px">+ Novo lançamento</button>
-    ${STATE.profile?.role === "admin" ? `<p style="font-size:12px;color:var(--text-3);margin-top:-6px">Lançamentos do professor selecionado. Alunos continuam isolados por professor.</p>` : ""}
+    ${STATE.profile?.role === "admin" ? `<p style="font-size:12px;color:var(--text-3);margin-top:-6px">Lançamentos do treinador selecionado. Alunos continuam isolados por treinador.</p>` : ""}
     ${tabsHTML}
     <div id="payment-sheet-list">
       ${filtered.length === 0
@@ -6587,7 +6648,7 @@ window.openMyPaymentsSheet = async function() {
   const open = list.filter(p => p.status !== 'paid' && p.status !== 'cancelled');
   const html = `
     <h3>Minhas mensalidades</h3>
-    <p>Quite os lançamentos abaixo e fale com seu professor para confirmar o pagamento.</p>
+    <p>Quite os lançamentos abaixo e fale com seu treinador para confirmar o pagamento.</p>
     <div class="section-title">Em aberto (${open.length})</div>
     ${open.length === 0 ? `<div class="empty"><p>Nenhuma pendência</p></div>` : open.map(studentPaymentItem).join("")}
     <div style="margin-top:14px"><button class="btn-ghost" onclick="closeSheet()">Fechar</button></div>
@@ -6845,7 +6906,7 @@ function renderCalendar() {
   const today = todayISO();
   const weeks = groupWeeks();
   if (!weeks.length) {
-    el.innerHTML = `<div class="empty"><h3>Sem periodização</h3><p>Peça ao seu professor para criar.</p></div>`;
+    el.innerHTML = `<div class="empty"><h3>Sem periodização</h3><p>Peça ao seu treinador para criar.</p></div>`;
     return;
   }
 
@@ -7008,10 +7069,10 @@ async function renderWorkout() {
       <div class="empty">
         <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="32" cy="32" r="22"/><path d="M22 32h20"/></svg>
         <h3>Treino bloqueado</h3>
-        <p>Sua mensalidade está em atraso. Acesse suas cobranças ou fale com seu professor para regularizar.</p>
+        <p>Sua mensalidade está em atraso. Acesse suas cobranças ou fale com seu treinador para regularizar.</p>
         <div class="empty-actions">
           <button class="btn-primary" style="width:auto" onclick="navTo('payments')">Ver mensalidades</button>
-          ${STATE.profile.coach_id ? `<button class="btn-ghost" style="width:auto" onclick="openChatThread('${STATE.profile.coach_id}')">Falar com professor</button>` : ""}
+          ${STATE.profile.coach_id ? `<button class="btn-ghost" style="width:auto" onclick="openChatThread('${STATE.profile.coach_id}')">Falar com treinador</button>` : ""}
         </div>
       </div>`;
     return;
@@ -7050,9 +7111,14 @@ async function renderWorkout() {
     return;
   }
   if (!W.exercises || W.exercises.length === 0) {
-    el.innerHTML = `<div class="empty"><h3>Treino sem exercícios</h3><p>O treino existe, mas ainda não tem exercícios cadastrados.</p><div class="empty-actions">${STATE.profile.coach_id ? `<button class="btn-primary" style="width:auto" onclick="openChatThread('${STATE.profile.coach_id}')">Avisar professor</button>` : ""}<button class="btn-ghost" style="width:auto" onclick="navTo('home')">Voltar</button></div></div>`;
+    el.innerHTML = `<div class="empty"><h3>Treino sem exercícios</h3><p>O treino existe, mas ainda não tem exercícios cadastrados.</p><div class="empty-actions">${STATE.profile.coach_id ? `<button class="btn-primary" style="width:auto" onclick="openChatThread('${STATE.profile.coach_id}')">Avisar treinador</button>` : ""}<button class="btn-ghost" style="width:auto" onclick="navTo('home')">Voltar</button></div></div>`;
     return;
   }
+
+  const restResume = STATE._resumeWorkoutFromRestTimer;
+  const shouldResumeRestWorkout = restResume
+    && (!restResume.workoutCode || restResume.workoutCode === code)
+    && (!restResume.date || restResume.date === date);
 
   // Se sessão salva é de outro treino/data, descartar
   if (STATE.currentSession && (STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code)) {
@@ -7063,6 +7129,13 @@ async function renderWorkout() {
   if (STATE.currentSession && (!STATE.setLogs || STATE.setLogs.length === 0)) {
     el.innerHTML = `<div class="loading"><div class="spinner"></div>Carregando treino...</div>`;
     await loadSetLogs();
+  }
+  if (shouldResumeRestWorkout && !STATE.currentSession) {
+    el.innerHTML = `<div class="loading"><div class="spinner"></div>Retomando treino...</div>`;
+    await loadOrCreateSession(date, code, restResume.intensity || intensity);
+  }
+  if (shouldResumeRestWorkout && Number.isFinite(Number(restResume.focusExercisePosition))) {
+    STATE.expandedEx = Number(restResume.focusExercisePosition);
   }
   const session = STATE.currentSession;
   const completed = session && session.status === "completed";
@@ -7151,6 +7224,16 @@ async function renderWorkout() {
   `;
 
   renderExerciseList(W, intensity, completed);
+  if (shouldResumeRestWorkout) {
+    const focusPos = Number(restResume.focusExercisePosition);
+    setTimeout(() => {
+      const card = Number.isFinite(focusPos)
+        ? document.querySelector(`.exercise-card[data-pos="${focusPos}"]`)
+        : document.querySelector(".exercise-card.expanded");
+      if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 90);
+    STATE._resumeWorkoutFromRestTimer = null;
+  }
 
   // Barra fixa inferior: só aparece quando sessão estiver ativa (iniciada pelo usuário)
   document.getElementById("workout-fixed-bar")?.remove();
@@ -7519,7 +7602,7 @@ function renderFeed() {
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
         <div>
           <div style="font-size:13px;font-weight:800;color:var(--text)">Encontrar pessoas</div>
-          <div style="font-size:11px;color:var(--text-3)">Busque qualquer aluno, professor ou admin cadastrado.</div>
+          <div style="font-size:11px;color:var(--text-3)">Busque qualquer aluno, treinador ou admin cadastrado.</div>
         </div>
         <button class="mini-btn mini-btn-ghost" style="flex:0 0 auto;min-width:70px;white-space:nowrap" onclick="openPeopleSearch()">Abrir</button>
       </div>
@@ -7528,7 +7611,7 @@ function renderFeed() {
     </div>
 
     ${pinned.length ? `
-      <div class="section-title" style="color:var(--orange,#e67e22)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Avisos do professor</div>
+      <div class="section-title" style="color:var(--orange,#e67e22)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Avisos do treinador</div>
       ${pinned.map(p => feedPostHTML(p, false)).join("")}` : ""}
 
     ${todayPosts.length ? `
@@ -7829,7 +7912,7 @@ async function renderProfile() {
           <div class="greeting-title" style="font-size:18px;">${escape(p.full_name || "—")}</div>
           <div class="greeting-sub">${escape(p.email)}</div>
           <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
-            <span class="today-pill ${isAdmin ? 'pill-red' : isCoach ? 'pill-flex' : 'pill-yellow'}">${isAdmin ? "Admin Master" : isCoach ? "Professor" : "Aluno"}</span>
+            <span class="today-pill ${isAdmin ? 'pill-red' : isCoach ? 'pill-flex' : 'pill-yellow'}">${isAdmin ? "Admin Master" : isCoach ? "Treinador" : "Aluno"}</span>
             <span class="today-pill pill-${p.status === 'approved' ? 'approved' : p.status === 'pending' ? 'pending' : 'blocked'}">
               ${p.status === 'approved' ? 'Ativo' : p.status === 'pending' ? 'Pendente' : 'Bloqueado'}
             </span>
@@ -7845,7 +7928,7 @@ async function renderProfile() {
       <div class="form-group">
         <label class="form-label">Foto do perfil</label>
         <div class="row-flex" style="gap:8px;">
-          <button class="btn-ghost" style="flex:1; width:auto;" onclick="onAvatarUpload()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Subir da galeria</button>
+          <button class="btn-ghost" style="flex:1; width:auto;" onclick="onAvatarUpload()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Alterar foto</button>
           ${p.avatar_url ? `<button class="mini-btn mini-btn-danger" onclick="clearAvatar()" style="flex:0 0 auto;">Remover</button>` : ''}
         </div>
         <p class="text-xs muted" style="margin-top:6px;">Recomendado: imagem quadrada. A foto é redimensionada para 512px e comprimida em JPEG antes do upload.</p>
@@ -8077,7 +8160,7 @@ window.onFeedPeopleSearch = function(q) {
 
 function peopleRow(p, context = "sheet") {
   const following = isFollowing(p.id);
-  const roleLabel = p.role === "coach" ? "Professor" : p.role === "admin" ? "Admin" : "Aluno";
+  const roleLabel = p.role === "coach" ? "Treinador" : p.role === "admin" ? "Admin" : "Aluno";
   const sub = [roleLabel, p.email].filter(Boolean).join(" · ");
   const rowStyle = context === "feed" ? ' style="padding:9px;border:1px solid var(--line);border-radius:12px;background:var(--bg-2,var(--bg-card))"' : "";
   return `<div class="list-row"${rowStyle}>
@@ -8137,7 +8220,7 @@ function renderBrandingPanel() {
           <div id="br-logo-preview" style="width:48px; height:48px; border-radius:10px; background:linear-gradient(135deg,var(--bg-3),var(--bg-2)); border:1px solid var(--line); display:grid; place-items:center; overflow:hidden; flex:0 0 48px;">
             ${b.logo_url ? `<img src="${escape(b.logo_url)}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:20px">${escape(b.logo_emoji || '💪')}</span>`}
           </div>
-          <button class="btn-ghost" style="flex:1; width:auto;" onclick="onLogoUpload()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Subir da galeria</button>
+          <button class="btn-ghost" style="flex:1; width:auto;" onclick="onLogoUpload()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Alterar foto</button>
           ${b.logo_url ? `<button class="mini-btn mini-btn-danger" onclick="clearBrandLogo()" style="flex:0 0 auto;">Remover</button>` : ''}
         </div>
         <input class="input" id="br-url" value="${escape(b.logo_url || '')}" placeholder="ou cole uma URL: https://..." style="font-size:11px;" />
@@ -8271,7 +8354,7 @@ window.onAvatarUpload = function() {
       previewUrl = URL.createObjectURL(file);
       if (avatarEl) avatarEl.innerHTML = `<img src="${previewUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;opacity:.72" />`;
     } catch (e) {
-      if (btn) { btn.disabled = false; btn.textContent = btn.dataset.oldText || "Subir da galeria"; }
+      if (btn) { btn.disabled = false; btn.textContent = btn.dataset.oldText || "Alterar foto"; }
       showToast("Erro: " + e.message, "error");
       return;
     }
@@ -8295,7 +8378,7 @@ window.onAvatarUpload = function() {
       renderProfile();
     } finally {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
-      if (btn) { btn.disabled = false; btn.textContent = btn.dataset.oldText || "Subir da galeria"; }
+      if (btn) { btn.disabled = false; btn.textContent = btn.dataset.oldText || "Alterar foto"; }
     }
   });
 };
@@ -8529,7 +8612,7 @@ window.clearStudentSelection = function() { _studentSelected.clear(); renderStud
 
 window.bulkBlockStudents = async function() {
   if (STATE.profile?.role !== "coach") {
-    showToast("Apenas professores podem bloquear alunos.", "error");
+    showToast("Apenas treinadores podem bloquear alunos.", "error");
     return;
   }
   if (!_studentSelected.size) return;
@@ -8604,7 +8687,7 @@ window.sendBulkMessage = async function(ids) {
 
 window.openNewStudentSheet = function() {
   if (STATE.profile?.role !== "coach") {
-    showToast("Apenas professores podem criar alunos.", "error");
+    showToast("Apenas treinadores podem criar alunos.", "error");
     return;
   }
   openSheet(`
@@ -8675,7 +8758,7 @@ function createTempClient() {
 
 window.submitNewStudent = async function() {
   if (STATE.profile?.role !== "coach") {
-    showToast("Apenas professores podem criar alunos.", "error");
+    showToast("Apenas treinadores podem criar alunos.", "error");
     return;
   }
   const btn = document.querySelector('#sheet-content .btn-primary');
@@ -8808,7 +8891,7 @@ window.deleteStudent = async function(id, email) {
 let _PRESETS = [];
 async function loadPresets() {
   // pega presets do coach responsável e fallback nos globais.
-  // Aluno também precisa carregar overrides do professor para o treino obedecer a periodização vinculada.
+  // Aluno também precisa carregar overrides do treinador para o treino obedecer a periodização vinculada.
   const coachId = STATE.profile && (
     STATE.profile.role === "coach" ? STATE.profile.id :
     STATE.profile.role === "student" ? STATE.profile.coach_id :
@@ -9053,7 +9136,7 @@ window.removePeriodWeek = async function(studentId) {
 
 function canManagePeriodWeeks() {
   if (STATE.profile?.role !== "coach") {
-    showToast("Apenas professor pode organizar a periodização.", "error");
+    showToast("Apenas treinador pode organizar a periodização.", "error");
     return false;
   }
   if (STATE._periodWeekAction) return false;
@@ -9721,13 +9804,13 @@ window.openSetCoachSheet = async function(studentId, studentName) {
     .eq("role", "coach").eq("status", "approved")
     .order("full_name");
   const html = `
-    <h3>Vincular professor</h3>
+    <h3>Vincular treinador</h3>
     <p>${escape(studentName)} será atendido(a) por:</p>
     <div style="max-height:50vh; overflow-y:auto; margin-bottom:14px;">
       <div class="list-row" onclick="onPickCoach('${studentId}', null, '${escape(studentName).replace(/'/g, "&#39;")}')" style="cursor:pointer">
         <div class="lr-avatar">—</div>
         <div class="lr-info">
-          <div class="lr-name">Sem professor</div>
+          <div class="lr-name">Sem treinador</div>
           <div class="lr-sub">Aluno fica desvinculado</div>
         </div>
       </div>
@@ -9749,7 +9832,7 @@ window.openSetCoachSheet = async function(studentId, studentName) {
 window.onPickCoach = async function(studentId, coachId, studentName) {
   const ok = await setStudentCoach(studentId, coachId);
   if (!ok) return;
-  showToast(coachId ? "Professor vinculado" : "Aluno desvinculado", "success");
+  showToast(coachId ? "Treinador vinculado" : "Aluno desvinculado", "success");
   await loadStudents();
   onStudentDetail(studentId);
 };
@@ -9781,12 +9864,12 @@ window.onStudentDetail = async function(id) {
     <span class="today-pill pill-${prof.status === 'approved' ? 'approved' : prof.status === 'pending' ? 'pending' : 'blocked'}">${prof.status}</span>
 
     ${isAdmin ? `
-      <div class="section-title">Professor responsável</div>
+      <div class="section-title">Treinador responsável</div>
       <div class="card">
         <div class="row-flex">
           <div style="flex:1; min-width:0;">
             <div class="fw-700 text-sm">${escape(coachName)}</div>
-            ${!prof.coach_id ? `<div class="text-xs muted">Sem professor vinculado</div>` : ''}
+            ${!prof.coach_id ? `<div class="text-xs muted">Sem treinador vinculado</div>` : ''}
           </div>
           <button class="mini-btn mini-btn-primary" onclick="openSetCoachSheet('${id}','${escape(prof.full_name || prof.email).replace(/'/g, "&#39;")}')">Mudar</button>
         </div>
@@ -9975,7 +10058,7 @@ function renderAdminWorkouts() {
       ${actionButton}
     </div>
     <p class="view-subtitle">Configure modelos, periodização e biblioteca de exercícios usados nos alunos.</p>
-    <div class="coach-finance-tabs coach-finance-tabs-3" role="tablist" aria-label="Treinos do professor">
+    <div class="coach-finance-tabs coach-finance-tabs-3" role="tablist" aria-label="Treinos do treinador">
       <button type="button" role="tab" aria-selected="${tab === "workouts" ? "true" : "false"}" class="coach-finance-tab ${tab === "workouts" ? "active" : ""}" onclick="setAdminWorkoutTab('workouts')">
         <span class="coach-finance-tab-label">Treinos</span>
         <span class="coach-finance-tab-sub">${workouts.length} modelo${workouts.length === 1 ? "" : "s"}</span>
@@ -10321,7 +10404,7 @@ window.deleteWorkoutType = async function(workoutId, code, name) {
     const ok = await showConfirm({
       title: willHide ? `Remover ${name || code} da sua lista?` : `Excluir ${name || code}?`,
       msg: willHide
-        ? "Este treino é global ou de outro professor — vamos esconder ele apenas da sua lista. Outros professores e o admin continuam vendo."
+        ? "Este treino é global ou de outro treinador — vamos esconder ele apenas da sua lista. Outros treinadores e o admin continuam vendo."
         : "O tipo de treino e seus exercícios serão removidos. Sessões já concluídas dos alunos continuam no histórico.",
       confirm: willHide ? "Remover" : "Excluir",
       cancel: "Cancelar",
@@ -11109,7 +11192,7 @@ async function postSignIn() {
       await sb.auth.signOut();
       return;
     }
-    const roleLabel = profile.role === "admin" ? "Admin · " : profile.role === "coach" ? "Professor · " : "Aluno · ";
+    const roleLabel = profile.role === "admin" ? "Admin · " : profile.role === "coach" ? "Treinador · " : "Aluno · ";
     headerSub.textContent = roleLabel + (profile.full_name || profile.email);
     if (desktopHeaderSub) desktopHeaderSub.textContent = roleLabel + (profile.full_name || profile.email);
 
@@ -11755,7 +11838,7 @@ function showOnboarding() {
   if (document.getElementById("onb-overlay")) return;
   const profile = STATE.profile;
   const branding = STATE.branding || {};
-  const coachName = (STATE.coachInfo && STATE.coachInfo.full_name) || branding.brand_name || "seu coach";
+  const coachName = (STATE.coachInfo && STATE.coachInfo.full_name) || branding.brand_name || "seu treinador";
   const overlay = document.createElement("div");
   overlay.id = "onb-overlay";
   overlay.innerHTML = `
@@ -11793,7 +11876,7 @@ function showOnboarding() {
       <h1>Como funciona</h1>
       <p>3 abas pra você focar no que importa.</p>
       <div class="onb-card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div><div><div class="ti">Hoje</div><div class="sub">Veja o treino do dia, comece e marque as séries.</div></div></div>
-      <div class="onb-card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div><div class="ti">Periodização</div><div class="sub">Calendário de 12 semanas montado pelo coach.</div></div></div>
+      <div class="onb-card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div><div class="ti">Periodização</div><div class="sub">Calendário de 12 semanas montado pelo treinador.</div></div></div>
       <div class="onb-card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6z"/></svg></div><div><div class="ti">Feed</div><div class="sub">Compartilhe treinos e veja a turma se mexendo.</div></div></div>
       <div class="onb-cta">
         <button class="onb-skip" data-act="back">Voltar</button>
@@ -11805,7 +11888,7 @@ function showOnboarding() {
       <p>Pra o app te ajudar de verdade, ative:</p>
       <div class="onb-card" id="onb-perm-push" style="cursor:pointer">
         <div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
-        <div style="flex:1"><div class="ti">Notificações</div><div class="sub" id="onb-push-sub">Lembretes de treino, novas mensagens do coach</div></div>
+        <div style="flex:1"><div class="ti">Notificações</div><div class="sub" id="onb-push-sub">Lembretes de treino, novas mensagens do treinador</div></div>
         <div id="onb-push-state" style="font-size:12px;color:var(--text-3)">Tocar pra ativar</div>
       </div>
       <div class="onb-card" id="onb-perm-install" style="cursor:pointer">
@@ -11895,7 +11978,7 @@ function showCoachOnboarding() {
     </style>
     <div class="onb-step active" data-step="1">
       <div class="coach-hero"><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11M6.5 17.5h11"/><path d="M3 8.5V15.5a1 1 0 0 0 1 1h1V7.5H4a1 1 0 0 0-1 1z"/><path d="M21 8.5a1 1 0 0 0-1-1h-1v9h1a1 1 0 0 0 1-1v-7z"/><path d="M6.5 7.5v9a1 1 0 0 0 1 1h1v-11h-1a1 1 0 0 0-1 1z"/><path d="M17.5 7.5a1 1 0 0 0-1-1h-1v11h1a1 1 0 0 0 1-1v-9z"/></svg></div>
-      <h1>Bem-vindo ao painel, ${escape((profile.full_name||'').split(' ')[0] || 'Professor')}!</h1>
+      <h1>Bem-vindo ao painel, ${escape((profile.full_name||'').split(' ')[0] || 'Treinador')}!</h1>
       <p>Tudo o que você precisa para gerenciar seus alunos e prescrever treinos de forma profissional — em um só lugar.</p>
       <div class="onb-cta">
         <button class="onb-skip" data-act="skip">Pular</button>
@@ -12506,6 +12589,8 @@ async function openAsaasSheet(paymentId) {
   if (!p) { showToast("Pagamento não encontrado", "error"); return; }
   const sheet = document.createElement("div");
   sheet.id = "asaas-overlay";
+  const chargeDueDate = String(p.due_date || "") < todayISO() ? todayISO() : p.due_date;
+  const hasAdjustedAsaasDueDate = Boolean(p.due_date && chargeDueDate && chargeDueDate !== p.due_date);
   sheet.innerHTML = `
     <style>
       #asaas-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9500;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -12528,8 +12613,9 @@ async function openAsaasSheet(paymentId) {
       <h3>Cobrança via Asaas</h3>
       <div style="color:var(--text-2);font-size:13px;margin-bottom:8px">
         <b>${escapeHtml(p.user?.full_name||'-')}</b><br>
-        Vencimento: ${formatBR(p.due_date)} · R$ ${Number(p.amount).toFixed(2)}
+        Vencimento original: ${formatBR(p.due_date)} · R$ ${Number(p.amount).toFixed(2)}
       </div>
+      ${hasAdjustedAsaasDueDate ? `<div style="margin:10px 0 0;padding:10px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text-2);font-size:12px;line-height:1.4">Como o lançamento já venceu, a nova cobrança Asaas será emitida com vencimento em ${formatBR(chargeDueDate)}. O atraso original continua preservado no financeiro.</div>` : ""}
       <div id="ax-result"></div>
       <div style="margin:10px 0 0;padding:10px;border-radius:10px;background:var(--bg-card);border:1px solid var(--line);color:var(--text-2);font-size:12px;line-height:1.4">
         Link Asaas abre a página segura para o aluno escolher cartão, boleto ou PIX quando liberado na conta.

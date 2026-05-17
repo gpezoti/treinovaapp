@@ -42,6 +42,12 @@ function addDaysIso(baseIso: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+function resolveAsaasDueDate(paymentDueDate: unknown) {
+  const original = String(paymentDueDate || "");
+  const today = todayIso();
+  return original && original < today ? today : original;
+}
+
 function normalizeCpfCnpj(value: unknown) {
   return String(value || "").replace(/\D/g, "");
 }
@@ -202,13 +208,14 @@ async function processPayment(payment: any, billingType: string, dryRun: boolean
   }
 
   const customerId = await ensureCustomer(payer);
+  const asaasDueDate = resolveAsaasDueDate(payment.due_date);
   const charge = await asaasFetch("/payments", {
     method: "POST",
     body: JSON.stringify({
       customer: customerId,
       billingType,
       value: Number(payment.amount),
-      dueDate: payment.due_date,
+      dueDate: asaasDueDate,
       description: payment.reference || "Mensalidade Treinova",
       externalReference: payment.id,
     }),
@@ -233,7 +240,7 @@ async function processPayment(payment: any, billingType: string, dryRun: boolean
     payer.id,
     "payment_charge_created",
     "Cobrança disponível",
-    `Sua cobrança de ${money(payment.amount)} vence em ${dateBr(payment.due_date)}. Abra o financeiro para pagar pelo Asaas.`,
+    `Sua cobrança de ${money(payment.amount)} referente ao vencimento de ${dateBr(payment.due_date)} está disponível no Asaas.`,
     payment.id,
   );
 
@@ -241,6 +248,8 @@ async function processPayment(payment: any, billingType: string, dryRun: boolean
     id: payment.id,
     status: "created",
     asaas_id: charge.id,
+    original_due_date: payment.due_date,
+    asaas_due_date: asaasDueDate,
     invoice_url: charge.invoiceUrl || null,
   };
 }

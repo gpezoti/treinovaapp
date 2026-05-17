@@ -93,6 +93,16 @@ function normalizeBillingType(value: unknown) {
   return billingType;
 }
 
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function resolveAsaasDueDate(paymentDueDate: unknown) {
+  const original = String(paymentDueDate || "");
+  const today = todayIso();
+  return original && original < today ? today : original;
+}
+
 function paymentMethodForDb(billingType: string) {
   if (billingType === "PIX") return "pix";
   if (billingType === "BOLETO") return "boleto";
@@ -264,8 +274,8 @@ async function notifyPaymentChargeCreated(payment: any, url?: string | null) {
     kind: "payment_charge_created",
     title: "Cobrança disponível",
     body: url
-      ? `Sua cobrança de ${value} vence em ${dueDate}. Abra a cobrança para pagar pelo Asaas.`
-      : `Sua cobrança de ${value} vence em ${dueDate}.`,
+      ? `Sua cobrança de ${value} referente ao vencimento de ${dueDate} está disponível no Asaas.`
+      : `Sua cobrança de ${value} referente ao vencimento de ${dueDate} está disponível.`,
     related_id: payment.id,
     related_kind: "payment",
   });
@@ -302,7 +312,7 @@ serve(async (req) => {
     }
     const isStaff = caller.role === "coach" || caller.role === "admin";
     if (!isStaff) {
-      return json({ error: "Apenas coaches e admins podem gerar cobranças" }, 403);
+      return json({ error: "Apenas treinadores e admins podem gerar cobranças" }, 403);
     }
 
     // 3. Ler payload
@@ -367,11 +377,12 @@ serve(async (req) => {
 
     const customerId = await ensureCustomer(payment.user);
 
+    const asaasDueDate = resolveAsaasDueDate(payment.due_date);
     const chargeBody: any = {
       customer:          customerId,
       billingType,
       value:             Number(payment.amount),
-      dueDate:           payment.due_date,
+      dueDate:           asaasDueDate,
       description:       payment.reference || "Mensalidade Treinova",
       externalReference: payment.id,
     };
@@ -407,6 +418,8 @@ serve(async (req) => {
     return json({
       ok:              true,
       asaas_id:        charge.id,
+      original_due_date: payment.due_date,
+      asaas_due_date:  asaasDueDate,
       invoice_url:     charge.invoiceUrl,
       pix_qr:          pixQr,
       pix_copy_paste:  pixCopyPaste,
