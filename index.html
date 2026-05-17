@@ -8817,23 +8817,29 @@ window.submitNewStudent = async function() {
         if (d <= now) d.setMonth(d.getMonth() + 1);
         return d.toISOString().slice(0, 10);
       })();
-      await sb.from("payments").insert({
-        student_id: studentId,
-        coach_id: STATE.profile.id,
-        amount: planValue,
-        due_date: dueDate,
-        status: "pending",
-        description: "Mensalidade"
-      }).catch(e => console.warn("[plan insert]", e));
+      try {
+        await recordPayment(studentId, STATE.profile.id, {
+          amount: planValue,
+          due_date: dueDate,
+          reference: "Mensalidade",
+        });
+      } catch (e) {
+        console.warn("[plan insert]", e);
+      }
       // Salva valor padrão para próximos alunos
       try { localStorage.setItem("treinova_last_plan_value", String(planValue)); } catch(e) {}
       try { localStorage.setItem("treinova_last_plan_day", String(planDay)); } catch(e) {}
     }
 
-    await sb.from("follows").upsert(
-      { follower_id: STATE.profile.id, following_id: studentId },
-      { onConflict: "follower_id,following_id", ignoreDuplicates: true }
-    ).catch(e => console.warn("[follow new student]", e));
+    try {
+      const { error: followErr } = await sb.from("follows").upsert(
+        { follower_id: STATE.profile.id, following_id: studentId },
+        { onConflict: "follower_id,following_id", ignoreDuplicates: true }
+      );
+      if (followErr) console.warn("[follow new student]", followErr);
+    } catch (e) {
+      console.warn("[follow new student]", e);
+    }
 
     showToast("Aluno criado" + (planValue ? " com plano de R$ " + planValue.toFixed(2) : ""), "success");
     closeSheet();
