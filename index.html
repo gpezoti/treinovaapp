@@ -2633,8 +2633,10 @@ async function loadWorkouts() {
   const { data: exercises, error: e2 } = workoutIds.length ? await exQ : { data: [], error: null };
   if (e2) { console.error(e2); return; }
   const map = {};
-  // Para alunos: prioriza workout personalizado (student_id = me) sobre global por code
+  // Para alunos: prioriza treino personalizado. Para treinadores: prioriza o proprio
+  // modelo antes de cair em um treino global com o mesmo codigo.
   const isStudent = STATE.profile && STATE.profile.role === "student";
+  const isCoach = STATE.profile && STATE.profile.role === "coach";
   const grouped = {};
   (workouts || []).forEach(w => {
     if (hiddenSet.has(w.id)) return; // ocultos por este coach
@@ -2646,6 +2648,8 @@ async function loadWorkouts() {
     let chosen;
     if (isStudent) {
       chosen = list.find(w => w.student_id === myId) || list.find(w => w.is_global) || list[0];
+    } else if (isCoach) {
+      chosen = list.find(w => w.coach_id === myId && !w.student_id) || list.find(w => w.is_global) || list[0];
     } else {
       chosen = list.find(w => w.is_global) || list[0];
     }
@@ -10998,6 +11002,28 @@ function buildWorkoutExerciseFromLibrary(lib, ctx, position) {
   };
 }
 
+async function assertCanAddExercisesToWorkout(workoutId) {
+  if (!workoutId) throw new Error("Treino não identificado.");
+  const { data: workout, error } = await sb.from("workouts")
+    .select("id, coach_id, student_id, is_global")
+    .eq("id", workoutId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!workout) throw new Error("Treino não encontrado.");
+  if (STATE.profile?.role !== "coach") return workout;
+  if (workout.coach_id === STATE.profile.id) return workout;
+  if (workout.student_id) {
+    const { data: ownStudent, error: studentError } = await sb.from("profiles")
+      .select("id")
+      .eq("id", workout.student_id)
+      .eq("coach_id", STATE.profile.id)
+      .maybeSingle();
+    if (studentError) throw studentError;
+    if (ownStudent) return workout;
+  }
+  throw new Error("Este é um treino global. Crie ou abra um treino seu para adicionar exercícios.");
+}
+
 window.addSelectedExercisesToWorkout = async function() {
   const ctx = STATE._pickerCtx;
   const selectedIds = [...(ctx?.selected || [])];
@@ -11012,6 +11038,7 @@ window.addSelectedExercisesToWorkout = async function() {
 
   // Calcula próxima position consultando o banco
   try {
+    await assertCanAddExercisesToWorkout(wId);
     const { data: existingEx, error: posError } = await sb.from("exercises").select("position").eq("workout_id", wId).order("position", { ascending: false }).limit(1);
     if (posError) throw posError;
     const startPos = (existingEx && existingEx.length > 0 ? existingEx[0].position : 0) + 1;
@@ -11088,6 +11115,7 @@ window.submitNewExercise = async function() {
   STATE._addingExercise = true;
   if (btn) { btn.disabled = true; btn.textContent = "Adicionando..."; }
   try {
+    await assertCanAddExercisesToWorkout(wId);
     const { data: existingEx, error: posError } = await sb.from("exercises").select("position").eq("workout_id", wId).order("position", { ascending: false }).limit(1);
     if (posError) throw posError;
     const nextPos = (existingEx && existingEx.length > 0 ? existingEx[0].position : 0) + 1;
