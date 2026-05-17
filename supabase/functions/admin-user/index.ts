@@ -47,6 +47,20 @@ function assertAdmin(caller: { role: string }) {
   return null;
 }
 
+async function findAuthUserByEmail(email: string) {
+  const target = cleanEmail(email);
+  const perPage = 1000;
+  for (let page = 1; page <= 10; page += 1) {
+    const { data, error } = await sbAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const users = data?.users || [];
+    const match = users.find((user) => cleanEmail(user.email) === target);
+    if (match) return match;
+    if (users.length < perPage) break;
+  }
+  return null;
+}
+
 async function createAuthUserOrReuseProfile(params: {
   email: string;
   password: string;
@@ -82,7 +96,18 @@ async function createAuthUserOrReuseProfile(params: {
 
   const message = createErr?.message || "Falha ao criar usuário.";
   if (/already|registered|exists|duplicate/i.test(message)) {
-    throw new Error("Este email já existe no Auth, mas não há profile correspondente para gerenciar pelo painel. Corrija o usuário no Supabase Authentication ou use outro email.");
+    const orphanAuthUser = await findAuthUserByEmail(email);
+    if (orphanAuthUser?.id) {
+      const { error: updateErr } = await sbAdmin.auth.admin.updateUserById(orphanAuthUser.id, {
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName, role },
+      });
+      if (updateErr) throw new Error(updateErr.message);
+      return { userId: orphanAuthUser.id, reused: true };
+    }
+    throw new Error("Este email já existe no Auth, mas não foi possível localizar o usuário para reaproveitar.");
   }
   throw new Error(message);
 }
