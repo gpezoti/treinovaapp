@@ -40,6 +40,14 @@ function cleanText(value: unknown) {
   return String(value || "").trim();
 }
 
+function passwordMeetsPolicy(value: unknown) {
+  const password = String(value || "");
+  return password.length >= 8
+    && /[a-z]/.test(password)
+    && /[A-Z]/.test(password)
+    && /\d/.test(password);
+}
+
 function assertAdmin(caller: { role: string }) {
   if (caller.role !== "admin") {
     return json({ error: "Apenas admin pode executar esta ação." }, 403);
@@ -171,8 +179,8 @@ serve(async (req) => {
       const phone = String(body.phone || "").trim();
       const coachId = caller.role === "coach" ? caller.id : (body.coach_id || null);
 
-      if (!fullName || !email.includes("@") || password.length < 8) {
-        return json({ error: "Nome, email válido e senha 8+ são obrigatórios." }, 400);
+      if (!fullName || !email.includes("@") || !passwordMeetsPolicy(password)) {
+        return json({ error: "Nome, email válido e senha com 8+ caracteres, maiúscula, minúscula e número são obrigatórios." }, 400);
       }
       if (caller.role === "admin" && coachId) {
         const { data: coach } = await sbAdmin
@@ -212,8 +220,8 @@ serve(async (req) => {
       const password = String(body.password || "");
       const fullName = String(body.full_name || "").trim();
       const asaasWalletId = cleanText(body.asaas_wallet_id);
-      if (!fullName || !email.includes("@") || password.length < 8) {
-        return json({ error: "Nome, email válido e senha 8+ são obrigatórios." }, 400);
+      if (!fullName || !email.includes("@") || !passwordMeetsPolicy(password)) {
+        return json({ error: "Nome, email válido e senha com 8+ caracteres, maiúscula, minúscula e número são obrigatórios." }, 400);
       }
 
       const created = await createAuthUserOrReuseProfile({ email, password, fullName, role: "coach" });
@@ -298,8 +306,8 @@ serve(async (req) => {
       if (!["coach", "student"].includes(role)) {
         return json({ error: "Papel inválido." }, 400);
       }
-      if (password && password.length < 8) {
-        return json({ error: "A nova senha precisa ter pelo menos 8 caracteres." }, 400);
+      if (password && !passwordMeetsPolicy(password)) {
+        return json({ error: "A nova senha precisa ter 8+ caracteres, maiúscula, minúscula e número." }, 400);
       }
 
       const authPatch: Record<string, unknown> = {
