@@ -1,6 +1,21 @@
 -- Fotos de progresso: leitura apenas do proprio aluno, do treinador responsavel e do admin.
 -- Mantem upload/exclusao restritos ao dono (ou admin) para evitar alteracoes indevidas.
 
+create table if not exists public.progress_photos (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references public.profiles(id) on delete cascade,
+  date date not null default current_date,
+  url text not null,
+  storage_path text,
+  weight numeric,
+  body_fat numeric,
+  notes text,
+  created_at timestamptz default now()
+);
+
+create index if not exists progress_photos_student_idx
+  on public.progress_photos(student_id, date desc);
+
 alter table if exists public.progress_photos enable row level security;
 
 drop policy if exists "progress read self or coach" on public.progress_photos;
@@ -33,9 +48,9 @@ create policy "progress delete self or admin" on public.progress_photos
     or public.is_admin(auth.uid())
   );
 
-update storage.buckets
-set public = false
-where id = 'progress';
+insert into storage.buckets (id, name, public)
+values ('progress', 'progress', false)
+on conflict (id) do update set public = excluded.public;
 
 drop policy if exists "progress_photos read all" on storage.objects;
 drop policy if exists "progress read all" on storage.objects;
