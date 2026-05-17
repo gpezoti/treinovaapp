@@ -75,7 +75,7 @@ function normalizeBillingType(value: unknown) {
 function resolveStudentTrainerSplit(payment: any, payer: any, receiver: any) {
   const isStudentTrainerCharge = payer?.role === "student"
     && receiver?.role === "coach"
-    && payer?.coach_id === receiver?.id;
+    && payment?.receiver_id === receiver?.id;
 
   if (!isStudentTrainerCharge) return null;
 
