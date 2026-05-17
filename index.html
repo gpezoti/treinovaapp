@@ -1862,6 +1862,7 @@ const STATE = {
   library: [],           // exercise library
   follows: { followers: [], following: [] }, // social
   payments: [],          // staff: lista de pagamentos
+  paymentAccounts: [],   // coach: contas de recebimento configuradas
   notifications: [],     // central de notificações
   myPaymentBlocked: false, // flag de bloqueio
   realtimeChannels: [],
@@ -5022,6 +5023,7 @@ function renderCoachOwnFinancePanel() {
 }
 
 async function recordPayment(payerId, receiverId, payload) {
+  const paymentPreference = await getPaymentPreferenceForNewCharge(receiverId);
   const insertData = {
     user_id: payerId,      // coluna oficial: user_id (FK → profiles)
     receiver_id: receiverId,
@@ -5032,11 +5034,57 @@ async function recordPayment(payerId, receiverId, payload) {
     notes: payload.notes || null,
     status: payload.markPaid ? 'paid' : 'pending',
     paid_at: payload.markPaid ? new Date().toISOString() : null,
-    created_by: STATE.profile.id
+    created_by: STATE.profile.id,
+    payment_provider: paymentPreference.provider,
+    provider_public_payload: paymentPreference.publicPayload
   };
   const { data, error } = await sb.from("payments").insert(insertData).select().single();
   if (error) throw error;
   return data;
+}
+
+async function loadMyPaymentAccounts({ force = false } = {}) {
+  if (STATE.profile?.role !== "coach") {
+    STATE.paymentAccounts = [];
+    return [];
+  }
+  if (!force && Array.isArray(STATE.paymentAccounts) && STATE.paymentAccounts.length) {
+    return STATE.paymentAccounts;
+  }
+  const { data, error } = await sb.from("trainer_payment_accounts")
+    .select("*")
+    .eq("trainer_id", STATE.profile.id)
+    .order("provider");
+  if (error) {
+    console.warn("[payments] Falha ao carregar contas de recebimento", error);
+    STATE.paymentAccounts = [];
+    return [];
+  }
+  STATE.paymentAccounts = data || [];
+  return STATE.paymentAccounts;
+}
+
+function getCoachDefaultPaymentAccount() {
+  return (STATE.paymentAccounts || []).find(account => account.is_default) || null;
+}
+
+async function getPaymentPreferenceForNewCharge(receiverId) {
+  const fallback = { provider: null, publicPayload: {} };
+  if (STATE.profile?.role !== "coach" || receiverId !== STATE.profile.id) return fallback;
+  await loadMyPaymentAccounts();
+  const account = getCoachDefaultPaymentAccount();
+  if (!account) return { provider: "asaas", publicPayload: {} };
+  if (account.provider !== "manual_pix") {
+    return { provider: account.provider, publicPayload: {} };
+  }
+  return {
+    provider: "manual_pix",
+    publicPayload: {
+      pix_key: account.pix_key || "",
+      pix_key_type: account.pix_key_type || "",
+      display_name: account.display_name || "",
+    }
+  };
 }
 
 async function markPaymentPaid(paymentId, method) {
@@ -6411,9 +6459,11 @@ async function renderPayments() {
 function paymentAccessHTML(p) {
   const invoice = p.invoice_url || p.boleto_url || null;
   const pix = p.pix_copy_paste || null;
+  const manualPix = p.payment_provider === "manual_pix" ? (p.provider_public_payload || {}) : null;
   return `
     ${invoice ? `<a href="${escape(invoice)}" target="_blank" class="mini-btn mini-btn-primary" style="text-decoration:none;margin-top:4px">Pagar no Asaas</a>` : ""}
     ${pix ? `<button class="mini-btn mini-btn-ghost" data-pix="${escape(pix)}" onclick="copyPaymentPix(this.dataset.pix)" style="margin-top:4px">Copiar PIX</button>` : ""}
+    ${manualPix?.pix_key ? `<button class="mini-btn mini-btn-ghost" data-pix="${escape(manualPix.pix_key)}" onclick="copyPaymentPix(this.dataset.pix)" style="margin-top:4px">Copiar PIX do treinador</button>` : ""}
   `;
 }
 
@@ -6464,6 +6514,13 @@ function paymentMethodLabel(method) {
   return escape(method);
 }
 
+function paymentProviderLabel(p) {
+  if (p.payment_provider === "manual_pix") return "PIX manual";
+  if (p.payment_provider === "mercado_pago") return "Mercado Pago";
+  if (p.payment_provider === "asaas") return "Asaas";
+  return paymentMethodLabel(p.method || p.payment_method);
+}
+
 function studentPaymentActions(p, status) {
   const hasGatewayAction = Boolean(p.invoice_url || p.boleto_url || p.pix_copy_paste);
   if (status === "paid" || status === "cancelled") {
@@ -6491,7 +6548,7 @@ function studentFinanceItem(p) {
         <div class="finance-item-title">${paymentTitle(p)}</div>
         <div class="finance-item-meta">
           Vencimento: ${dueLabel}${paidLabel ? ` · Pago em ${paidLabel}` : ""}<br>
-          ${paymentMethodLabel(p.method || p.payment_method)}
+          ${paymentProviderLabel(p)}
         </div>
       </div>
       ${paymentStatusBadge(status)}
@@ -6567,7 +6624,7 @@ window.openStudentPaymentDetails = function(paymentId) {
       <div class="finance-item-meta" style="margin-top:10px">
         Vencimento: ${p.due_date ? fmtDateBR(p.due_date) : "—"}<br>
         ${p.paid_at ? `Pago em: ${fmtDateBR(String(p.paid_at).slice(0,10))}<br>` : ""}
-        Método: ${paymentMethodLabel(p.method || p.payment_method)}
+        Método: ${paymentProviderLabel(p)}
       </div>
       ${p.notes ? `<div class="finance-item-meta" style="margin-top:8px">${escape(p.notes)}</div>` : ""}
       <div class="finance-actions">${studentPaymentActions(p, status)}</div>
@@ -6684,6 +6741,7 @@ function paymentItem(p, userId, name) {
   const statusBadge = p.status === 'paid' ? `<span class="today-pill pill-approved">✓ Pago</span>` :
     overdue ? `<span class="today-pill pill-red">Atrasado</span>` :
     `<span class="today-pill pill-pending">Pendente</span>`;
+  const usesManualPix = p.payment_provider === "manual_pix";
   return `<div class="card mb-8">
     <div class="row-flex" style="align-items:flex-start;">
       <div style="flex:1; min-width:0;">
@@ -6694,7 +6752,8 @@ function paymentItem(p, userId, name) {
       <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
         ${statusBadge}
         ${p.status !== 'paid' ? `<button class="mini-btn mini-btn-success" onclick="onMarkPaid('${p.id}','${userId}','${escape(name).replace(/'/g,"\\'")}')" style="margin-top:4px">Marcar pago</button>` : ''}
-        ${p.status !== 'paid' ? `<button class="mini-btn" style="background:#32BCAD;color:#fff;margin-top:4px" onclick="openAsaasSheet('${p.id}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Cobrar via Asaas</button>` : ''}
+        ${p.status !== 'paid' && !usesManualPix ? `<button class="mini-btn" style="background:#32BCAD;color:#fff;margin-top:4px" onclick="openAsaasSheet('${p.id}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Cobrar via Asaas</button>` : ''}
+        ${p.status !== 'paid' && usesManualPix ? `<span class="today-pill pill-flex" style="margin-top:4px">PIX manual</span>` : ''}
         <button class="mini-btn mini-btn-ghost" onclick="onDeletePayment('${p.id}','${userId}','${escape(name).replace(/'/g,"\\'")}')" style="margin-top:4px">Apagar</button>
       </div>
     </div>
@@ -7879,6 +7938,7 @@ async function renderProfile() {
   const isCoach = p.role === "coach";
   const isAdmin = p.role === "admin";
   const isStaff = isCoach || isAdmin;
+  if (isCoach) await loadMyPaymentAccounts();
 
   // load history (students only)
   let historyHTML = "";
@@ -8061,6 +8121,10 @@ async function renderProfile() {
           <button class="btn-ghost" onclick="saveAdminCoachLink()">Salvar vínculo</button>
         </div>
       ` : ''}
+      ${isCoach ? `
+        <div class="section-title">Recebimentos dos alunos</div>
+        ${renderCoachPaymentSettingsPanel()}
+      ` : ""}
       <div class="section-title">Identidade do app (white-label)</div>
       ${renderBrandingPanel()}
     `}
@@ -8088,6 +8152,147 @@ async function renderProfile() {
 }
 window.signOut = signOut;
 window.applyTheme = applyTheme;
+
+function renderCoachPaymentSettingsPanel() {
+  const account = getCoachDefaultPaymentAccount();
+  const selectedProvider = account?.provider || "asaas";
+  const manualPix = (STATE.paymentAccounts || []).find(item => item.provider === "manual_pix") || {};
+  const hasManualPix = Boolean(manualPix.pix_key);
+  const hasAsaasWallet = Boolean(STATE.profile?.asaas_wallet_id);
+  const asaasStatusText = hasAsaasWallet
+    ? "Carteira configurada pelo admin"
+    : "Aguardando carteira Asaas do treinador";
+  return `
+    <div class="card">
+      <p class="text-xs muted" style="margin-top:0;line-height:1.45">
+        Escolha como prefere receber dos seus alunos. Sem alteração, o app continua usando o fluxo atual via Asaas.
+      </p>
+      <div class="role-select" style="margin-bottom:12px">
+        <div class="role-option ${selectedProvider === "asaas" ? "active" : ""}" onclick="selectCoachPaymentProvider('asaas')">
+          <div class="ro-title">Asaas</div>
+          <div class="ro-desc">${asaasStatusText}</div>
+        </div>
+        <div class="role-option ${selectedProvider === "manual_pix" ? "active" : ""}" onclick="selectCoachPaymentProvider('manual_pix')">
+          <div class="ro-title">PIX manual</div>
+          <div class="ro-desc">${hasManualPix ? "Chave configurada" : "Cadastre sua chave"}</div>
+        </div>
+      </div>
+      <div class="card" style="margin:0 0 12px;background:var(--bg-2)">
+        <div class="form-group">
+          <label class="form-label">Nome exibido ao aluno</label>
+          <input class="input" id="coach-pix-name" value="${escape(manualPix.display_name || STATE.profile.full_name || "")}" placeholder="Nome do recebedor" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="form-group">
+            <label class="form-label">Tipo da chave PIX</label>
+            <select class="input" id="coach-pix-type">
+              <option value="cpf_cnpj" ${manualPix.pix_key_type === "cpf_cnpj" ? "selected" : ""}>CPF/CNPJ</option>
+              <option value="email" ${manualPix.pix_key_type === "email" ? "selected" : ""}>Email</option>
+              <option value="phone" ${manualPix.pix_key_type === "phone" ? "selected" : ""}>Telefone</option>
+              <option value="random" ${manualPix.pix_key_type === "random" ? "selected" : ""}>Aleatória</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Chave PIX</label>
+            <input class="input" id="coach-pix-key" value="${escape(manualPix.pix_key || "")}" placeholder="Sua chave PIX" />
+          </div>
+        </div>
+        <button class="btn-ghost" onclick="saveCoachManualPixSettings()">Salvar dados PIX</button>
+      </div>
+      <div class="shortcut-empty" style="margin-bottom:12px">
+        <div class="title">Mercado Pago</div>
+        <div class="sub">Estrutura preparada para futura conexão segura por conta do treinador, sem interferir no fluxo atual.</div>
+      </div>
+      <button class="btn-primary" onclick="saveCoachPaymentProvider()">
+        Salvar forma padrão: ${selectedProvider === "manual_pix" ? "PIX manual" : "Asaas"}
+      </button>
+    </div>
+  `;
+}
+
+window.selectCoachPaymentProvider = function(provider) {
+  if (!["asaas", "manual_pix"].includes(provider)) return;
+  const existing = getCoachDefaultPaymentAccount();
+  if (existing) existing.is_default = false;
+  let account = (STATE.paymentAccounts || []).find(item => item.provider === provider);
+  if (!account) {
+    account = { provider, trainer_id: STATE.profile.id, is_default: true, status: "active" };
+    STATE.paymentAccounts.push(account);
+  }
+  account.is_default = true;
+  renderProfile();
+};
+
+window.saveCoachManualPixSettings = async function() {
+  const displayName = document.getElementById("coach-pix-name")?.value.trim() || "";
+  const pixKeyType = document.getElementById("coach-pix-type")?.value || "random";
+  const pixKey = document.getElementById("coach-pix-key")?.value.trim() || "";
+  if (!displayName || !pixKey) {
+    showToast("Informe nome e chave PIX para salvar.", "error");
+    return;
+  }
+  const payload = {
+    trainer_id: STATE.profile.id,
+    provider: "manual_pix",
+    status: "active",
+    display_name: displayName,
+    pix_key_type: pixKeyType,
+    pix_key: pixKey,
+  };
+  const { error } = await sb.from("trainer_payment_accounts")
+    .upsert(payload, { onConflict: "trainer_id,provider" });
+  if (error) {
+    showToast("Erro ao salvar PIX: " + error.message, "error");
+    return;
+  }
+  await loadMyPaymentAccounts({ force: true });
+  showToast("Dados PIX salvos", "success");
+  renderProfile();
+};
+
+window.saveCoachPaymentProvider = async function() {
+  const selected = getCoachDefaultPaymentAccount()?.provider || "asaas";
+  if (selected === "manual_pix") {
+    const manualPix = (STATE.paymentAccounts || []).find(item => item.provider === "manual_pix");
+    if (!manualPix?.pix_key) {
+      showToast("Cadastre sua chave PIX antes de usar PIX manual.", "error");
+      return;
+    }
+  }
+  const rows = (STATE.paymentAccounts || []).filter(item => ["asaas", "manual_pix"].includes(item.provider));
+  const activeRows = rows.length
+    ? rows
+    : [{ trainer_id: STATE.profile.id, provider: "asaas", is_default: true, status: "active" }];
+  const resetPayload = activeRows.map(item => ({
+    trainer_id: STATE.profile.id,
+    provider: item.provider,
+    status: item.status || "active",
+    display_name: item.display_name || null,
+    pix_key_type: item.pix_key_type || null,
+    pix_key: item.pix_key || null,
+    external_account_id: item.external_account_id || null,
+    wallet_id: item.wallet_id || null,
+    metadata: item.metadata || {},
+    is_default: item.provider === selected,
+  }));
+  const { error: clearErr } = await sb.from("trainer_payment_accounts")
+    .update({ is_default: false })
+    .eq("trainer_id", STATE.profile.id)
+    .eq("is_default", true);
+  if (clearErr) {
+    showToast("Erro ao preparar forma padrão: " + clearErr.message, "error");
+    return;
+  }
+  const { error } = await sb.from("trainer_payment_accounts")
+    .upsert(resetPayload, { onConflict: "trainer_id,provider" });
+  if (error) {
+    showToast("Erro ao salvar forma padrão: " + error.message, "error");
+    return;
+  }
+  await loadMyPaymentAccounts({ force: true });
+  showToast("Forma de recebimento atualizada", "success");
+  renderProfile();
+};
 
 window.saveNewPassword = async function() {
   const np = document.getElementById("prof-new-pass").value;
