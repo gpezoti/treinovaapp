@@ -6148,6 +6148,11 @@ window.openNewTrainerSheet = function() {
     <div class="form-group"><label class="form-label">Nome completo</label><input class="input" id="nt-name" placeholder="Nome" /></div>
     <div class="form-group"><label class="form-label">Email</label><input class="input" id="nt-email" type="email" placeholder="email@exemplo.com" /></div>
     <div class="form-group"><label class="form-label">Senha temporária</label><input class="input" id="nt-pass" type="text" placeholder="Mínimo 8 caracteres" /></div>
+    <div class="form-group">
+      <label class="form-label">Carteira Asaas do treinador</label>
+      <input class="input" id="nt-wallet" placeholder="walletId opcional" />
+      <p class="text-xs muted" style="margin:6px 0 0;">Necessária para ele receber diretamente as cobranças dos alunos.</p>
+    </div>
     <button class="btn-primary" onclick="submitNewTrainer()">Criar treinador</button>
     <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Cancelar</button>
   `);
@@ -6216,6 +6221,7 @@ window.submitNewTrainer = async function() {
   const name = document.getElementById("nt-name").value.trim();
   const email = document.getElementById("nt-email").value.trim();
   const pass = document.getElementById("nt-pass").value;
+  const wallet = document.getElementById("nt-wallet").value.trim();
   if (!name || !email || !pass || pass.length < 8) { showToast("Preencha tudo (senha 8+)", "error"); return; }
   setBusy(true);
   try {
@@ -6224,7 +6230,8 @@ window.submitNewTrainer = async function() {
         action: "create_trainer",
         full_name: name,
         email,
-        password: pass
+        password: pass,
+        asaas_wallet_id: wallet || null,
       }
     });
     if (error) throw error;
@@ -6826,6 +6833,11 @@ window.openEditTrainerSheet = async function(id) {
         </div>
         <p class="text-xs muted" style="margin-top:6px;">Promover a Admin Master só por SQL (segurança).</p>
       </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Carteira Asaas do treinador</label>
+        <input class="input" id="et-wallet" value="${escape(prof.asaas_wallet_id || '')}" placeholder="walletId do treinador" />
+        <p class="text-xs muted" style="margin:6px 0 0;">Obrigatória para o treinador receber diretamente as cobranças dos alunos.</p>
+      </div>
     </div>
 
     <div class="section-title">Senha</div>
@@ -6874,11 +6886,11 @@ window.submitEditTrainer = async function(id) {
   const emoji = document.getElementById("et-emoji").value.trim() || "🎯";
   const status = document.getElementById("et-tmp-status").value;
   const role = document.getElementById("et-tmp-role").value;
-  const password = document.getElementById("et-password").value.trim();
+      const password = document.getElementById("et-password").value.trim();
   if (!name || !email) { showToast("Preencha nome e email", "error"); return; }
   if (password && password.length < 8) { showToast("Senha temporária precisa ter 8+ caracteres", "error"); return; }
   try {
-    await runAdminTrainerAction("update_trainer", {
+      await runAdminTrainerAction("update_trainer", {
       user_id: id,
       full_name: name,
       email,
@@ -6886,8 +6898,9 @@ window.submitEditTrainer = async function(id) {
       avatar_emoji: emoji,
       status,
       role,
-      password: password || undefined,
-    });
+        password: password || undefined,
+        asaas_wallet_id: document.getElementById("et-wallet").value.trim() || null,
+      });
     showToast("Treinador atualizado", "success");
     closeSheet();
     await loadTrainers();
@@ -12647,11 +12660,18 @@ async function openAsaasSheet(paymentId) {
     if (!result) {
       const isPixUnavailable = type === "PIX" && STATE._lastAsaasCode === "ASAAS_PIX_UNAVAILABLE";
       const needsTaxId = STATE._lastAsaasCode === "ASAAS_PAYER_TAX_ID_REQUIRED" || STATE._lastAsaasCode === "ASAAS_PAYER_TAX_ID_INVALID";
-      const title = isPixUnavailable ? "PIX aguardando aprovação no Asaas." : "Não foi possível gerar a cobrança.";
+      const needsTrainerWallet = STATE._lastAsaasCode === "ASAAS_TRAINER_WALLET_REQUIRED";
+      const title = isPixUnavailable
+        ? "PIX aguardando aprovação no Asaas."
+        : needsTrainerWallet
+          ? "Carteira Asaas do treinador pendente."
+          : "Não foi possível gerar a cobrança.";
       const detailText = isPixUnavailable
         ? "Use boleto por enquanto. Para liberar PIX, conclua o cadastro/aprovação da conta no painel do Asaas."
         : needsTaxId
           ? "O Asaas exige CPF ou CNPJ do cliente para gerar cobrança. Informe abaixo uma vez e eu salvo no cadastro."
+        : needsTrainerWallet
+          ? "Cadastre o walletId do treinador antes de cobrar alunos. Assim o valor vai direto para ele."
         : STATE._lastAsaasError;
       const detail = detailText ? `<div style="margin-top:8px;color:var(--text-2);font-size:12px;line-height:1.4;word-break:break-word">${escapeHtml(detailText)}</div>` : "";
       const taxIdForm = needsTaxId ? `

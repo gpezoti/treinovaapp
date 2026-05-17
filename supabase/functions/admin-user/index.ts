@@ -186,6 +186,7 @@ serve(async (req) => {
       const email = String(body.email || "").trim().toLowerCase();
       const password = String(body.password || "");
       const fullName = String(body.full_name || "").trim();
+      const asaasWalletId = cleanText(body.asaas_wallet_id);
       if (!fullName || !email.includes("@") || password.length < 8) {
         return json({ error: "Nome, email válido e senha 8+ são obrigatórios." }, 400);
       }
@@ -201,6 +202,7 @@ serve(async (req) => {
           role: "coach",
           status: "approved",
           coach_id: null,
+          asaas_wallet_id: asaasWalletId || null,
           must_reset_password: true,
         }, { onConflict: "id" });
       if (profileErr) return json({ error: profileErr.message }, 500);
@@ -257,6 +259,7 @@ serve(async (req) => {
       const email = cleanEmail(body.email);
       const phone = cleanText(body.phone);
       const avatarEmoji = cleanText(body.avatar_emoji);
+      const asaasWalletId = cleanText(body.asaas_wallet_id);
       const status = cleanText(body.status || target.status);
       const role = cleanText(body.role || target.role);
       const password = String(body.password || "");
@@ -292,6 +295,7 @@ serve(async (req) => {
         status,
         role,
         coach_id: role === "coach" ? null : body.coach_id || null,
+        asaas_wallet_id: role === "coach" ? (asaasWalletId || null) : null,
       };
       if (password) profilePatch.must_reset_password = false;
 
@@ -330,6 +334,7 @@ serve(async (req) => {
           role: "student",
           status: "blocked",
           coach_id: null,
+          asaas_wallet_id: null,
           must_reset_password: true,
         })
         .eq("id", user_id);

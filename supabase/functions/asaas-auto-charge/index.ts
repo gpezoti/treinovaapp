@@ -72,6 +72,31 @@ function normalizeBillingType(value: unknown) {
   return billingType;
 }
 
+function resolveStudentTrainerSplit(payment: any, payer: any, receiver: any) {
+  const isStudentTrainerCharge = payer?.role === "student"
+    && receiver?.role === "coach"
+    && payer?.coach_id === receiver?.id;
+
+  if (!isStudentTrainerCharge) return null;
+
+  const walletId = String(receiver?.asaas_wallet_id || "").trim();
+  if (!walletId) {
+    return {
+      missingTrainerWallet: true,
+      trainerId: receiver?.id || null,
+      walletId: null,
+      percentualValue: null,
+    };
+  }
+
+  return {
+    missingTrainerWallet: false,
+    trainerId: receiver?.id || null,
+    walletId,
+    percentualValue: 100,
+  };
+}
+
 async function asaasFetch(path: string, init: RequestInit = {}) {
   if (!ASAAS_API_KEY) throw new Error("ASAAS_API_KEY não configurada.");
   const res = await fetch(`${ASAAS_BASE_URL}${path}`, {
@@ -194,6 +219,17 @@ async function processPayment(payment: any, billingType: string, dryRun: boolean
     return { id: payment.id, status: "skipped", reason: "payer_not_found" };
   }
 
+  const { data: receiver, error: receiverErr } = payment.receiver_id
+    ? await sb
+      .from("profiles")
+      .select("*")
+      .eq("id", payment.receiver_id)
+      .maybeSingle()
+    : { data: null, error: null };
+  if (receiverErr) {
+    return { id: payment.id, status: "skipped", reason: "receiver_not_found" };
+  }
+
   const cpfCnpj = normalizeCpfCnpj(payer.cpf_cnpj);
   if (![11, 14].includes(cpfCnpj.length)) {
     if (!dryRun) {
@@ -212,18 +248,37 @@ async function processPayment(payment: any, billingType: string, dryRun: boolean
     return { id: payment.id, status: "dry_run", payer_id: payer.id };
   }
 
+  const split = resolveStudentTrainerSplit(payment, payer, receiver);
+  if (split?.missingTrainerWallet) {
+    await notifyOnce(
+      receiver?.id || payment.receiver_id || payment.created_by,
+      "asaas_missing_trainer_wallet",
+      "Carteira Asaas pendente",
+      "Configure sua carteira Asaas para receber cobranças dos seus alunos diretamente.",
+      payment.id,
+    );
+    return { id: payment.id, status: "skipped", reason: "missing_trainer_wallet", trainer_id: split.trainerId };
+  }
+
   const customerId = await ensureCustomer(payer);
   const asaasDueDate = resolveAsaasDueDate(payment.due_date);
+  const chargeBody: any = {
+    customer: customerId,
+    billingType,
+    value: Number(payment.amount),
+    dueDate: asaasDueDate,
+    description: payment.reference || "Mensalidade Treinova",
+    externalReference: payment.id,
+  };
+  if (split?.walletId) {
+    chargeBody.split = [{
+      walletId: split.walletId,
+      percentualValue: split.percentualValue,
+    }];
+  }
   const charge = await asaasFetch("/payments", {
     method: "POST",
-    body: JSON.stringify({
-      customer: customerId,
-      billingType,
-      value: Number(payment.amount),
-      dueDate: asaasDueDate,
-      description: payment.reference || "Mensalidade Treinova",
-      externalReference: payment.id,
-    }),
+    body: JSON.stringify(chargeBody),
   });
 
   const updatePayload: any = {
@@ -232,6 +287,8 @@ async function processPayment(payment: any, billingType: string, dryRun: boolean
     boleto_url: charge.bankSlipUrl || null,
     method: paymentMethodForDb(charge.billingType || billingType),
     external_reference: payment.id,
+    asaas_split_wallet_id: split?.walletId || null,
+    asaas_split_percentual_value: split?.percentualValue || null,
   };
 
   if ((charge.billingType || billingType) === "PIX") {

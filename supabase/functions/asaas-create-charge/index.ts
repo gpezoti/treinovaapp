@@ -161,6 +161,33 @@ function validatePayerForAsaas(profile: any) {
   return { ok: true, cpfCnpj };
 }
 
+function resolveStudentTrainerSplit(payment: any, payer: any, receiver: any) {
+  const isStudentTrainerCharge = payer?.role === "student"
+    && receiver?.role === "coach"
+    && payer?.coach_id === receiver?.id;
+
+  if (!isStudentTrainerCharge) return null;
+
+  const walletId = String(receiver?.asaas_wallet_id || "").trim();
+  if (!walletId) {
+    return {
+      walletId: null,
+      percentualValue: null,
+      errorResponse: json({
+        error: "Configure a carteira Asaas do treinador antes de cobrar alunos.",
+        code: "ASAAS_TRAINER_WALLET_REQUIRED",
+        trainer_id: receiver?.id || null,
+      }, 400),
+    };
+  }
+
+  return {
+    walletId,
+    percentualValue: 100,
+    errorResponse: null,
+  };
+}
+
 async function syncCustomerCpfCnpj(customerId: string, profile: any) {
   const cpfCnpj = normalizeCpfCnpj(profile?.cpf_cnpj);
   if (!cpfCnpj) return;
@@ -346,6 +373,15 @@ serve(async (req) => {
     if (payerErr || !payer) return json({ error: "Pagador não encontrado." }, 404);
     payment.user = payer;
 
+    const { data: receiver, error: receiverErr } = payment.receiver_id
+      ? await sbAdmin
+        .from("profiles")
+        .select("*")
+        .eq("id", payment.receiver_id)
+        .maybeSingle()
+      : { data: null, error: null };
+    if (receiverErr) return json({ error: "Recebedor não encontrado." }, 404);
+
     // 5. Validar ownership: o chamador deve ser o receiver_id ou admin
     const isOwner  = payment.receiver_id === caller.id || payment.created_by === caller.id;
     const isAdmin  = caller.role === "admin";
@@ -370,6 +406,9 @@ serve(async (req) => {
     const payerValidation = validatePayerForAsaas(payer);
     if (!payerValidation.ok) return payerValidation.response;
 
+    const split = resolveStudentTrainerSplit(payment, payer, receiver);
+    if (split?.errorResponse) return split.errorResponse;
+
     const existing = await fetchExistingCharge(payment, billingType);
     if (existing) {
       await notifyPaymentChargeCreated(payment, existing.invoice_url || existing.boleto_url || null);
@@ -391,6 +430,12 @@ serve(async (req) => {
       description:       payment.reference || "Mensalidade Treinova",
       externalReference: payment.id,
     };
+    if (split?.walletId) {
+      chargeBody.split = [{
+        walletId: split.walletId,
+        percentualValue: split.percentualValue,
+      }];
+    }
 
     const charge = await asaasFetch(`/payments`, {
       method: "POST",
@@ -402,6 +447,8 @@ serve(async (req) => {
       invoice_url:        charge.invoiceUrl || null,
       method:             paymentMethodForDb(billingType),
       external_reference: payment.id,
+      asaas_split_wallet_id: split?.walletId || null,
+      asaas_split_percentual_value: split?.percentualValue || null,
     };
 
     let pixQr = null, pixCopyPaste = null, boletoUrl = null;
