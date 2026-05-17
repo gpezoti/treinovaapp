@@ -5456,6 +5456,26 @@ function getAppNavItems() {
   ];
 }
 
+function getDesktopNavItems() {
+  const items = getAppNavItems();
+  const role = STATE.profile && STATE.profile.role;
+  if (role === "admin" || items.some((item) => item.id === "payments")) {
+    return items;
+  }
+  const financeItem = {
+    id: "payments",
+    label: "Financeiro",
+    svg: `<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>`,
+  };
+  const profileIndex = items.findIndex((item) => item.id === "profile");
+  if (profileIndex < 0) return [...items, financeItem];
+  return [
+    ...items.slice(0, profileIndex),
+    financeItem,
+    ...items.slice(profileIndex),
+  ];
+}
+
 function navBadgeHTML(itemId, finBadge, feedBadge, desktop = false) {
   if (itemId === "payments" && finBadge > 0) {
     return desktop
@@ -5488,6 +5508,7 @@ function renderDesktopNav(items, finBadge, feedBadge) {
 function renderBottomNav() {
   const bar = document.getElementById("bn-bar");
   const items = getAppNavItems();
+  const desktopItems = getDesktopNavItems();
   bar.classList.remove("cols-4","cols-5");
   bar.classList.add(items.length === 4 ? "cols-4" : "cols-5");
   const finBadge  = (STATE.coachPayments || []).filter(x => x.is_overdue).length;
@@ -5500,7 +5521,7 @@ function renderBottomNav() {
     </button>`;
   }).join("");
   bar.querySelectorAll(".bn-item").forEach(b => b.addEventListener("click", () => navTo(b.dataset.nav)));
-  renderDesktopNav(items, finBadge, feedBadge);
+  renderDesktopNav(desktopItems, finBadge, feedBadge);
 }
 
 /* =============================================================================
