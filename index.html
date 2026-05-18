@@ -2638,8 +2638,8 @@ async function loadWorkouts() {
   const { data: exercises, error: e2 } = workoutIds.length ? await exQ : { data: [], error: null };
   if (e2) { console.error(e2); return; }
   const map = {};
-  // Para alunos: prioriza treino personalizado. Para treinadores: prioriza o proprio
-  // modelo antes de cair em um treino global com o mesmo codigo.
+  // Para alunos vinculados a um treinador: o modelo atual do treinador e a fonte
+  // principal. Clones antigos por aluno ficam como fallback para contas legadas.
   const isStudent = STATE.profile && STATE.profile.role === "student";
   const isCoach = STATE.profile && STATE.profile.role === "coach";
   const studentCoachId = isStudent ? STATE.profile.coach_id : null;
@@ -2653,8 +2653,8 @@ async function loadWorkouts() {
     const list = grouped[code];
     let chosen;
     if (isStudent) {
-      chosen = list.find(w => w.student_id === myId)
-        || list.find(w => w.coach_id === studentCoachId && !w.student_id)
+      chosen = list.find(w => w.coach_id === studentCoachId && !w.student_id)
+        || list.find(w => w.student_id === myId)
         || list.find(w => w.is_global)
         || list[0];
     } else if (isCoach) {
@@ -9225,8 +9225,8 @@ async function loadPeriodWorkoutOptions(studentId) {
   const map = {};
   Object.keys(grouped).forEach(code => {
     const list = grouped[code];
-    map[code] = list.find(w => w.student_id === studentId)
-      || list.find(w => coachId && w.coach_id === coachId && !w.student_id)
+    map[code] = list.find(w => coachId && w.coach_id === coachId && !w.student_id)
+      || list.find(w => w.student_id === studentId)
       || list.find(w => w.is_global)
       || list[0];
   });
