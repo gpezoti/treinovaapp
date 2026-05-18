@@ -9664,6 +9664,7 @@ window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0) {
   const preset = getPreset(b.preset_code) || { label: b.preset_code, color: '#9aa6c0', is_workout: !!b.workout_code };
   const isWorkout = preset.is_workout || !!b.workout_code;
   const isAero = b.preset_code === 'aero' || preset.label?.toLowerCase().includes('aero');
+  const workoutPresets = (_PRESETS || []).filter(p => p.active !== false && p.is_workout);
   const codes = [...new Set(['A','B','C','D', ...Object.keys(STATE.workouts || {})])]
     .filter(c => c && c !== 'FLEX')
     .sort((a,b) => a.localeCompare(b, "pt-BR", { numeric: true }));
@@ -9678,6 +9679,18 @@ window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0) {
         </div>
       </div>
       ${isWorkout && !isAero ? `
+        ${workoutPresets.length > 1 ? `
+          <div style="margin-bottom:8px">
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Tipo do bloco</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              ${workoutPresets.map(p => `
+                <button class="mini-btn ${b.preset_code===p.code?'mini-btn-primary':'mini-btn-ghost'}"
+                  style="padding:5px 10px;font-size:11px;${b.preset_code===p.code?`background:${p.color}22;color:${p.color};border-color:${p.color}66`:''}"
+                  onclick="setBlockPreset('${b.id}','${dayId}','${studentId}','${p.code}')">${escape(p.label)}</button>
+              `).join("")}
+            </div>
+          </div>
+        ` : ''}
         <div style="display:flex;gap:5px;flex-wrap:wrap">
           ${codes.map(c => `
             <button class="mini-btn ${b.workout_code===c?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${c}')">${c}</button>
@@ -9740,6 +9753,22 @@ window.moveBlock = async function(blockId, dayId, studentId, dir) {
 window.setBlockWorkout = async function(blockId, dayId, studentId, workout) {
   await sb.from("periodization_blocks").update({ workout_code: workout || null }).eq("id", blockId);
   await syncDayLegacy(dayId);
+  editPeriodDay(dayId, studentId);
+};
+
+window.setBlockPreset = async function(blockId, dayId, studentId, presetCode) {
+  const nextPreset = getPreset(presetCode);
+  if (!nextPreset || nextPreset.active === false || !nextPreset.is_workout) {
+    showToast("Selecione um tipo de treino válido", "error");
+    return;
+  }
+  const { error } = await sb.from("periodization_blocks").update({ preset_code: presetCode }).eq("id", blockId);
+  if (error) {
+    showToast("Erro ao trocar tipo: " + error.message, "error");
+    return;
+  }
+  await syncDayLegacy(dayId);
+  showToast("Tipo atualizado", "success");
   editPeriodDay(dayId, studentId);
 };
 
