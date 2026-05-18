@@ -2844,9 +2844,13 @@ async function loadFollows() {
       body: { action: "follows" }
     });
     if (!error && data?.ok) {
+      const [following, followers] = await Promise.all([
+        hydrateFollowRows(data.following || [], "following"),
+        hydrateFollowRows(data.followers || [], "followers")
+      ]);
       STATE.follows = {
-        following: data.following || [],
-        followers: data.followers || []
+        following,
+        followers
       };
       cacheSocialProfiles([
         ...(STATE.follows.following || []).map(f => f.profile),
@@ -2862,9 +2866,13 @@ async function loadFollows() {
     sb.from("follows").select("following_id").eq("follower_id", me),
     sb.from("follows").select("follower_id").eq("following_id", me)
   ]);
+  const [following, followers] = await Promise.all([
+    hydrateFollowRows(followingRes.data || [], "following"),
+    hydrateFollowRows(followersRes.data || [], "followers")
+  ]);
   STATE.follows = {
-    following: followingRes.data || [],
-    followers: followersRes.data || []
+    following,
+    followers
   };
 }
 
@@ -2873,6 +2881,27 @@ function cacheSocialProfiles(people = []) {
   (people || []).filter(Boolean).forEach(p => {
     if (p.id) STATE._socialProfilesById[p.id] = p;
   });
+}
+
+async function hydrateFollowRows(rows = [], type = "following") {
+  const isFollowers = type === "followers";
+  const ids = [...new Set((rows || [])
+    .map(f => isFollowers ? f.follower_id : f.following_id)
+    .filter(Boolean))];
+  const profileById = await loadSocialProfilesByIds([
+    ...ids,
+    ...rows.map(f => f.profile?.id).filter(Boolean)
+  ]);
+  const seen = new Set();
+  return (rows || []).map(row => {
+    const id = isFollowers ? row.follower_id : row.following_id;
+    const profile = row.profile || profileById[id];
+    if (!id || !profile?.id || seen.has(id)) return null;
+    seen.add(id);
+    return isFollowers
+      ? { follower_id: id, profile }
+      : { following_id: id, profile };
+  }).filter(Boolean);
 }
 
 async function loadSocialProfilesByIds(ids = []) {
@@ -2977,6 +3006,24 @@ async function unfollowUser(userId) {
 }
 function isFollowing(userId) {
   return ((STATE.follows && STATE.follows.following) || []).some(f => f.following_id === userId);
+}
+
+function fallbackNameFromEmail(email) {
+  const local = String(email || "").split("@")[0] || "";
+  if (!local) return "";
+  return local
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function personDisplayName(profile, fallback = "Usuário") {
+  const name = String(profile?.full_name || "").trim();
+  const emailName = fallbackNameFromEmail(profile?.email);
+  if (!name) return emailName || profile?.email || fallback;
+  if (/^(aluno|usu[aá]rio|student)$/i.test(name) && emailName) return emailName;
+  return name;
 }
 
 async function searchPeople(query) {
@@ -7868,7 +7915,7 @@ function feedPostHTML(p, compact) {
   const isMine = STATE.profile && p.student_id === STATE.profile.id;
   const isCoach = STATE.profile.role === "coach";
   const canShare = canShareFeedWorkout(p);
-  const studentName = (p.student && (p.student.full_name || p.student.email)) || "Usuário";
+  const studentName = personDisplayName(p.student, "Usuário");
   const role = p.student && p.student.role === "coach" ? ' <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>' : (p.student && p.student.role === "admin" ? ' <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zM4 20h16"/></svg>' : "");
   const avatarInner = (p.student && p.student.avatar_url)
     ? `<img src="${escape(p.student.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
@@ -8532,7 +8579,7 @@ function peopleRow(p, context = "sheet") {
   return `<div class="list-row"${rowStyle}>
     <div class="lr-avatar" style="overflow:hidden;">${p.avatar_url ? `<img src="${escape(p.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"/>` : escape(p.avatar_emoji || '💪')}</div>
     <div class="lr-info">
-      <div class="lr-name">${escape(p.full_name || p.email)}</div>
+      <div class="lr-name">${escape(personDisplayName(p, "Usuário"))}</div>
       <div class="lr-sub">${escape(sub)}</div>
     </div>
     <div class="lr-actions">
