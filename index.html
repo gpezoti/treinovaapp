@@ -228,6 +228,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .day-pill .dp-num { display: block; font-size: 16px; font-weight: 800; color: var(--text); margin: 2px 0 4px; }
 .day-pill .dp-w { display: inline-block; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 999px;
   background: rgba(255,255,255,0.08); }
+.day-pill .dp-meta { display:block; min-height:12px; margin-top:4px; font-size:8px; line-height:1.2; color:var(--text-3); }
 .day-pill.is-today { border-color: var(--brand); background: linear-gradient(180deg, rgba(0,180,255,0.16), var(--bg-card)); }
 .day-pill.is-today .dp-day { color: var(--brand); }
 .day-pill.intensity-yellow .dp-w { background: var(--yellow-soft); color: var(--yellow); }
@@ -250,6 +251,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .day-pill .dp-day { font-size: 8px; letter-spacing: 0.2px; }
   .day-pill .dp-num { font-size: 13px; margin: 1px 0 3px; }
   .day-pill .dp-w { font-size: 8px; padding: 1px 3px; }
+  .day-pill .dp-meta { font-size:7px; margin-top:3px; }
   .week-card-head { padding: 8px 10px; }
   .week-name { font-size: 12px; }
 }
@@ -274,6 +276,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .week-grid .day-pill { flex: 0 0 calc((100% - 6*4px) / 7); min-width: 42px; padding: 8px 2px; }
 .week-grid .day-pill .dp-num { font-size: 14px; }
 .week-grid .day-pill .dp-w { font-size: 9px; padding: 1px 5px; }
+.week-grid .day-pill .dp-meta { font-size:8px; }
 
 /* Workout */
 .workout-hero { background: linear-gradient(135deg, var(--brand-soft), transparent 60%), var(--bg-card);
@@ -9224,6 +9227,28 @@ async function loadBlocksForDays(dayIds) {
   return map;
 }
 
+function summarizePeriodDayBlocks(blocks = []) {
+  if (!blocks.length) return { primary: "Livre", meta: "sem bloco", title: "Nenhum bloco configurado" };
+  const first = blocks[0];
+  const preset = getPreset(first.preset_code) || {};
+  const presetLabel = preset.label || first.preset_code || "Bloco";
+  const requiresWorkout = blocks.some(block => {
+    const blockPreset = getPreset(block.preset_code);
+    return !!blockPreset?.is_workout && !block.workout_code;
+  });
+  const primary = first.workout_code ? `${first.workout_code} · ${presetLabel}` : presetLabel;
+  const title = blocks.map(block => {
+    const blockPreset = getPreset(block.preset_code) || {};
+    const label = blockPreset.label || block.preset_code || "Bloco";
+    return block.workout_code ? `${block.workout_code} · ${label}` : label;
+  }).join(" + ");
+  return {
+    primary,
+    meta: requiresWorkout ? "falta treino" : (blocks.length > 1 ? `${blocks.length} blocos` : "configurado"),
+    title
+  };
+}
+
 async function resolvePeriodStudentCoachId(studentId) {
   if (!studentId) return null;
   if (STATE.profile?.role === "student" && STATE.profile.id === studentId) return STATE.profile.coach_id || null;
@@ -9445,6 +9470,7 @@ window.openStudentPeriodSheet = async function(id) {
           <div class="period-week-actions">
             <button class="mini-btn mini-btn-ghost" onclick="movePeriodWeek('${id}',${wi},-1)" ${wi === 0 ? 'disabled' : ''}>↑ Subir</button>
             <button class="mini-btn mini-btn-ghost" onclick="movePeriodWeek('${id}',${wi},1)" ${wi === grouped.length - 1 ? 'disabled' : ''}>↓ Descer</button>
+            <button class="mini-btn mini-btn-ghost" onclick="openRepeatPeriodWeekSheet('${id}',${wi})" ${wi >= grouped.length - 1 ? 'disabled' : ''}>Repetir</button>
             <button class="mini-btn mini-btn-primary" onclick="duplicatePeriodWeek('${id}',${wi})">Duplicar</button>
           </div>
         </div>
@@ -9452,18 +9478,15 @@ window.openStudentPeriodSheet = async function(id) {
           ${week.map(d => {
             const dt = new Date(d.date+"T00:00:00");
             const blocks = blocksByDay[d.id] || [];
-            const labels = blocks.map(b => {
-              const p = getPreset(b.preset_code);
-              const lab = (p && p.label) || b.preset_code;
-              return b.workout_code ? `${b.workout_code} · ${lab.slice(0,5)}` : lab.slice(0,5);
-            });
+            const summary = summarizePeriodDayBlocks(blocks);
             const colors = blocks.map(b => (getPreset(b.preset_code)||{}).color || '#9aa6c0');
             const stripe = colors.slice(0,3).map(c => `<span style="background:${c};width:6px;border-radius:2px"></span>`).join('');
-            return `<div class="day-pill" style="position:relative;cursor:pointer" onclick="editPeriodDay('${d.id}','${id}')">
+            return `<div class="day-pill" title="${escape(summary.title)}" style="position:relative;cursor:pointer" onclick="editPeriodDay('${d.id}','${id}')">
               <div style="position:absolute;top:4px;left:4px;right:4px;display:flex;gap:2px;height:4px">${stripe}</div>
               <span class="dp-day">${WEEKDAY_LABELS[dt.getDay()]}</span>
               <span class="dp-num">${dt.getDate()}</span>
-              <span class="dp-w" style="font-size:9px;line-height:1.2">${labels.length === 0 ? '—' : labels.slice(0,2).join('·')}</span>
+              <span class="dp-w" style="font-size:9px;line-height:1.2">${escape(summary.primary)}</span>
+              <span class="dp-meta">${escape(summary.meta)}</span>
             </div>`;
           }).join("")}
         </div>
@@ -9593,6 +9616,127 @@ async function movePeriodWeekClientFallback(studentId, weekIndex, dir) {
     await updatePeriodDayDate(target[i].id, source[i].date);
   }
 }
+
+function canManagePeriodBulk() {
+  if (!["coach", "admin"].includes(STATE.profile?.role)) {
+    showToast("Apenas treinador pode editar em massa a periodização.", "error");
+    return false;
+  }
+  if (STATE._periodBulkAction) return false;
+  return true;
+}
+
+async function replacePeriodDayBlocks(targetDayId, sourceBlocks = []) {
+  const { error: deleteError } = await sb.from("periodization_blocks").delete().eq("day_id", targetDayId);
+  if (deleteError) throw deleteError;
+  if (sourceBlocks.length) {
+    const rows = sourceBlocks.map((block, index) => ({
+      day_id: targetDayId,
+      position: Number.isFinite(block.position) ? block.position : index,
+      preset_code: block.preset_code,
+      workout_code: block.workout_code || null,
+      workout_id: block.workout_id || null,
+      notes: block.notes || null
+    }));
+    const { error: insertError } = await sb.from("periodization_blocks").insert(rows);
+    if (insertError) throw insertError;
+  }
+  await syncDayLegacy(targetDayId);
+}
+
+window.applyDayToSameWeekday = async function(dayId, studentId) {
+  if (!canManagePeriodBulk()) return;
+  const days = await loadPeriodDaysOrdered(studentId);
+  const sourceDay = days.find(day => day.id === dayId);
+  if (!sourceDay) return;
+  const weekday = new Date(sourceDay.date + "T00:00:00").getDay();
+  const targets = days.filter(day => day.id !== dayId && new Date(day.date + "T00:00:00").getDay() === weekday);
+  if (!targets.length) {
+    showToast("Não há outros dias equivalentes neste ciclo.", "error");
+    return;
+  }
+  const weekdayLabel = WEEKDAY_FULL[weekday];
+  const ok = await showConfirm({
+    title: `Aplicar em toda ${weekdayLabel}?`,
+    msg: `Os blocos deste dia substituirão os blocos das outras ${targets.length} ${weekdayLabel.toLowerCase()}(s) do ciclo.`,
+    confirm: "Aplicar",
+    danger: true
+  });
+  if (!ok) return;
+  STATE._periodBulkAction = true;
+  try {
+    const sourceBlocks = (await loadBlocksForDays([dayId]))[dayId] || [];
+    for (const target of targets) await replacePeriodDayBlocks(target.id, sourceBlocks);
+    showToast(`${weekdayLabel}: ${targets.length} dia(s) atualizado(s)`, "success");
+    await editPeriodDay(dayId, studentId);
+  } catch (error) {
+    showToast("Erro ao aplicar dia: " + (error.message || "tente novamente"), "error");
+  } finally {
+    STATE._periodBulkAction = false;
+  }
+};
+
+window.openRepeatPeriodWeekSheet = async function(studentId, weekIndex) {
+  if (!canManagePeriodBulk()) return;
+  const days = await loadPeriodDaysOrdered(studentId);
+  const totalWeeks = Math.floor(days.length / 7);
+  const remainingWeeks = Math.max(0, totalWeeks - weekIndex - 1);
+  if (!remainingWeeks) {
+    showToast("Não há semanas seguintes para repetir.", "error");
+    return;
+  }
+  openSheet(`
+    <h3>Repetir semana ${weekIndex + 1}</h3>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 14px">Copie esta semana para as próximas semanas já existentes do ciclo.</p>
+    <div class="form-group">
+      <label class="form-label">Quantas semanas seguintes?</label>
+      <select class="input" id="repeat-week-count">
+        ${Array.from({ length: remainingWeeks }, (_, i) => `<option value="${i + 1}">${i + 1} semana${i === 0 ? "" : "s"}</option>`).join("")}
+      </select>
+    </div>
+    <div style="padding:10px;border-radius:8px;background:rgba(255,200,0,0.08);border:1px solid rgba(255,200,0,0.2);color:var(--text-2);font-size:12px;margin-bottom:14px">
+      Os blocos das semanas escolhidas serão substituídos, mantendo as datas do ciclo.
+    </div>
+    <button class="btn-primary" onclick="repeatPeriodWeek('${studentId}',${weekIndex})">Repetir semana</button>
+    <button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')" style="margin-top:8px">Voltar</button>
+  `);
+};
+
+window.repeatPeriodWeek = async function(studentId, weekIndex) {
+  if (!canManagePeriodBulk()) return;
+  const count = parseInt(document.getElementById("repeat-week-count")?.value || "0", 10);
+  if (!count) {
+    showToast("Escolha quantas semanas repetir.", "error");
+    return;
+  }
+  const ok = await showConfirm({
+    title: "Repetir esta semana?",
+    msg: `A configuração da semana ${weekIndex + 1} substituirá as próximas ${count} semana(s).`,
+    confirm: "Repetir",
+    danger: true
+  });
+  if (!ok) return;
+  STATE._periodBulkAction = true;
+  try {
+    const days = await loadPeriodDaysOrdered(studentId);
+    const sourceWeek = days.slice(weekIndex * 7, weekIndex * 7 + 7);
+    if (sourceWeek.length !== 7) throw new Error("Semana de origem incompleta.");
+    const sourceBlocksByDay = await loadBlocksForDays(sourceWeek.map(day => day.id));
+    for (let offset = 1; offset <= count; offset++) {
+      const targetWeek = days.slice((weekIndex + offset) * 7, (weekIndex + offset) * 7 + 7);
+      if (targetWeek.length !== 7) throw new Error("Uma das semanas de destino está incompleta.");
+      for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+        await replacePeriodDayBlocks(targetWeek[dayOffset].id, sourceBlocksByDay[sourceWeek[dayOffset].id] || []);
+      }
+    }
+    showToast(`Semana repetida em ${count} semana(s)`, "success");
+    await openStudentPeriodSheet(studentId);
+  } catch (error) {
+    showToast("Erro ao repetir semana: " + (error.message || "tente novamente"), "error");
+  } finally {
+    STATE._periodBulkAction = false;
+  }
+};
 
 window.duplicatePeriodWeek = async function(studentId, weekIndex) {
   if (!canManagePeriodWeeks()) return;
@@ -9767,6 +9911,10 @@ window.editPeriodDay = async function(dayId, studentId) {
     <div id="blocks-list">
       ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId, (blocks||[]).length, periodWorkoutOptions)).join("") || '<div style="padding:14px;text-align:center;color:var(--text-3);font-size:13px">Nenhum bloco. Adicione abaixo.</div>'}
     </div>
+    ${["coach", "admin"].includes(STATE.profile?.role) ? `
+      <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">Ações em massa</div>
+      <button class="mini-btn mini-btn-ghost" style="width:100%;justify-content:center;min-height:38px" onclick="applyDayToSameWeekday('${dayId}','${studentId}')">Aplicar este dia em toda ${WEEKDAY_FULL[dt.getDay()]}</button>
+    ` : ""}
     <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">+ Adicionar bloco</div>
     <div class="preset-chip-grid">
       ${_PRESETS.filter(p => p.active !== false).map(p => `

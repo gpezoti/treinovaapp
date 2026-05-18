@@ -23,8 +23,16 @@ has(html, "loadPeriodDaysOrdered", "fallback must load ordered periodization day
 has(html, "updatePeriodDayDate", "fallback must persist reordered dates");
 has(html, "STATE._periodDaysByStudent", "period editor must cache ordered days for faster navigation");
 has(html, "dias configurados", "week cards must summarize configured days");
+has(html, "summarizePeriodDayBlocks", "day pills must expose richer block summaries");
+has(html, "falta treino", "day summaries must flag workout blocks missing a workout");
+has(html, "sem bloco", "day summaries must identify empty days");
 has(html, "← Dia", "day editor must expose previous day navigation");
 has(html, "Dia →", "day editor must expose next day navigation");
+has(html, "applyDayToSameWeekday", "day editor must expose bulk weekday apply");
+has(html, "Aplicar este dia em toda", "day editor must label weekday bulk action");
+has(html, "openRepeatPeriodWeekSheet", "week card must expose repeat-week action");
+has(html, "repeatPeriodWeek", "week repetition flow must exist");
+has(html, "replacePeriodDayBlocks", "bulk periodization actions must reuse one safe block replacement helper");
 has(html, "mantendo os blocos já configurados nos dias preservados", "period config must explain that kept days preserve blocks");
 has(html, "const overlap = Math.min(existingDays.length, targetDates.length)", "period config must preserve overlapping days instead of recreating all");
 has(html, "const tempBase = \"2700-01-01\"", "period config must use temporary dates to avoid unique collisions");
