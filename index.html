@@ -37,6 +37,8 @@
   --shadow: 0 6px 24px rgba(0,0,0,0.35);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --vv-top: 0px;
+  --vv-height: 100vh;
   --theme-toggle-icon-rotate: 0deg;
 }
 /* ---------- LIGHT THEME ---------- */
@@ -583,12 +585,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .mini-btn-primary { background: var(--brand-soft); color: var(--brand); border: 1px solid rgba(0,180,255,0.4); }
 
 /* Sheet/Modal */
-.sheet-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,0.6);
+.sheet-overlay { position: fixed; top: var(--vv-top); right: 0; bottom: auto; left: 0;
+  height: var(--vv-height); z-index: 80; background: rgba(0,0,0,0.6);
   display: none; align-items: flex-end; justify-content: center; }
 .sheet-overlay.active { display: flex; animation: fadein 0.2s ease; }
 .sheet { background: var(--bg-2); border-top-left-radius: 22px; border-top-right-radius: 22px;
-  width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; padding: 20px 20px 0;
-  border-top: 1px solid var(--line); animation: slideup 0.25s ease; -webkit-overflow-scrolling: touch; }
+  width: 100%; max-width: 520px; max-height: min(90vh, calc(var(--vv-height) - 12px));
+  overflow-y: auto; overscroll-behavior-y: contain; scroll-padding-bottom: calc(88px + var(--safe-bottom));
+  padding: 20px 20px 0; border-top: 1px solid var(--line); animation: slideup 0.25s ease;
+  -webkit-overflow-scrolling: touch; }
 .sheet-footer { position: sticky; bottom: 0; background: var(--bg-2);
   border-top: 1px solid var(--line); margin: 14px -20px 0;
   padding: 12px 20px calc(12px + var(--safe-bottom));
@@ -3466,9 +3471,9 @@ async function toggleLike(postId) {
 }
 
 /* =============================================================================
-   [UX-01] VISUAL VIEWPORT — iOS keyboard push-up
-   Ajusta o bottom da sheet e do chat quando o teclado virtual aparece no iOS.
-   Sem isso, inputs no final de formulários ficam cobertos pelo teclado.
+   [UX-01] VISUAL VIEWPORT — iOS keyboard
+   Mantém sheets dentro do viewport realmente visível quando o teclado abre.
+   O conteúdo rola internamente; o modal não precisa ser empurrado inteiro para cima.
    ============================================================================= */
 (function setupVisualViewport() {
   if (!window.visualViewport) return;
@@ -3482,14 +3487,8 @@ async function toggleLike(postId) {
       // height: altura do viewport visível (exclui teclado)
       const keyboardHeight = window.innerHeight - (vv.offsetTop + vv.height);
       const offset = Math.max(0, keyboardHeight);
-
-      // Sheet bottom
-      const sheet = document.getElementById("sheet");
-      if (sheet) {
-        sheet.style.paddingBottom = offset > 0
-          ? `calc(${offset}px + env(safe-area-inset-bottom, 0px))`
-          : "";
-      }
+      document.documentElement.style.setProperty("--vv-top", `${Math.max(0, vv.offsetTop)}px`);
+      document.documentElement.style.setProperty("--vv-height", `${Math.max(1, vv.height)}px`);
 
       // Chat thread input footer
       const ctFooter = document.querySelector("#chat-thread-overlay .ct-f");
@@ -3499,11 +3498,12 @@ async function toggleLike(postId) {
           : "";
       }
 
-      // Rola o último input visível para cima
+      // Mantém o campo ativo confortável dentro da sheet, sem saltos bruscos.
       if (offset > 0) {
         const focused = document.activeElement;
-        if (focused && (focused.tagName === "INPUT" || focused.tagName === "TEXTAREA")) {
-          focused.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        const activeSheet = focused && focused.closest && focused.closest("#sheet.active .sheet");
+        if (activeSheet && (focused.tagName === "INPUT" || focused.tagName === "TEXTAREA" || focused.tagName === "SELECT")) {
+          focused.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
         }
       }
     });
@@ -3511,6 +3511,7 @@ async function toggleLike(postId) {
 
   window.visualViewport.addEventListener("resize", onViewportChange, { passive: true });
   window.visualViewport.addEventListener("scroll", onViewportChange, { passive: true });
+  onViewportChange();
 })();
 
 /* =============================================================================
@@ -4752,7 +4753,7 @@ function openSheet(html) {
   sheet.classList.add("active");
   lockPageScrollForSheet();
   // reseta scroll para o topo
-  try { sheet.scrollTop = 0; } catch(e){}
+  try { root.scrollTop = 0; } catch(e){}
   // Empurra estado para que o botão voltar (hardware/browser) feche a sheet
   if (!_sheetInHistory) {
     _sheetInHistory = true;
