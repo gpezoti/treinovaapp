@@ -20,6 +20,8 @@ const checks = [
   ["periodization options prefer trainer model before legacy student clones", /map\[code\] = list\.find\(w => coachId && w\.coach_id === coachId && !w\.student_id\)[\s\S]*?\|\| list\.find\(w => w\.student_id === studentId\)/.test(html)],
   ["period blocks preserve exact workout binding", /insert\.workout_id = workoutOptions\?\.\[insert\.workout_code\]\?\.id \|\| null/.test(html) && /update\(\{ workout_code: workout \|\| null, workout_id: workoutId \|\| null \}\)/.test(html)],
   ["workout resolver prefers workout id over ambiguous code", /function resolveWorkoutRef\(workoutCode, workoutId = null\)[\s\S]*?STATE\.workoutsById\[workoutId\]/.test(html)],
+  ["today workout preselection keeps workout id", /STATE\.selectedWorkoutId = info\.workout_id \|\| null/.test(html)],
+  ["workout view backfills missing workout id from periodization", /if \(code && !STATE\.selectedWorkoutId\)[\s\S]*?STATE\.selectedWorkoutId = info\.workout_id/.test(html)],
   ["periodization workout binding migration backfills trainer models first", /add column if not exists workout_id uuid/.test(workoutBindingSql) && /when w\.coach_id = student\.coach_id and w\.student_id is null then 1/.test(workoutBindingSql)],
   ["completed workout double-submit guard exists", /Treino já concluído/.test(html)],
   ["student can reopen completed workout today", /reopenCompletedWorkout/.test(html) && /Continuar treino/.test(html)],

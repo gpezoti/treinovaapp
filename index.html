@@ -5001,7 +5001,7 @@ function renderCoachFinanceTabs() {
   const receivablesOpen = (STATE.coachPayments || []).filter(p => Number(p.open_count || 0) > 0).length;
   const tabs = [
     { id: "mine", label: "Minha mensalidade", sub: ownOpen ? `${ownOpen} em aberto` : "Tudo em dia" },
-    { id: "receivables", label: "Recebimentos", sub: receivablesOpen ? `${receivablesOpen} aluno(s)` : "Alunos" }
+    { id: "receivables", label: "Recebimentos", sub: receivablesOpen ? `${receivablesOpen} com cobrança` : "Sem cobranças" }
   ];
   return `<div class="coach-finance-tabs" role="tablist" aria-label="Financeiro do treinador">
     ${tabs.map(t => `<button type="button" role="tab" aria-selected="${_coachFinanceTab === t.id ? 'true' : 'false'}" class="coach-finance-tab ${_coachFinanceTab === t.id ? 'active' : ''}" onclick="setCoachFinanceTab('${t.id}')">
@@ -5983,7 +5983,7 @@ function renderCoachHome(el) {
       </button>
       <button class="insight-card ${inactive > 0 ? 'is-warn' : ''}" onclick="navTo('students')">
         <div class="insight-value">${inactive}</div>
-        <div class="insight-label">inativos</div>
+        <div class="insight-label">sem treino 7d</div>
       </button>
       <button class="insight-card ${overdue > 0 ? 'is-danger' : ''}" onclick="navTo('payments')">
         <div class="insight-value">${overdue}</div>
@@ -7241,6 +7241,12 @@ async function renderWorkout() {
       STATE.selectedWorkoutId = info.workout_id || null;
       STATE.selectedIntensity = intensity;
       STATE.selectedPresetCode = info.preset_code || resolvePresetForWorkoutDate(date, code, info.workout_id);
+    }
+  }
+  if (code && !STATE.selectedWorkoutId) {
+    const info = findDayInfo(date);
+    if (info && info.workout_code === code && info.workout_id) {
+      STATE.selectedWorkoutId = info.workout_id;
     }
   }
   if (!STATE.selectedPresetCode) {
@@ -8768,7 +8774,7 @@ function renderStudents() {
   const tabs = [
     { id: "all",      label: "Todos",        count: allStudents.length },
     { id: "active",   label: "Ativos",       count: approved.length },
-    { id: "inactive", label: "Inativos",     count: countInactive },
+    { id: "inactive", label: "Sem treino 7d",count: countInactive },
     { id: "overdue",  label: "Inadimplentes",count: countOverdue  },
   ];
   const tabsHTML = `
@@ -8793,7 +8799,6 @@ function renderStudents() {
     </div>
     <p class="view-subtitle" style="margin-bottom:10px">${canManageStudents ? "Gerencie alunos, treinos, pagamentos e acompanhamento em um só lugar." : "Visão geral dos alunos cadastrados na plataforma."}</p>
     ${canManageStudents ? `<div class="teacher-toolbar">
-      <button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">Adicionar aluno</button>
       <button class="mini-btn mini-btn-ghost" onclick="openShareLinkSheet()">Compartilhar link</button>
       <button class="mini-btn mini-btn-ghost" onclick="setStudentTab('overdue')">Ver inadimplentes</button>
     </div>` : ""}
@@ -8802,7 +8807,7 @@ function renderStudents() {
         <div class="insight-value">${approved.length}</div><div class="insight-label">ativos</div>
       </button>
       <button class="insight-card ${countInactive ? 'is-warn' : ''}" onclick="setStudentTab('inactive')">
-        <div class="insight-value">${countInactive}</div><div class="insight-label">inativos</div>
+        <div class="insight-value">${countInactive}</div><div class="insight-label">sem treino 7d</div>
       </button>
       <button class="insight-card ${countOverdue ? 'is-danger' : ''}" onclick="setStudentTab('overdue')">
         <div class="insight-value">${countOverdue}</div><div class="insight-label">em aberto</div>
@@ -8845,7 +8850,7 @@ function studentRow(s, selMode) {
   const isInactive = s.status === "approved" && (!s.last_session_at || s.last_session_at < cutoff7d);
   const isOverdue  = s.payment_status === "overdue" || s.payment_status === "pending_overdue";
   const badges = [
-    isInactive ? `<span style="font-size:10px;font-weight:700;background:var(--orange-soft,#fff3e0);color:var(--orange,#e67e22);border-radius:6px;padding:2px 6px;flex-shrink:0"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Inativo</span>` : "",
+    isInactive ? `<span style="font-size:10px;font-weight:700;background:var(--orange-soft,#fff3e0);color:var(--orange,#e67e22);border-radius:6px;padding:2px 6px;flex-shrink:0"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Sem treino 7d</span>` : "",
     isOverdue  ? `<span style="font-size:10px;font-weight:700;background:var(--red-soft,#fde8e8);color:var(--red,#e74c3c);border-radius:6px;padding:2px 6px;flex-shrink:0"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Devendo</span>` : "",
   ].filter(Boolean).join(" ");
 
@@ -11676,8 +11681,9 @@ async function postSignIn() {
     if (info && info.workout_code !== "OFF") {
       STATE.selectedDate = today;
       STATE.selectedWorkout = info.workout_code;
+      STATE.selectedWorkoutId = info.workout_id || null;
       STATE.selectedIntensity = info.intensity;
-      STATE.selectedPresetCode = info.preset_code || resolvePresetForWorkoutDate(today, info.workout_code);
+      STATE.selectedPresetCode = info.preset_code || resolvePresetForWorkoutDate(today, info.workout_code, info.workout_id);
     }
   }
 
