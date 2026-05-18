@@ -9198,8 +9198,9 @@ async function loadBlocksForDays(dayIds) {
 async function resolvePeriodStudentCoachId(studentId) {
   if (!studentId) return null;
   if (STATE.profile?.role === "student" && STATE.profile.id === studentId) return STATE.profile.coach_id || null;
-  const cached = (STATE.students || []).find(s => s.id === studentId);
+  const cached = (STATE.students || []).find(s => (s.student_id || s.id) === studentId);
   if (cached) return cached.coach_id || null;
+  if (STATE.profile?.role === "coach") return STATE.profile.id;
   const { data } = await sb.from("profiles").select("coach_id").eq("id", studentId).maybeSingle();
   return data?.coach_id || null;
 }

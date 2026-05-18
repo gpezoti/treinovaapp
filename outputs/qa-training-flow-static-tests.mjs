@@ -14,6 +14,7 @@ const checks = [
   ["exercise reorder function exists", /window\.moveExerciseInWorkout/.test(html)],
   ["period blocks support moving down", /moveBlock\('\$\{b\.id\}','\$\{dayId\}','\$\{studentId\}',1\)/.test(html)],
   ["periodization uses student available workout options", /loadPeriodWorkoutOptions/.test(html) && /STATE\._periodWorkoutOptions/.test(html)],
+  ["periodization resolves cached students by student_id", /\(s\.student_id \|\| s\.id\) === studentId/.test(html)],
   ["student workouts prefer trainer model before global fallback", /w\.coach_id === studentCoachId && !w\.student_id/.test(html)],
   ["completed workout double-submit guard exists", /Treino já concluído/.test(html)],
   ["student can reopen completed workout today", /reopenCompletedWorkout/.test(html) && /Continuar treino/.test(html)],
