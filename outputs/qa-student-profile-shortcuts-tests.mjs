@@ -7,7 +7,7 @@ assert.match(html, /\.shortcut-view\s*\{/, "student shortcut shared layout CSS m
 assert.match(html, /function getProgressPhotoPath\(photo\)/, "progress photo storage path resolver must exist");
 assert.match(html, /function resolveProgressPhotoUrl\(photo\)/, "progress photo URL resolver must exist");
 assert.match(html, /createSignedUrl\(path,\s*60 \* 60\)/, "progress photos should support private bucket signed URLs");
-assert.match(html, /function loadProgressPhotos\(\)/, "progress photos should load through a guarded loader");
+assert.match(html, /async function loadProgressPhotos\(studentId = STATE\.profile\.id\)/, "progress photos should load through a guarded loader");
 assert.match(html, /class="shortcut-loading"/, "progress menu should show a loading state");
 assert.match(html, /class="shortcut-error"/, "progress menu should show an error state");
 assert.match(html, /class="photo-grid"/, "progress gallery should use the polished grid");
