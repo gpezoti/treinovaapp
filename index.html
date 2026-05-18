@@ -1851,9 +1851,11 @@ const STATE = {
   profile: null,
   view: "home",
   workouts: {},          // by code: { ...workout, exercises: [] }
+  workoutsById: {},      // by id: { ...workout, exercises: [] }
   periodization: [],     // array of {date, workout_code, intensity, ...}
   selectedDate: null,
   selectedWorkout: null,
+  selectedWorkoutId: null,
   selectedIntensity: "yellow",
   selectedPresetCode: null,
   expandedEx: null,
@@ -2050,18 +2052,29 @@ function findDayInfo(iso) {
   const blocks = d.blocks || (STATE.dayBlocks || {})[iso] || [];
   let presetCode = d.preset_code || null;
   let workoutCode = d.workout_code;
+  let workoutId = d.workout_id || null;
   const firstWorkoutBlock = blocks.find(b => b.workout_code) || blocks.find(b => b.preset_code && (b.preset_code === "flex" || b.preset_code === presetCode));
   if (firstWorkoutBlock) {
     presetCode = firstWorkoutBlock.preset_code || presetCode;
     workoutCode = firstWorkoutBlock.workout_code || workoutCode;
+    workoutId = firstWorkoutBlock.workout_id || workoutId;
   }
-  return { ...d, workout_code: workoutCode, preset_code: presetCode, blocks, week: Math.floor(idx / 7) + 1 };
+  return { ...d, workout_code: workoutCode, workout_id: workoutId, preset_code: presetCode, blocks, week: Math.floor(idx / 7) + 1 };
 }
 
-function resolvePresetForWorkoutDate(date, workoutCode) {
+function resolveWorkoutRef(workoutCode, workoutId = null) {
+  if (workoutId && STATE.workoutsById && STATE.workoutsById[workoutId]) {
+    return STATE.workoutsById[workoutId];
+  }
+  return workoutCode ? (STATE.workouts[workoutCode] || null) : null;
+}
+
+function resolvePresetForWorkoutDate(date, workoutCode, workoutId = null) {
   const info = findDayInfo(date);
   if (!info) return null;
   const blocks = info.blocks || [];
+  const exactById = workoutId ? blocks.find(b => b.workout_id === workoutId) : null;
+  if (exactById?.preset_code) return exactById.preset_code;
   const exact = blocks.find(b => b.workout_code === workoutCode);
   if (exact?.preset_code) return exact.preset_code;
   const legacyFlex = workoutCode === "FLEX" && blocks.find(b => b.preset_code === "flex");
@@ -2638,6 +2651,7 @@ async function loadWorkouts() {
   const { data: exercises, error: e2 } = workoutIds.length ? await exQ : { data: [], error: null };
   if (e2) { console.error(e2); return; }
   const map = {};
+  const byId = {};
   // Para alunos vinculados a um treinador: o modelo atual do treinador e a fonte
   // principal. Clones antigos por aluno ficam como fallback para contas legadas.
   const isStudent = STATE.profile && STATE.profile.role === "student";
@@ -2646,6 +2660,7 @@ async function loadWorkouts() {
   const grouped = {};
   (workouts || []).forEach(w => {
     if (hiddenSet.has(w.id)) return; // ocultos por este coach
+    byId[w.id] = { ...w, exercises: [] };
     if (!grouped[w.code]) grouped[w.code] = [];
     grouped[w.code].push(w);
   });
@@ -2662,13 +2677,13 @@ async function loadWorkouts() {
     } else {
       chosen = list.find(w => w.is_global) || list[0];
     }
-    map[code] = { ...chosen, exercises: [] };
+    map[code] = byId[chosen.id];
   });
   exercises.forEach(ex => {
-    const code = Object.keys(map).find(k => map[k].id === ex.workout_id);
-    if (code) map[code].exercises.push(ex);
+    if (byId[ex.workout_id]) byId[ex.workout_id].exercises.push(ex);
   });
   STATE.workouts = map;
+  STATE.workoutsById = byId;
 }
 
 async function loadPeriodization() {
@@ -2681,7 +2696,7 @@ async function loadPeriodization() {
   let blocksByDay = {};
   if (dayIds.length) {
     const { data: blocks } = await sb.from("periodization_blocks")
-      .select("day_id, position, preset_code, workout_code")
+      .select("day_id, position, preset_code, workout_code, workout_id")
       .in("day_id", dayIds)
       .order("position", { ascending: true });
     (blocks || []).forEach(b => {
@@ -2696,7 +2711,8 @@ async function loadPeriodization() {
       ...d,
       blocks,
       preset_code: first?.preset_code || null,
-      workout_code: first?.workout_code || d.workout_code
+      workout_code: first?.workout_code || d.workout_code,
+      workout_id: first?.workout_id || null
     };
   });
 }
@@ -5647,7 +5663,7 @@ function renderHome() {
         <span class="today-pill pill-off">Descanso</span>
       </div>`;
   } else {
-    const W = STATE.workouts[info.workout_code];
+    const W = resolveWorkoutRef(info.workout_code, info.workout_id);
     if (!W) {
       todayCardHTML = `<div class="today-card intensity-off"><div class="today-title">Treino ${info.workout_code} não encontrado</div></div>`;
 	    } else {
@@ -5662,7 +5678,7 @@ function renderHome() {
           <span class="today-pill ${pillCls}">${pillTxt}</span>
           ${info.aero ? `<span class="today-pill pill-flex" style="margin-left:6px">+ Aeróbio 35'</span>` : ""}
           <div style="margin-top:14px">
-            <button class="btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px" onclick="${info.preset_code ? `openWorkoutWithPreset('${today}','${info.workout_code}','${info.preset_code}')` : `openWorkout('${today}','${info.workout_code}','${info.intensity}')`}">
+            <button class="btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px" onclick="${info.preset_code ? `openWorkoutWithPreset('${today}','${info.workout_code}','${info.preset_code}','${info.workout_id || ""}')` : `openWorkout('${today}','${info.workout_code}','${info.intensity}','${info.workout_id || ""}')`}">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               Iniciar treino
             </button>
@@ -5780,7 +5796,7 @@ window.onDayClick = function(iso) {
     const dt = new Date(iso + "T00:00:00");
     const dayLabel = dt.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
     const wCode = info.workout_code;
-    const W = STATE.workouts[wCode];
+    const W = resolveWorkoutRef(wCode, info.workout_id);
     const wName = W ? W.name : "Treino " + wCode;
     openSheet(`
       <div style="text-align:center;margin-bottom:4px">
@@ -5789,7 +5805,7 @@ window.onDayClick = function(iso) {
         <p style="color:var(--text-2);font-size:13px;margin:0 0 16px">${wName} · ${dayLabel}</p>
         <p style="color:var(--text-2);font-size:13px;line-height:1.5;margin:0 0 20px">Sem problema — você ainda pode registrar este treino. Acontece com todo mundo!</p>
       </div>
-      <button class="btn-primary" onclick="closeSheet();${info.preset_code ? `openWorkoutWithPreset('${iso}','${wCode}','${info.preset_code}')` : `openWorkout('${iso}','${wCode}','${info.intensity}')`}" style="margin-bottom:10px">
+      <button class="btn-primary" onclick="closeSheet();${info.preset_code ? `openWorkoutWithPreset('${iso}','${wCode}','${info.preset_code}','${info.workout_id || ""}')` : `openWorkout('${iso}','${wCode}','${info.intensity}','${info.workout_id || ""}')`}" style="margin-bottom:10px">
         ▶ Fazer este treino agora
       </button>
       <button class="btn-ghost" onclick="closeSheet();navTo('chat')" style="margin-bottom:8px">
@@ -5800,16 +5816,17 @@ window.onDayClick = function(iso) {
     return;
   }
   if (info.preset_code) {
-    openWorkoutWithPreset(iso, info.workout_code, info.preset_code);
+    openWorkoutWithPreset(iso, info.workout_code, info.preset_code, info.workout_id);
   } else {
-    openWorkout(iso, info.workout_code, info.intensity);
+    openWorkout(iso, info.workout_code, info.intensity, info.workout_id);
   }
 };
-window.openWorkout = function(iso, code, intensity) {
+window.openWorkout = function(iso, code, intensity, workoutId = null) {
   STATE.selectedDate = iso;
   STATE.selectedWorkout = code;
+  STATE.selectedWorkoutId = workoutId || null;
   STATE.selectedIntensity = intensity || "yellow";
-  STATE.selectedPresetCode = resolvePresetForWorkoutDate(iso, code);
+  STATE.selectedPresetCode = resolvePresetForWorkoutDate(iso, code, workoutId);
   STATE.expandedEx = null;
   navTo("workout");
 };
@@ -5840,7 +5857,7 @@ function renderSelfTrainingCard({ emptyCta = true } = {}) {
         <span class="today-pill pill-off">Descanso</span>
       </div>`;
   }
-  const W = STATE.workouts[info.workout_code];
+  const W = resolveWorkoutRef(info.workout_code, info.workout_id);
   const [pillCls, pillTxt] = intensityPill(info.intensity);
   return `
     <div class="today-card ${intensityClass(info.intensity)}">
@@ -5849,7 +5866,7 @@ function renderSelfTrainingCard({ emptyCta = true } = {}) {
       <div class="today-meta">${escape(W ? W.focus || "" : "Seu treino pessoal")}</div>
       <span class="today-pill ${pillCls}">${pillTxt}</span>
       <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <button class="btn-primary" onclick="openWorkout('${today}','${info.workout_code}','${info.intensity}')">Iniciar treino</button>
+        <button class="btn-primary" onclick="openWorkout('${today}','${info.workout_code}','${info.intensity}','${info.workout_id || ""}')">Iniciar treino</button>
         <button class="btn-ghost" onclick="navTo('calendar')">Periodização</button>
       </div>
     </div>`;
@@ -6068,7 +6085,7 @@ function renderAdminHome(el) {
           <span class="today-pill pill-off">Descanso</span>
         </div>`;
     } else {
-      const W = STATE.workouts[myInfo.workout_code];
+      const W = resolveWorkoutRef(myInfo.workout_code, myInfo.workout_id);
       const [pillCls, pillTxt] = intensityPill(myInfo.intensity);
       myWorkoutCard = `
         <div class="today-card ${intensityClass(myInfo.intensity)}">
@@ -6077,7 +6094,7 @@ function renderAdminHome(el) {
           <div class="today-meta">${escape(W ? W.focus || "" : "")}</div>
           <span class="today-pill ${pillCls}">${pillTxt}</span>
           <div style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <button class="btn-primary" onclick="openWorkout('${today}','${myInfo.workout_code}','${myInfo.intensity}')">Iniciar treino</button>
+            <button class="btn-primary" onclick="openWorkout('${today}','${myInfo.workout_code}','${myInfo.intensity}','${myInfo.workout_id || ""}')">Iniciar treino</button>
             <button class="btn-ghost" onclick="navTo('calendar')">Periodização</button>
           </div>
         </div>`;
@@ -7219,11 +7236,15 @@ async function renderWorkout() {
     const info = findDayInfo(date);
     if (info && info.workout_code !== "OFF") {
       code = info.workout_code; intensity = info.intensity;
-      STATE.selectedDate = date; STATE.selectedWorkout = code; STATE.selectedIntensity = intensity; STATE.selectedPresetCode = info.preset_code || resolvePresetForWorkoutDate(date, code);
+      STATE.selectedDate = date;
+      STATE.selectedWorkout = code;
+      STATE.selectedWorkoutId = info.workout_id || null;
+      STATE.selectedIntensity = intensity;
+      STATE.selectedPresetCode = info.preset_code || resolvePresetForWorkoutDate(date, code, info.workout_id);
     }
   }
   if (!STATE.selectedPresetCode) {
-    STATE.selectedPresetCode = resolvePresetForWorkoutDate(date, code);
+    STATE.selectedPresetCode = resolvePresetForWorkoutDate(date, code, STATE.selectedWorkoutId);
   }
 
   if (!code || code === "OFF") {
@@ -7239,7 +7260,7 @@ async function renderWorkout() {
     return;
   }
 
-  const W = STATE.workouts[code];
+  const W = resolveWorkoutRef(code, STATE.selectedWorkoutId);
   if (!W) {
     el.innerHTML = `<div class="empty"><h3>Treino não encontrado</h3><p>Esse treino ainda não está disponível para sua conta.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="navTo('home')">Voltar ao início</button></div></div>`;
     return;
@@ -9528,6 +9549,7 @@ async function duplicatePeriodWeekClientFallback(studentId, weekIndex) {
         position: b.position || 0,
         preset_code: b.preset_code,
         workout_code: b.workout_code || null,
+        workout_id: b.workout_id || null,
         notes: b.notes || null
       });
     });
@@ -9724,6 +9746,9 @@ window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0, per
   const isAero = b.preset_code === 'aero' || preset.label?.toLowerCase().includes('aero');
   const workoutPresets = (_PRESETS || []).filter(p => p.active !== false && p.is_workout);
   const workoutMap = periodWorkoutOptions || STATE._periodWorkoutOptions?.[studentId] || STATE.workouts || {};
+  const selectedWorkout = b.workout_id
+    ? Object.values(workoutMap || {}).find(w => w?.id === b.workout_id)
+    : workoutMap[b.workout_code];
   const codes = Object.keys(workoutMap || {})
     .filter(c => c && c !== 'FLEX')
     .sort((a,b) => a.localeCompare(b, "pt-BR", { numeric: true }));
@@ -9752,13 +9777,13 @@ window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0, per
         ` : ''}
         <div style="display:flex;gap:5px;flex-wrap:wrap">
           ${codes.map(c => `
-            <button class="mini-btn ${b.workout_code===c?'mini-btn-primary':'mini-btn-ghost'}"
+            <button class="mini-btn ${(selectedWorkout?.id && workoutMap[c]?.id === selectedWorkout.id) || (!selectedWorkout?.id && b.workout_code===c)?'mini-btn-primary':'mini-btn-ghost'}"
               title="${escape(workoutMap[c]?.name || `Treino ${c}`)}"
-              style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${c}')">${c}</button>
+              style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${c}','${workoutMap[c]?.id || ""}')">${c}</button>
           `).join("")}
-          <button class="mini-btn ${!b.workout_code?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','')">—</button>
+          <button class="mini-btn ${!b.workout_code?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','','')">—</button>
         </div>
-        ${b.workout_code && workoutMap[b.workout_code] ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">Treino: ${escape(workoutMap[b.workout_code].name || `Treino ${b.workout_code}`)}</div>` : ''}
+        ${selectedWorkout ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">Treino: ${escape(selectedWorkout.name || `Treino ${b.workout_code}`)}</div>` : ''}
 	        ${preset.rep_min || preset.pause_seconds || preset.sets_count ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${preset.sets_count || 3} séries · ${preset.rep_min || "—"}-${preset.rep_max || "—"} reps · pausa ${formatPauseLabel(preset.pause_seconds || 0)}</div>` : ''}
       ` : isAero ? `
         <div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Modalidade aeróbia</div>
@@ -9788,6 +9813,7 @@ window.addBlockToDay = async function(dayId, studentId, presetCode, isWorkout) {
   if (isWorkout) {
     const workoutOptions = STATE._periodWorkoutOptions?.[studentId] || await loadPeriodWorkoutOptions(studentId);
     insert.workout_code = Object.keys(workoutOptions || {}).sort((a,b) => a.localeCompare(b, "pt-BR", { numeric: true }))[0] || "A";
+    insert.workout_id = workoutOptions?.[insert.workout_code]?.id || null;
   }
   const { error } = await sb.from("periodization_blocks").insert(insert);
   if (error) { showToast(error.message, "error"); return; }
@@ -9815,8 +9841,8 @@ window.moveBlock = async function(blockId, dayId, studentId, dir) {
   editPeriodDay(dayId, studentId);
 };
 
-window.setBlockWorkout = async function(blockId, dayId, studentId, workout) {
-  await sb.from("periodization_blocks").update({ workout_code: workout || null }).eq("id", blockId);
+window.setBlockWorkout = async function(blockId, dayId, studentId, workout, workoutId = null) {
+  await sb.from("periodization_blocks").update({ workout_code: workout || null, workout_id: workoutId || null }).eq("id", blockId);
   await syncDayLegacy(dayId);
   editPeriodDay(dayId, studentId);
 };
@@ -13520,7 +13546,7 @@ async function renderHomeExtras() {
           <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
             <span class="today-pill pill-approved" style="font-size:13px;padding:7px 14px">✓ Treino concluído!</span>
             <button class="btn-ghost" style="font-size:12px;padding:6px 12px"
-              onclick="openWorkout('${todayDate}','${todayInfo.workout_code}','${todayInfo.intensity}')">Ver detalhes</button>
+              onclick="openWorkout('${todayDate}','${todayInfo.workout_code}','${todayInfo.intensity}','${todayInfo.workout_id || ""}')">Ver detalhes</button>
           </div>`;
       }
       // Para admin com grid de 2 colunas (btn-primary + btn-ghost)
@@ -13529,7 +13555,7 @@ async function renderHomeExtras() {
         adminGrid.innerHTML = `
           <span class="today-pill pill-approved" style="font-size:13px;padding:7px 14px;grid-column:1/-1">✓ Treino concluído!</span>
           <button class="btn-ghost" style="font-size:12px"
-            onclick="openWorkout('${todayDate}','${todayInfo.workout_code}','${todayInfo.intensity}')">Ver detalhes</button>
+            onclick="openWorkout('${todayDate}','${todayInfo.workout_code}','${todayInfo.intensity}','${todayInfo.workout_id || ""}')">Ver detalhes</button>
           <button class="btn-ghost" onclick="navTo('calendar')">Periodização</button>`;
       }
     }
@@ -14959,7 +14985,7 @@ function renderTodayBlocksCard() {
 
   const blocksHTML = blocks.map(b => {
     const p = (typeof getPreset === "function" && getPreset(b.preset_code)) || { label: b.preset_code, color: '#9aa6c0', is_workout: !!b.workout_code };
-    const W = b.workout_code ? STATE.workouts[b.workout_code] : null;
+    const W = b.workout_code ? resolveWorkoutRef(b.workout_code, b.workout_id) : null;
 	    const scheme = getTrainingScheme(b.preset_code, "yellow");
 	    const hasRepRange = p.rep_min && p.rep_max;
     return `
@@ -14972,7 +14998,7 @@ function renderTodayBlocksCard() {
             ${W && W.focus ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px">${escape(W.focus)}</div>` : ''}
           </div>
           ${b.workout_code && W ? `
-            <button class="btn-primary" style="padding:9px 14px;font-size:12px;width:auto;flex-shrink:0" onclick="openWorkoutWithPreset('${today}','${b.workout_code}','${b.preset_code}')">
+            <button class="btn-primary" style="padding:9px 14px;font-size:12px;width:auto;flex-shrink:0" onclick="openWorkoutWithPreset('${today}','${b.workout_code}','${b.preset_code}','${b.workout_id || ""}')">
               Iniciar
             </button>
           ` : (b.preset_code === 'aero' ? `
@@ -14993,12 +15019,13 @@ function renderTodayBlocksCard() {
 window.renderTodayBlocksCard = renderTodayBlocksCard;
 
 /* Abre treino com o preset selecionado (rep range + pause vêm do preset) */
-window.openWorkoutWithPreset = function(date, code, presetCode) {
+window.openWorkoutWithPreset = function(date, code, presetCode, workoutId = null) {
   STATE.selectedPresetCode = presetCode;
   // mapeia preset → intensity legacy pra UI atual
   const intMap = { hipertrofia: 'yellow', forca: 'red', deload: 'white', flex: 'flex', off: 'off', aero: 'flex' };
   STATE.selectedDate = date;
   STATE.selectedWorkout = code;
+  STATE.selectedWorkoutId = workoutId || null;
   STATE.selectedIntensity = intMap[presetCode] || 'yellow';
   STATE.expandedEx = null;
   navTo("workout");

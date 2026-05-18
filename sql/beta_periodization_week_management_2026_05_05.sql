@@ -114,8 +114,8 @@ begin
     )
     returning id into v_new_day_id;
 
-    insert into public.periodization_blocks (day_id, position, preset_code, workout_code, notes)
-    select v_new_day_id, position, preset_code, workout_code, notes
+    insert into public.periodization_blocks (day_id, position, preset_code, workout_code, workout_id, notes)
+    select v_new_day_id, position, preset_code, workout_code, workout_id, notes
     from public.periodization_blocks
     where day_id = d.id
     order by position;

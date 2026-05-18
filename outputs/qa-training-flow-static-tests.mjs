@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const recoverySql = readFileSync(new URL("../sql/student_workout_session_recovery_2026_05_06.sql", import.meta.url), "utf8");
 const paymentRlsSql = readFileSync(new URL("../supabase/migrations/20260512125000_restore_rls_payment_function_execute.sql", import.meta.url), "utf8");
+const workoutBindingSql = readFileSync(new URL("../supabase/migrations/20260518193000_periodization_blocks_workout_binding.sql", import.meta.url), "utf8");
 
 const checks = [
   ["custom workout validates code format", /Use apenas letras, números, _ ou - no código/.test(html)],
@@ -17,6 +18,9 @@ const checks = [
   ["periodization resolves cached students by student_id", /\(s\.student_id \|\| s\.id\) === studentId/.test(html)],
   ["student workouts prefer trainer model before legacy student clones", /chosen = list\.find\(w => w\.coach_id === studentCoachId && !w\.student_id\)[\s\S]*?\|\| list\.find\(w => w\.student_id === myId\)/.test(html)],
   ["periodization options prefer trainer model before legacy student clones", /map\[code\] = list\.find\(w => coachId && w\.coach_id === coachId && !w\.student_id\)[\s\S]*?\|\| list\.find\(w => w\.student_id === studentId\)/.test(html)],
+  ["period blocks preserve exact workout binding", /insert\.workout_id = workoutOptions\?\.\[insert\.workout_code\]\?\.id \|\| null/.test(html) && /update\(\{ workout_code: workout \|\| null, workout_id: workoutId \|\| null \}\)/.test(html)],
+  ["workout resolver prefers workout id over ambiguous code", /function resolveWorkoutRef\(workoutCode, workoutId = null\)[\s\S]*?STATE\.workoutsById\[workoutId\]/.test(html)],
+  ["periodization workout binding migration backfills trainer models first", /add column if not exists workout_id uuid/.test(workoutBindingSql) && /when w\.coach_id = student\.coach_id and w\.student_id is null then 1/.test(workoutBindingSql)],
   ["completed workout double-submit guard exists", /Treino já concluído/.test(html)],
   ["student can reopen completed workout today", /reopenCompletedWorkout/.test(html) && /Continuar treino/.test(html)],
   ["student can restart completed workout today", /restartCompletedWorkout/.test(html) && /Reiniciar treino de hoje/.test(html)],
