@@ -422,6 +422,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   border-radius: 18px; padding: 6px; display: grid; gap: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
 .bn-bar.cols-4 { grid-template-columns: repeat(4, 1fr); }
 .bn-bar.cols-5 { grid-template-columns: repeat(5, 1fr); }
+.bn-bar.cols-6 { grid-template-columns: repeat(6, 1fr); }
 .bn-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px;
   border-radius: 12px; color: var(--text-3); font-size: 9px; font-weight: 700; letter-spacing: 0.4px;
   text-transform: uppercase; transition: all 0.15s ease; }
@@ -5516,6 +5517,7 @@ function getAppNavItems() {
       { id: "workout", label: "Treinar", svg: `<path d="M6.5 6.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/><path d="M17.5 6.5h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-2"/><line x1="6.5" y1="9" x2="6.5" y2="15"/><line x1="17.5" y1="9" x2="17.5" y2="15"/><line x1="6.5" y1="12" x2="17.5" y2="12"/><circle cx="6.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="16.5" r="1.5"/><circle cx="17.5" cy="7.5" r="1.5"/><circle cx="17.5" cy="16.5" r="1.5"/>` },
       { id: "students", label: "Alunos", svg: `<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a7 7 0 0 1 14 0v1"/><circle cx="17" cy="9" r="3"/><path d="M22 21v-1a5 5 0 0 0-5-5"/>` },
       { id: "admin-workouts", label: "Biblioteca", svg: `<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>` },
+      { id: "feed", label: "Feed", svg: `<path d="M4 4h16v4H4zM4 11h16v4H4zM4 18h10v4H4z"/>` },
       { id: "profile", label: "Perfil", svg: `<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>` }
     ];
   }
@@ -5581,8 +5583,8 @@ function renderBottomNav() {
   const bar = document.getElementById("bn-bar");
   const items = getAppNavItems();
   const desktopItems = getDesktopNavItems();
-  bar.classList.remove("cols-4","cols-5");
-  bar.classList.add(items.length === 4 ? "cols-4" : "cols-5");
+  bar.classList.remove("cols-4","cols-5","cols-6");
+  bar.classList.add(items.length === 4 ? "cols-4" : items.length === 6 ? "cols-6" : "cols-5");
   const finBadge  = (STATE.coachPayments || []).filter(x => x.is_overdue).length;
   const feedBadge = STATE.feedUnread || 0;
   bar.innerHTML = items.map(it => {
@@ -9414,6 +9416,8 @@ window.openStudentPeriodSheet = async function(id) {
   const isSelfPeriod = STATE.profile && id === STATE.profile.id;
   const { data: days } = await sb.from("periodization_days")
     .select("*").eq("student_id", id).order("date");
+  STATE._periodDaysByStudent = STATE._periodDaysByStudent || {};
+  STATE._periodDaysByStudent[id] = days || [];
   const dayIds = (days||[]).map(d => d.id);
   const blocksByDay = await loadBlocksForDays(dayIds);
   const grouped = [];
@@ -9436,6 +9440,7 @@ window.openStudentPeriodSheet = async function(id) {
           <div>
             <div class="period-week-title">Semana ${wi+1}</div>
             <div class="text-xs muted">${fmtDateBR(week[0]?.date)}${week[6]?.date ? ` a ${fmtDateBR(week[6].date)}` : ""}</div>
+            <div class="text-xs muted">${week.filter(day => (blocksByDay[day.id] || []).length > 0).length} de ${week.length} dias configurados</div>
           </div>
           <div class="period-week-actions">
             <button class="mini-btn mini-btn-ghost" onclick="movePeriodWeek('${id}',${wi},-1)" ${wi === 0 ? 'disabled' : ''}>↑ Subir</button>
@@ -9658,7 +9663,7 @@ window.openPeriodConfig = function(studentId) {
       <button class="mini-btn" onclick="openStudentPeriodSheet('${studentId}')" style="padding:6px 12px">← Voltar</button>
       <div style="font-weight:700;font-size:15px">Configurar período</div>
     </div>
-    <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Define o início e a duração do ciclo. Os dias existentes serão recriados a partir da nova data.</p>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Define o início e a duração do ciclo mantendo os blocos já configurados nos dias preservados.</p>
     <div class="form-group">
       <label class="form-label">Data de início</label>
       <input class="input" type="date" id="pc-start" value="${currentStart}" />
@@ -9670,7 +9675,7 @@ window.openPeriodConfig = function(studentId) {
       </select>
     </div>
     <div style="padding:10px;border-radius:8px;background:rgba(255,200,0,0.08);border:1px solid rgba(255,200,0,0.2);color:var(--text-2);font-size:12px;margin-bottom:14px">
-      ⚠ Isso recria todos os dias do ciclo. Os blocos de cada dia e o histórico de treinos não são afetados.
+      Se reduzir o número de semanas, apenas os dias excedentes serão removidos. Os blocos dos dias mantidos continuam no lugar.
     </div>
     <button class="btn-primary" onclick="applyPeriodConfig('${studentId}')">Aplicar configuração</button>
   `;
@@ -9683,19 +9688,36 @@ window.applyPeriodConfig = async function(studentId) {
   const btn = document.querySelector('#sheet-content .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = "Aplicando…"; }
   try {
-    // Deleta dias existentes (mantém blocks e set_logs via FK com ON DELETE CASCADE)
-    const { error: delErr } = await sb.from("periodization_days").delete().eq("student_id", studentId);
-    if (delErr) throw delErr;
-    // Cria novos dias (sem blocos — coach edita depois)
-    const rows = [];
+    const existingDays = await loadPeriodDaysOrdered(studentId);
+    const targetDates = [];
     const start = new Date(startDate + "T00:00:00");
     for (let i = 0; i < numWeeks * 7; i++) {
       const d = new Date(start); d.setDate(start.getDate() + i);
-      rows.push({ student_id: studentId, date: d.toISOString().slice(0, 10), workout_code: 'OFF', intensity: 'off', aero: false });
+      targetDates.push(d.toISOString().slice(0, 10));
     }
-    // Insere em batches de 200 para evitar limite de payload
-    for (let i = 0; i < rows.length; i += 200) {
-      const { error } = await sb.from("periodization_days").insert(rows.slice(i, i + 200));
+    const overlap = Math.min(existingDays.length, targetDates.length);
+    const tempBase = "2700-01-01";
+    for (let i = 0; i < overlap; i++) {
+      await updatePeriodDayDate(existingDays[i].id, addDaysISO(tempBase, i));
+    }
+    for (let i = 0; i < overlap; i++) {
+      await updatePeriodDayDate(existingDays[i].id, targetDates[i]);
+    }
+    if (targetDates.length > existingDays.length) {
+      const rows = targetDates.slice(existingDays.length).map(date => ({
+        student_id: studentId,
+        date,
+        workout_code: 'OFF',
+        intensity: 'off',
+        aero: false
+      }));
+      for (let i = 0; i < rows.length; i += 200) {
+        const { error } = await sb.from("periodization_days").insert(rows.slice(i, i + 200));
+        if (error) throw error;
+      }
+    } else if (targetDates.length < existingDays.length) {
+      const extraIds = existingDays.slice(targetDates.length).map(day => day.id);
+      const { error } = await sb.from("periodization_days").delete().in("id", extraIds);
       if (error) throw error;
     }
     showToast(`Período de ${numWeeks} semanas criado a partir de ${fmtDateBR(startDate)}`, "success");
@@ -9718,6 +9740,13 @@ window.editPeriodDay = async function(dayId, studentId) {
 
   const { data: d } = await sb.from("periodization_days").select("*").eq("id", dayId).single();
   if (!d) return;
+  const cachedDays = STATE._periodDaysByStudent?.[studentId];
+  const periodDays = cachedDays && cachedDays.length
+    ? cachedDays
+    : await loadPeriodDaysOrdered(studentId);
+  const dayIndex = periodDays.findIndex(day => day.id === dayId);
+  const prevDay = dayIndex > 0 ? periodDays[dayIndex - 1] : null;
+  const nextDay = dayIndex >= 0 && dayIndex < periodDays.length - 1 ? periodDays[dayIndex + 1] : null;
   const { data: blocks } = await sb.from("periodization_blocks")
     .select("*").eq("day_id", dayId).order("position");
   const dt = new Date(d.date+"T00:00:00");
@@ -9729,6 +9758,10 @@ window.editPeriodDay = async function(dayId, studentId) {
       <div>
         <div style="font-weight:700;font-size:15px">${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}/${MONTH_SHORT[dt.getMonth()]}</div>
         <div style="font-size:11px;color:var(--text-3)">Alterações salvas automaticamente</div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="mini-btn mini-btn-ghost" style="padding:6px 10px" ${prevDay ? `onclick="editPeriodDay('${prevDay.id}','${studentId}')"` : 'disabled'}>← Dia</button>
+        <button class="mini-btn mini-btn-ghost" style="padding:6px 10px" ${nextDay ? `onclick="editPeriodDay('${nextDay.id}','${studentId}')"` : 'disabled'}>Dia →</button>
       </div>
     </div>
     <div id="blocks-list">

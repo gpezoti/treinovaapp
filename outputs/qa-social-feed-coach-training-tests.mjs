@@ -21,6 +21,7 @@ assert.match(html, /window\.onFollowToggle = async function\(id, currentlyFollow
 assert.match(html, /function renderSelfTrainingCard\(/);
 assert.match(html, /\{ id: "feed", label: "Feed"/);
 assert.match(html, /\{ id: "workout", label: "Treino"/);
+assert.match(html, /if \(isCoach\)[\s\S]*?\{ id: "feed", label: "Feed"/, "coach nav must expose feed directly");
 assert.match(html, /profile\.role === "student" \|\| profile\.role === "coach"/);
 assert.match(html, /full_name\.ilike\.%\$\{term\}%/);
 assert.match(html, /email\.ilike\.%\$\{term\}%/);
