@@ -2642,6 +2642,7 @@ async function loadWorkouts() {
   // modelo antes de cair em um treino global com o mesmo codigo.
   const isStudent = STATE.profile && STATE.profile.role === "student";
   const isCoach = STATE.profile && STATE.profile.role === "coach";
+  const studentCoachId = isStudent ? STATE.profile.coach_id : null;
   const grouped = {};
   (workouts || []).forEach(w => {
     if (hiddenSet.has(w.id)) return; // ocultos por este coach
@@ -2652,7 +2653,10 @@ async function loadWorkouts() {
     const list = grouped[code];
     let chosen;
     if (isStudent) {
-      chosen = list.find(w => w.student_id === myId) || list.find(w => w.is_global) || list[0];
+      chosen = list.find(w => w.student_id === myId)
+        || list.find(w => w.coach_id === studentCoachId && !w.student_id)
+        || list.find(w => w.is_global)
+        || list[0];
     } else if (isCoach) {
       chosen = list.find(w => w.coach_id === myId && !w.student_id) || list.find(w => w.is_global) || list[0];
     } else {
@@ -9191,6 +9195,44 @@ async function loadBlocksForDays(dayIds) {
   return map;
 }
 
+async function resolvePeriodStudentCoachId(studentId) {
+  if (!studentId) return null;
+  if (STATE.profile?.role === "student" && STATE.profile.id === studentId) return STATE.profile.coach_id || null;
+  const cached = (STATE.students || []).find(s => s.id === studentId);
+  if (cached) return cached.coach_id || null;
+  const { data } = await sb.from("profiles").select("coach_id").eq("id", studentId).maybeSingle();
+  return data?.coach_id || null;
+}
+
+async function loadPeriodWorkoutOptions(studentId) {
+  const coachId = await resolvePeriodStudentCoachId(studentId);
+  let q = sb.from("workouts").select("*").order("code");
+  q = coachId
+    ? q.or(`is_global.eq.true,student_id.eq.${studentId},coach_id.eq.${coachId}`)
+    : q.or(`is_global.eq.true,student_id.eq.${studentId}`);
+  const { data, error } = await q;
+  if (error) {
+    console.warn("[loadPeriodWorkoutOptions]", error);
+    return STATE.workouts || {};
+  }
+  const grouped = {};
+  (data || [])
+    .filter(w => w && (w.is_global || w.student_id === studentId || (coachId && w.coach_id === coachId && !w.student_id)))
+    .forEach(w => {
+      (grouped[w.code] = grouped[w.code] || []).push(w);
+    });
+  const map = {};
+  Object.keys(grouped).forEach(code => {
+    const list = grouped[code];
+    map[code] = list.find(w => w.student_id === studentId)
+      || list.find(w => coachId && w.coach_id === coachId && !w.student_id)
+      || list.find(w => w.is_global)
+      || list[0];
+  });
+  return map;
+}
+window.loadPeriodWorkoutOptions = loadPeriodWorkoutOptions;
+
 
 // ============== TEMPLATES DE PERIODIZACAO ==============
 
@@ -9251,18 +9293,12 @@ window.openApplyTemplateSheet = async function(studentId) {
     return;
   }
   const list = (templates || []);
-  const today = todayISO();
   const html = `
     <h3>Aplicar template</h3>
-    <p style="font-size:13px;color:var(--text-2);margin:0 0 14px">Selecione um template e a data de início. As datas atuais a partir do início serão substituídas.</p>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 14px">Escolha um template. Antes de aplicar, você define a data de início e se deseja substituir o ciclo atual.</p>
     ${list.length === 0 ? `
       <div class="empty"><p>Você ainda não tem templates. Salve a periodização de um aluno como template para começar.</p></div>
     ` : `
-      <div class="form-group">
-        <label class="form-label">Data de início</label>
-        <input class="input" id="apply-tmpl-date" type="date" value="${today}" />
-      </div>
-      <label class="row-flex" style="margin-bottom:12px;gap:8px"><input type="checkbox" id="apply-tmpl-replace" checked><span class="text-sm">Substituir periodização existente a partir desta data</span></label>
       <div style="display:flex;flex-direction:column;gap:8px">
         ${list.map(t => `
           <div class="card" style="padding:12px">
@@ -9271,7 +9307,7 @@ window.openApplyTemplateSheet = async function(studentId) {
                 <div class="fw-700 text-sm">${escape(t.name)}</div>
                 <div class="text-xs muted" style="margin-top:3px">${t.weeks_count} semana(s) · ${t.total_days} dias${t.description ? ' · ' + escape(t.description) : ''}</div>
               </div>
-              <button class="mini-btn mini-btn-primary" onclick="applyTemplateToStudent('${t.id}','${studentId}','${escape(t.name).replace(/'/g, "&#39;")}')">Aplicar</button>
+              <button class="mini-btn mini-btn-primary" onclick="openApplyTemplateConfigSheet('${t.id}','${studentId}','${escape(t.name).replace(/'/g, "&#39;")}',${Number(t.weeks_count) || 0},${Number(t.total_days) || 0})">Aplicar</button>
               <button class="mini-btn mini-btn-danger" onclick="deletePeriodTemplate('${t.id}','${studentId}')" title="Excluir template">×</button>
             </div>
           </div>
@@ -9281,6 +9317,24 @@ window.openApplyTemplateSheet = async function(studentId) {
     <button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')" style="margin-top:14px">Voltar</button>
   `;
   openSheet(html);
+};
+
+window.openApplyTemplateConfigSheet = function(templateId, studentId, templateName, weeksCount = 0, totalDays = 0) {
+  openSheet(`
+    <h3>Aplicar ${escape(templateName)}</h3>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 14px">A sequência do template será mantida a partir da data escolhida.</p>
+    <div class="card" style="padding:12px;margin-bottom:12px">
+      <div class="fw-700 text-sm">${escape(templateName)}</div>
+      <div class="text-xs muted" style="margin-top:3px">${weeksCount || "—"} semana(s) · ${totalDays || "—"} dias</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Data de início</label>
+      <input class="input" id="apply-tmpl-date" type="date" value="${todayISO()}" />
+    </div>
+    <label class="row-flex" style="margin-bottom:12px;gap:8px"><input type="checkbox" id="apply-tmpl-replace" checked><span class="text-sm">Substituir periodização existente a partir desta data</span></label>
+    <button class="btn-primary" onclick="applyTemplateToStudent('${templateId}','${studentId}','${escape(templateName).replace(/'/g, "&#39;")}')">Aplicar template</button>
+    <button class="btn-ghost" onclick="openApplyTemplateSheet('${studentId}')" style="margin-top:8px">Voltar</button>
+  `);
 };
 
 window.applyTemplateToStudent = async function(templateId, studentId, templateName) {
@@ -9625,6 +9679,9 @@ window.applyPeriodConfig = async function(studentId) {
 
 window.editPeriodDay = async function(dayId, studentId) {
   if (!_PRESETS.length) await loadPresets();
+  const periodWorkoutOptions = await loadPeriodWorkoutOptions(studentId);
+  STATE._periodWorkoutOptions = STATE._periodWorkoutOptions || {};
+  STATE._periodWorkoutOptions[studentId] = periodWorkoutOptions;
   // Salva scroll da sheet antes de entrar no editor de dia
   const sheetEl = document.getElementById("sheet");
   if (sheetEl) _periodScrollTop = sheetEl.scrollTop;
@@ -9646,7 +9703,7 @@ window.editPeriodDay = async function(dayId, studentId) {
       </div>
     </div>
     <div id="blocks-list">
-      ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId, (blocks||[]).length)).join("") || '<div style="padding:14px;text-align:center;color:var(--text-3);font-size:13px">Nenhum bloco. Adicione abaixo.</div>'}
+      ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId, (blocks||[]).length, periodWorkoutOptions)).join("") || '<div style="padding:14px;text-align:center;color:var(--text-3);font-size:13px">Nenhum bloco. Adicione abaixo.</div>'}
     </div>
     <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">+ Adicionar bloco</div>
     <div class="preset-chip-grid">
@@ -9660,12 +9717,13 @@ window.editPeriodDay = async function(dayId, studentId) {
 
 const AERO_MODALITIES = ['Corrida','Caminhada','Bike','Elíptico','Natação','Remo','Pular corda','Outro'];
 
-window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0) {
+window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0, periodWorkoutOptions = null) {
   const preset = getPreset(b.preset_code) || { label: b.preset_code, color: '#9aa6c0', is_workout: !!b.workout_code };
   const isWorkout = preset.is_workout || !!b.workout_code;
   const isAero = b.preset_code === 'aero' || preset.label?.toLowerCase().includes('aero');
   const workoutPresets = (_PRESETS || []).filter(p => p.active !== false && p.is_workout);
-  const codes = [...new Set(['A','B','C','D', ...Object.keys(STATE.workouts || {})])]
+  const workoutMap = periodWorkoutOptions || STATE._periodWorkoutOptions?.[studentId] || STATE.workouts || {};
+  const codes = Object.keys(workoutMap || {})
     .filter(c => c && c !== 'FLEX')
     .sort((a,b) => a.localeCompare(b, "pt-BR", { numeric: true }));
   return `
@@ -9693,10 +9751,13 @@ window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0) {
         ` : ''}
         <div style="display:flex;gap:5px;flex-wrap:wrap">
           ${codes.map(c => `
-            <button class="mini-btn ${b.workout_code===c?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${c}')">${c}</button>
+            <button class="mini-btn ${b.workout_code===c?'mini-btn-primary':'mini-btn-ghost'}"
+              title="${escape(workoutMap[c]?.name || `Treino ${c}`)}"
+              style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${c}')">${c}</button>
           `).join("")}
           <button class="mini-btn ${!b.workout_code?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','')">—</button>
         </div>
+        ${b.workout_code && workoutMap[b.workout_code] ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">Treino: ${escape(workoutMap[b.workout_code].name || `Treino ${b.workout_code}`)}</div>` : ''}
 	        ${preset.rep_min || preset.pause_seconds || preset.sets_count ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${preset.sets_count || 3} séries · ${preset.rep_min || "—"}-${preset.rep_max || "—"} reps · pausa ${formatPauseLabel(preset.pause_seconds || 0)}</div>` : ''}
       ` : isAero ? `
         <div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Modalidade aeróbia</div>
@@ -9723,7 +9784,10 @@ window.addBlockToDay = async function(dayId, studentId, presetCode, isWorkout) {
   const { data: existing } = await sb.from("periodization_blocks").select("position").eq("day_id", dayId).order("position", { ascending: false }).limit(1);
   const pos = existing && existing.length ? (existing[0].position + 1) : 0;
   const insert = { day_id: dayId, position: pos, preset_code: presetCode };
-  if (isWorkout) insert.workout_code = Object.keys(STATE.workouts || {}).sort((a,b) => a.localeCompare(b, "pt-BR", { numeric: true }))[0] || "A";
+  if (isWorkout) {
+    const workoutOptions = STATE._periodWorkoutOptions?.[studentId] || await loadPeriodWorkoutOptions(studentId);
+    insert.workout_code = Object.keys(workoutOptions || {}).sort((a,b) => a.localeCompare(b, "pt-BR", { numeric: true }))[0] || "A";
+  }
   const { error } = await sb.from("periodization_blocks").insert(insert);
   if (error) { showToast(error.message, "error"); return; }
   await syncDayLegacy(dayId);
