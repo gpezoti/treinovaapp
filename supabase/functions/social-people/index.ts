@@ -72,11 +72,48 @@ async function getFollows(req: Request) {
     .or(`follower_id.eq.${user.id},following_id.eq.${user.id}`);
 
   if (error) return json({ error: error.message }, 500);
+  const ids = Array.from(new Set((data || []).flatMap((f: any) => [f.follower_id, f.following_id]).filter(Boolean)));
+  let profileById = new Map<string, any>();
+  if (ids.length) {
+    const { data: profiles, error: profilesError } = await sbAdmin
+      .from("profiles")
+      .select("id,email,full_name,avatar_emoji,avatar_url,role,status")
+      .in("id", ids)
+      .eq("status", "approved");
+    if (profilesError) return json({ error: profilesError.message }, 500);
+    profileById = new Map((profiles || []).map((p: any) => [p.id, p]));
+  }
+  const following = (data || [])
+    .filter((f: any) => f.follower_id === user.id && profileById.has(f.following_id))
+    .map((f: any) => ({ following_id: f.following_id, profile: profileById.get(f.following_id) }));
+  const followers = (data || [])
+    .filter((f: any) => f.following_id === user.id && profileById.has(f.follower_id))
+    .map((f: any) => ({ follower_id: f.follower_id, profile: profileById.get(f.follower_id) }));
   return json({
     ok: true,
-    following: (data || []).filter((f: any) => f.follower_id === user.id).map((f: any) => ({ following_id: f.following_id })),
-    followers: (data || []).filter((f: any) => f.following_id === user.id).map((f: any) => ({ follower_id: f.follower_id })),
+    following,
+    followers,
   });
+}
+
+async function lookupProfiles(req: Request, body: any) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) return json({ error: "Não autenticado." }, 401);
+
+  const ids = Array.from(new Set((Array.isArray(body?.ids) ? body.ids : [])
+    .map((id: unknown) => String(id || "").trim())
+    .filter(Boolean)))
+    .slice(0, 80);
+  if (!ids.length) return json({ ok: true, people: [] });
+
+  const { data, error } = await sbAdmin
+    .from("profiles")
+    .select("id,email,full_name,avatar_emoji,avatar_url,role,status")
+    .in("id", ids)
+    .eq("status", "approved");
+
+  if (error) return json({ error: error.message }, 500);
+  return json({ ok: true, people: data || [] });
 }
 
 async function followPerson(req: Request, body: any) {
@@ -177,6 +214,7 @@ serve(async (req) => {
 
   if (body.action === "search") return searchPeople(req, body);
   if (body.action === "follows") return getFollows(req);
+  if (body.action === "profiles") return lookupProfiles(req, body);
   if (body.action === "follow") return followPerson(req, body);
   if (body.action === "unfollow") return unfollowPerson(req, body);
   if (body.action === "push_audit") return pushAudit(req);

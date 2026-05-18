@@ -13,10 +13,14 @@ assert.match(html, /safeLoad\("coach auto-follow", ensureCoachStudentFollows\)/)
 assert.match(html, /window\.openSocialList = async function\(type\)/);
 assert.match(html, /window\.openPeopleSearch = function\(\)/);
 assert.match(html, /window\.onFeedPeopleSearch = function\(q\)/);
+assert.match(html, /cacheSocialProfiles/);
+assert.match(html, /loadSocialProfilesByIds/);
+assert.match(html, /enrichFeedAuthors/);
 assert.match(html, /Encontrar pessoas/);
 assert.match(html, /sb\.functions\.invoke\("social-people"/);
-assert.match(html, /select\("id, email, full_name, avatar_emoji, avatar_url, role"\)/);
+assert.match(html, /student:profiles!feed_posts_student_id_fkey\(id, email, full_name, avatar_emoji, avatar_url, role\)/);
 assert.match(html, /function peopleRow\(p, context = "sheet"\)/);
+assert.match(html, /row\?\.profile \|\| profileById\[id\]/);
 assert.match(html, /window\.onFollowToggle = async function\(id, currentlyFollowing = null\)/);
 assert.match(html, /function renderSelfTrainingCard\(/);
 assert.match(html, /\{ id: "feed", label: "Feed"/);
@@ -38,9 +42,12 @@ assert.match(sql, /create policy "setlogs self manage"/);
 
 assert.match(socialPeopleEdge, /body\.action === "search"/);
 assert.match(socialPeopleEdge, /body\.action === "follows"/);
+assert.match(socialPeopleEdge, /body\.action === "profiles"/);
 assert.match(socialPeopleEdge, /body\.action === "follow"/);
 assert.match(socialPeopleEdge, /body\.action === "unfollow"/);
 assert.match(socialPeopleEdge, /body\.action === "push_audit"/);
+assert.match(socialPeopleEdge, /lookupProfiles/);
+assert.match(socialPeopleEdge, /profileById/);
 assert.match(socialPeopleEdge, /neq\("id", user\.id\)/);
 assert.match(socialPeopleEdge, /eq\("status", "approved"\)/);
 assert.match(socialPeopleEdge, /onConflict: "follower_id,following_id"/);

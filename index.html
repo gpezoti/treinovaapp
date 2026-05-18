@@ -2796,7 +2796,7 @@ async function trackFeedViews(posts) {
 
 async function loadFeed() {
   let q = sb.from("feed_posts")
-    .select("*, student:profiles!feed_posts_student_id_fkey(id, full_name, avatar_emoji, avatar_url, role)")
+    .select("*, student:profiles!feed_posts_student_id_fkey(id, email, full_name, avatar_emoji, avatar_url, role)")
     .order("created_at", { ascending: false }).limit(50);
   // Feed social:
   // - Admin: tudo
@@ -2818,6 +2818,7 @@ async function loadFeed() {
   const { data, error } = await q;
   if (error) { console.error(error); return; }
   STATE.feed = data || [];
+  await enrichFeedAuthors(STATE.feed);
   // likes + comments count
   if (STATE.profile && STATE.feed.length) {
     const ids = STATE.feed.map(p => p.id);
@@ -2847,6 +2848,10 @@ async function loadFollows() {
         following: data.following || [],
         followers: data.followers || []
       };
+      cacheSocialProfiles([
+        ...(STATE.follows.following || []).map(f => f.profile),
+        ...(STATE.follows.followers || []).map(f => f.profile)
+      ]);
       return;
     }
     if (error || data?.error) console.warn("[follows edge]", error || data.error);
@@ -2861,6 +2866,58 @@ async function loadFollows() {
     following: followingRes.data || [],
     followers: followersRes.data || []
   };
+}
+
+function cacheSocialProfiles(people = []) {
+  STATE._socialProfilesById = STATE._socialProfilesById || {};
+  (people || []).filter(Boolean).forEach(p => {
+    if (p.id) STATE._socialProfilesById[p.id] = p;
+  });
+}
+
+async function loadSocialProfilesByIds(ids = []) {
+  const uniqueIds = [...new Set((ids || []).filter(Boolean))];
+  if (!uniqueIds.length) return {};
+  STATE._socialProfilesById = STATE._socialProfilesById || {};
+  const missing = uniqueIds.filter(id => !STATE._socialProfilesById[id]);
+  if (missing.length) {
+    try {
+      const { data, error } = await sb.functions.invoke("social-people", {
+        body: { action: "profiles", ids: missing }
+      });
+      if (!error && data?.ok) cacheSocialProfiles(data.people || []);
+      else if (error || data?.error) console.warn("[profiles edge]", error || data.error);
+    } catch(e) {
+      console.warn("[profiles edge]", e);
+    }
+  }
+  const stillMissing = uniqueIds.filter(id => !STATE._socialProfilesById[id]);
+  if (stillMissing.length) {
+    try {
+      const { data, error } = await sb.from("profiles")
+        .select("id, email, full_name, avatar_emoji, avatar_url, role")
+        .in("id", stillMissing)
+        .eq("status", "approved");
+      if (!error) cacheSocialProfiles(data || []);
+      else console.warn("[profiles fallback]", error);
+    } catch(e) {
+      console.warn("[profiles fallback]", e);
+    }
+  }
+  return STATE._socialProfilesById || {};
+}
+
+async function enrichFeedAuthors(posts = []) {
+  const ids = posts
+    .filter(p => p?.student_id && (!p.student || !p.student.full_name))
+    .map(p => p.student_id);
+  if (!ids.length) return;
+  const profiles = await loadSocialProfilesByIds(ids);
+  posts.forEach(p => {
+    if (p?.student_id && profiles[p.student_id]) {
+      p.student = { ...(p.student || {}), ...profiles[p.student_id] };
+    }
+  });
 }
 
 async function ensureCoachStudentFollows() {
@@ -2930,7 +2987,10 @@ async function searchPeople(query) {
     const { data, error } = await sb.functions.invoke("social-people", {
       body: { action: "search", query: term }
     });
-    if (!error && data?.ok) return data.people || [];
+    if (!error && data?.ok) {
+      cacheSocialProfiles(data.people || []);
+      return data.people || [];
+    }
     if (error || data?.error) console.warn("[people-search edge]", error || data.error);
   } catch(e) {
     console.warn("[people-search edge]", e);
@@ -2943,7 +3003,10 @@ async function searchPeople(query) {
       .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
       .order("full_name", { ascending: true })
       .limit(30);
-    if (!error) return data || [];
+    if (!error) {
+      cacheSocialProfiles(data || []);
+      return data || [];
+    }
     console.warn("[people-search fallback]", error);
   } catch(e) {
     console.warn("[people-search fallback]", e);
@@ -7805,7 +7868,7 @@ function feedPostHTML(p, compact) {
   const isMine = STATE.profile && p.student_id === STATE.profile.id;
   const isCoach = STATE.profile.role === "coach";
   const canShare = canShareFeedWorkout(p);
-  const studentName = (p.student && p.student.full_name) || "Aluno";
+  const studentName = (p.student && (p.student.full_name || p.student.email)) || "Usuário";
   const role = p.student && p.student.role === "coach" ? ' <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>' : (p.student && p.student.role === "admin" ? ' <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zM4 20h16"/></svg>' : "");
   const avatarInner = (p.student && p.student.avatar_url)
     ? `<img src="${escape(p.student.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
@@ -8386,17 +8449,24 @@ window.openPeopleSearch = function() {
 
 window.openSocialList = async function(type) {
   const isFollowers = type === "followers";
-  const ids = ((STATE.follows && STATE.follows[type]) || [])
+  const rows = (STATE.follows && STATE.follows[type]) || [];
+  const ids = rows
     .map(f => isFollowers ? f.follower_id : f.following_id)
     .filter(Boolean);
   openSheet(`<h3>${isFollowers ? "Seguidores" : "Seguindo"}</h3><div class="loading"><div class="spinner"></div>Carregando...</div>`);
-  let people = [];
+  const profileById = await loadSocialProfilesByIds([
+    ...ids,
+    ...rows.map(f => f.profile?.id).filter(Boolean)
+  ]);
+  let people = ids.map(id => {
+    const row = rows.find(f => (isFollowers ? f.follower_id : f.following_id) === id);
+    return row?.profile || profileById[id] || null;
+  }).filter(Boolean);
   if (ids.length) {
-    const { data } = await sb.from("profiles")
-      .select("id, email, full_name, avatar_emoji, avatar_url, role")
-      .in("id", ids)
-      .order("full_name");
-    people = data || [];
+    const order = new Map(ids.map((id, idx) => [id, idx]));
+    people = people
+      .filter((p, idx, arr) => p?.id && arr.findIndex(x => x?.id === p.id) === idx)
+      .sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999));
   }
   openSheet(`
     <h3>${isFollowers ? "Seguidores" : "Seguindo"}</h3>
