@@ -1124,11 +1124,15 @@ const EXERCISE_IMAGE_RULES = [
   ["plank", /prancha|plank/],
   ["crunch", /abdominal|crunch|core|infra|supra/],
   ["calf", /panturrilha|gemeos|calf/],
+  ["deadlift", /lombar|hiperextensao|back extension/],
+  ["shoulder", /trapezio|trapézio|encolhimento|shrug/],
+  ["squat", /adutor|adutora|adductor|abdutor|abdutora|abductor/],
   ["mobility", /mobilidade|alongamento|mobility|rotador|aquecimento/]
 ];
 const EXERCISE_CAT_IMAGE_KIND = {
   chest: "bench", back: "row", shoulder: "shoulder", biceps: "curl", triceps: "triceps",
   quad: "squat", hamstring: "deadlift", glute: "hipthrust", calf: "calf", core: "crunch",
+  lowerback: "deadlift", trap: "shoulder", abductor: "squat",
   mobility: "mobility", rotator: "mobility", hipflex: "lunge", adductor: "squat", cardio: "generic"
 };
 const EXERCISE_LIBRARY_GROUPS = [
@@ -1138,25 +1142,30 @@ const EXERCISE_LIBRARY_GROUPS = [
   { value: "Bíceps", cat: "biceps", label: "Bíceps" },
   { value: "Tríceps", cat: "triceps", label: "Tríceps" },
   { value: "Quadríceps", cat: "quad", label: "Quadríceps" },
-  { value: "Posterior", cat: "hamstring", label: "Posterior" },
+  { value: "Posterior de coxa", cat: "hamstring", label: "Posterior" },
   { value: "Glúteos", cat: "glute", label: "Glúteos" },
+  { value: "Adutores", cat: "adductor", label: "Adutores" },
+  { value: "Abdutores", cat: "abductor", label: "Abdutores" },
   { value: "Panturrilha", cat: "calf", label: "Panturrilha" },
   { value: "Abdômen", cat: "core", label: "Abdômen" },
+  { value: "Lombar", cat: "lowerback", label: "Lombar" },
+  { value: "Trapézio", cat: "trap", label: "Trapézio" },
   { value: "Mobilidade", cat: "mobility", label: "Mobilidade" },
   { value: "Aeróbio", cat: "cardio", label: "Aeróbio" }
 ];
 const POPULAR_LIBRARY_EXERCISE_NAMES = [
   "Supino reto com barra", "Supino inclinado com halteres", "Crossover no cabo", "Flexão de braços",
-  "Puxada frontal pegada aberta", "Remada curvada com barra", "Remada unilateral com halter", "Barra fixa pegada pronada",
+  "Puxada alta na polia", "Remada curvada com barra", "Remada unilateral com halter", "Barra fixa",
   "Desenvolvimento com halteres", "Elevação lateral com halteres", "Face pull no cabo",
-  "Rosca direta com barra", "Rosca martelo", "Rosca scott na máquina",
-  "Tríceps corda no cabo", "Tríceps testa com barra W", "Mergulho em paralelas dips",
+  "Rosca direta", "Rosca martelo", "Rosca Scott",
+  "Tríceps corda", "Tríceps testa", "Mergulho nas paralelas",
   "Agachamento livre com barra", "Leg press 45°", "Cadeira extensora", "Agachamento búlgaro",
-  "Mesa flexora", "Stiff com barra", "Levantamento terra romeno",
-  "Hip thrust com barra", "Glúteo no cabo kickback", "Abdução de quadril na máquina",
+  "Mesa flexora", "Stiff", "Levantamento terra romeno",
+  "Hip thrust", "Glúteo no cabo", "Cadeira abdutora",
   "Panturrilha sentado", "Panturrilha no leg press",
-  "Prancha isométrica", "Crunch abdominal", "Elevação de pernas na paralela",
-  "Bike ergométrica", "Corrida na esteira", "Mobilidade de quadril 90/90 com troca", "World greatest stretch"
+  "Prancha", "Crunch abdominal", "Elevação de pernas",
+  "Hiperextensão lombar", "Encolhimento com halteres", "Cadeira adutora",
+  "Bike ergométrica", "Corrida na esteira", "Mobilidade de quadril 90/90", "World greatest stretch"
 ];
 const EXERCISE_LIBRARY_MODES = [
   { value: "all", label: "Lista" },
@@ -15053,7 +15062,8 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
   // cat é o código inglês ("chest","back"…), muscle_group é o nome em PT ("Peito","Costas"…)
   const CAT_LABEL = { chest:'Peito', back:'Costas', shoulder:'Ombros', biceps:'Bíceps',
     triceps:'Tríceps', quad:'Quadríceps', hamstring:'Posterior', glute:'Glúteos',
-    calf:'Panturrilha', core:'Abdômen', mobility:'Mobilidade', cardio:'Cardio' };
+    calf:'Panturrilha', core:'Abdômen', lowerback:'Lombar', trap:'Trapézio',
+    adductor:'Adutores', abductor:'Abdutores', mobility:'Mobilidade', cardio:'Cardio' };
   const WData = STATE.workouts[STATE.selectedWorkout];
   const rawCats = WData ? [...new Set((WData.exercises||[]).map(e => {
     // prefere muscle_group (já em PT), senão converte cat pelo mapa

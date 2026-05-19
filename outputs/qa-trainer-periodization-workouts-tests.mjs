@@ -6,6 +6,7 @@ const sql = fs.readFileSync("sql/trainer_periodization_types_sets_2026_05_08.sql
 const flexSql = fs.readFileSync("sql/fix_flex_period_and_push_subscription_2026_05_08.sql", "utf8");
 const exerciseLibrarySql = fs.readFileSync("sql/exercise_library_curated_2026_05_08.sql", "utf8");
 const exerciseLibraryDedupeSql = fs.readFileSync("supabase/migrations/20260519143000_exercise_library_dedupe_and_popular_ux.sql", "utf8");
+const exerciseLibraryNormalizedSql = fs.readFileSync("supabase/migrations/20260519190000_exercise_library_normalized_catalog.sql", "utf8");
 const edgeFn = fs.readFileSync("supabase/functions/rest-timer-push/index.ts", "utf8");
 const notifSheet = html.slice(
   html.indexOf("window.openNotificationsSheet"),
@@ -33,6 +34,11 @@ assert.match(html, /function renderExerciseLibraryManagerHTML/, "Exercise librar
 assert.match(html, /openLibraryExerciseSheet/, "Trainer must be able to create/edit library exercises");
 assert.match(html, /deleteLibraryExercise/, "Trainer must be able to remove library exercises");
 assert.match(html, /EXERCISE_LIBRARY_GROUPS/, "Exercise library must use standardized muscle groups");
+assert.match(html, /Posterior de coxa/, "Exercise library must expose normalized posterior thigh group");
+assert.match(html, /Lombar/, "Exercise library must expose lower-back group");
+assert.match(html, /Trapézio/, "Exercise library must expose trapezius group");
+assert.match(html, /Adutores/, "Exercise library must expose adductor group");
+assert.match(html, /Abdutores/, "Exercise library must expose abductor group");
 assert.match(html, /function lockPageScrollForSheet/, "Open sheets must lock background page scroll");
 assert.match(html, /unlockPageScrollForSheet/, "Closing sheets must restore page scroll");
 assert.match(html, /exercise-library-group-scroll/, "Exercise category filters must have a stable scroll container");
@@ -89,6 +95,12 @@ assert.match(exerciseLibrarySql, /when lower\(muscle_group\) in \('peito'\) then
 assert.match(exerciseLibraryDedupeSql, /delete from public\.exercises/, "Exercise library dedupe migration must remove exact duplicate library rows");
 assert.match(exerciseLibraryDedupeSql, /where is_library = true/, "Exercise library dedupe migration must be limited to library rows");
 assert.match(exerciseLibraryDedupeSql, /'Seguir período'/, "Exercise library cleanup must preserve period-driven workout parameters");
+assert.match(exerciseLibraryNormalizedSql, /where e\.is_library = true/, "Exercise library normalization must only target library rows");
+assert.match(exerciseLibraryNormalizedSql, /Supino reto com barra[\s\S]*Supino com barra/, "Exercise library normalization must map near-duplicate chest names");
+assert.match(exerciseLibraryNormalizedSql, /Posterior de coxa/, "Exercise library normalization must migrate posterior group naming");
+assert.match(exerciseLibraryNormalizedSql, /Adutores[\s\S]*Abdutores/, "Exercise library normalization must include missing thigh groups");
+assert.match(exerciseLibraryNormalizedSql, /Lombar[\s\S]*Trapézio/, "Exercise library normalization must include missing posterior chain groups");
+assert.match(exerciseLibraryNormalizedSql, /delete from public\.exercises e[\s\S]*and e\.is_library = true/, "Exercise library normalization must dedupe safely inside the library only");
 assert.match(html, /renderPushSubscriptionCardHTML/, "Notification sheet must show production push status instead of test controls");
 assert.doesNotMatch(notifSheet, /Teste bloqueado 15s|Testar agora|Diagnóstico push/, "Notification sheet must not expose push test controls");
 assert.match(edgeFn, /request-subscription/, "Rest timer edge function must save subscriptions on login/permission renewal");
