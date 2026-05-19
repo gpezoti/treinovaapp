@@ -39,10 +39,14 @@ assert.match(html, /exercise-library-group-scroll/, "Exercise category filters m
 assert.match(html, /_exerciseLibraryFilterScrollLeft/, "Exercise category filters must preserve horizontal scroll");
 assert.match(html, /dedupeLibraryExercises/, "Exercise library must hide duplicate library rows in the UI");
 assert.match(html, /EXERCISE_LIBRARY_MODES/, "Exercise library manager must expose focused list modes");
+assert.match(html, /EXERCISE_LIBRARY_PAGE_SIZE\s*=\s*20/, "Exercise library should paginate in batches of 20");
 assert.match(html, /POPULAR_LIBRARY_EXERCISE_NAMES/, "Exercise library must surface a curated popular exercise list");
 assert.match(html, /toggleLibraryExerciseFavorite/, "Trainer must be able to favorite library exercises");
 assert.match(html, /recordExerciseUsage/, "Exercise picker must learn the most used exercises per trainer");
 assert.match(html, /Mais usados por você/, "Exercise picker must prioritize trainer-specific frequent exercises");
+assert.match(html, /maybeLoadMoreExerciseLibrary/, "Exercise library must progressively load more cards on scroll");
+assert.match(html, /exercise-library-sentinel/, "Exercise library must render a sentinel for infinite scrolling");
+assert.match(html, /STATE\._exerciseLibraryLoading = true/, "Exercise library tab should show loading state before the library query resolves");
 assert.match(html, /coach-finance-tabs[\s\S]*aria-label="Treinos do treinador"/, "Trainer workouts tabs must reuse the finance tab component");
 assert.match(html, /coach-finance-tabs coach-finance-tabs-3[\s\S]*aria-label="Treinos do treinador"/, "Trainer workouts tabs must fit 3 tabs on one row");
 assert.match(html, /Esse código já existe/, "Duplicate periodization type codes must show a friendly validation message");
