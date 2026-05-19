@@ -664,6 +664,16 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
 .period-day-editor-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; position:sticky; top:-20px; z-index:2; background:var(--bg-2); padding:10px 0; }
 .preset-chip-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
 .sheet-action-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.exercise-chip-scroll { display:flex; gap:6px; overflow-x:auto; padding:2px 18px 8px 2px; margin:0 -2px 8px;
+  scrollbar-width:none; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity;
+  -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 28px),transparent 100%);
+  mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 28px),transparent 100%); }
+.exercise-chip-scroll::-webkit-scrollbar { display:none; }
+.exercise-chip-scroll .mini-btn { flex:0 0 auto; white-space:nowrap; scroll-snap-align:start; }
+.library-exercise-card { padding:10px 12px; }
+.library-exercise-row { display:grid; grid-template-columns:58px minmax(0,1fr) auto; gap:10px; align-items:center; }
+.library-exercise-actions { display:flex; align-items:center; justify-content:flex-end; gap:6px; }
+.library-exercise-actions .mini-btn { min-width:38px; }
 .exercise-card { scroll-margin-top: 92px; }
 .exercise-card.expanded { border-color: color-mix(in srgb, var(--brand) 52%, var(--line)); box-shadow: 0 10px 28px rgba(0,0,0,.18); }
 .ex-head { min-height: 84px; }
@@ -699,6 +709,11 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
   .period-week-head { align-items:flex-start; flex-direction:column; }
   .period-week-actions { width:100%; justify-content:flex-start; }
   .period-week-actions .mini-btn { flex:1 1 auto; min-width:92px; }
+  .library-exercise-card { padding:10px; }
+  .library-exercise-row { grid-template-columns:54px minmax(0,1fr); gap:9px; align-items:start; }
+  .library-exercise-row .ex-thumb { width:54px !important; height:54px !important; flex-basis:54px !important; }
+  .library-exercise-actions { grid-column:2; width:100%; display:grid; grid-template-columns:42px minmax(88px,1fr) 42px; margin-top:2px; }
+  .library-exercise-actions .mini-btn { min-height:36px; padding-inline:8px; }
   .ex-head { gap: 10px; padding: 12px; }
   .ex-thumb { width: 58px; height: 58px; flex-basis: 58px; }
   .ex-progress { min-width: 34px; }
@@ -10981,14 +10996,17 @@ window.onStudentDetail = async function(id) {
       <button class="student-flow-step" onclick="openStudentPeriodSheet('${id}')">
         <span class="step-kicker">1</span>
         <span class="step-title">Periodização</span>
+        <span class="text-xs muted">Organizar ciclo</span>
       </button>
       <button class="student-flow-step" onclick="openStudentWorkoutsSheet('${id}')">
         <span class="step-kicker">2</span>
         <span class="step-title">Treinos</span>
+        <span class="text-xs muted">Modelos do aluno</span>
       </button>
       <button class="student-flow-step" onclick="openPaymentSheet('${id}','${studentNameSafe}')">
         <span class="step-kicker">3</span>
         <span class="step-title">Cobrança</span>
+        <span class="text-xs muted">Mensalidade</span>
       </button>
     </div>
 
@@ -11035,13 +11053,19 @@ window.seedPerForStudent = async (id) => {
 
 window.openStudentWorkoutsSheet = async function(studentId) {
   openSheet(`<h3>Treinos personalizados</h3><div class="loading"><div class="spinner"></div></div>`);
-  // Carrega workouts globais e personalizados deste aluno
-  const { data: globals } = await sb.from("workouts").select("*").is("student_id", null).order("code");
-  const { data: customs } = await sb.from("workouts").select("*").eq("student_id", studentId).order("code");
+  // Carrega modelos do treinador responsável e personalizações deste aluno.
+  const coachId = await resolvePeriodStudentCoachId(studentId);
+  let modelQuery = sb.from("workouts").select("*").is("student_id", null).order("code");
+  if (coachId) modelQuery = modelQuery.eq("coach_id", coachId);
+  const [{ data: models }, { data: customs }] = await Promise.all([
+    modelQuery,
+    sb.from("workouts").select("*").eq("student_id", studentId).order("code")
+  ]);
+  const coachModels = (models || []).filter(w => w && !w.student_id && (!coachId || w.coach_id === coachId));
   const customCodes = new Set((customs||[]).map(c => c.code));
   const html = `
     <h3>Treinos personalizados</h3>
-    <p>Você pode personalizar um treino apenas para este aluno (não afeta os outros).</p>
+    <p>Você pode usar seus modelos do treinador ou criar uma versão exclusiva para este aluno.</p>
 
     ${(customs||[]).length > 0 ? `
       <div class="section-title">Personalizados deste aluno</div>
@@ -11059,19 +11083,20 @@ window.openStudentWorkoutsSheet = async function(studentId) {
       `).join("")}
     ` : ""}
 
-    <div class="section-title">Treinos globais (clique para personalizar)</div>
-    ${(globals||[]).filter(g => !customCodes.has(g.code)).map(w => `
+    <div class="section-title">Modelos do treinador</div>
+    ${coachModels.filter(g => !customCodes.has(g.code)).map(w => `
       <div class="card mb-8">
         <div class="row-flex">
           <div style="flex:1; min-width:0;">
             <div class="fw-700 text-sm">${escape(w.code)} · ${escape(w.name)}</div>
-            <div class="text-xs muted">Global · ${escape(w.focus || "")}</div>
+            <div class="text-xs muted">Modelo do treinador${w.focus ? " · " + escape(w.focus) : ""}</div>
           </div>
           <button class="mini-btn mini-btn-primary" onclick="cloneForStudent('${w.id}','${studentId}')">Personalizar</button>
         </div>
       </div>
     `).join("")}
-    ${(globals||[]).filter(g => customCodes.has(g.code)).length > 0 ? `<p class="text-xs muted">Os treinos já personalizados não aparecem aqui.</p>` : ""}
+    ${coachModels.length === 0 ? `<div class="empty"><p>Nenhum modelo do treinador encontrado. Crie seus modelos na aba Treinos.</p></div>` : ""}
+    ${coachModels.filter(g => customCodes.has(g.code)).length > 0 ? `<p class="text-xs muted">Os modelos já personalizados para este aluno não aparecem nesta lista.</p>` : ""}
 
     <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn-primary" onclick="openCreateWorkoutSheet('${studentId}')">+ Criar novo treino</button>
@@ -11457,16 +11482,16 @@ function renderExerciseLibraryManagerHTML() {
         autocomplete="off" autocorrect="off" autocapitalize="off"
         oninput="setExerciseLibraryQuery(this.value)" />
     </div>
-    <div id="exercise-library-mode-scroll" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px">
+    <div id="exercise-library-mode-scroll" class="exercise-chip-scroll" aria-label="Filtros da biblioteca">
       ${EXERCISE_LIBRARY_MODES.map(mode => {
         const count = mode.value === "favorites" ? favoriteCount : mode.value === "used" ? usedCount : "";
-        return `<button class="mini-btn ${currentMode === mode.value ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" aria-pressed="${currentMode === mode.value ? "true" : "false"}" onclick="setExerciseLibraryMode('${escapeAttr(mode.value)}')">${escape(mode.label)}${count !== "" ? ` · ${count}` : ""}</button>`;
+        return `<button class="mini-btn ${currentMode === mode.value ? "mini-btn-primary" : "mini-btn-ghost"}" aria-pressed="${currentMode === mode.value ? "true" : "false"}" onclick="setExerciseLibraryMode('${escapeAttr(mode.value)}')">${escape(mode.label)}${count !== "" ? ` · ${count}` : ""}</button>`;
       }).join("")}
     </div>
-    <div id="exercise-library-group-scroll" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px">
-      <button class="mini-btn ${currentGroup === "todos" ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" aria-pressed="${currentGroup === "todos" ? "true" : "false"}" onclick="setExerciseLibraryGroup('todos')">Todos</button>
+    <div id="exercise-library-group-scroll" class="exercise-chip-scroll" style="margin-bottom:12px" aria-label="Grupos musculares da biblioteca">
+      <button class="mini-btn ${currentGroup === "todos" ? "mini-btn-primary" : "mini-btn-ghost"}" aria-pressed="${currentGroup === "todos" ? "true" : "false"}" onclick="setExerciseLibraryGroup('todos')">Todos</button>
       ${groups.map(g => {
-        return `<button class="mini-btn ${currentGroup === g ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" aria-pressed="${currentGroup === g ? "true" : "false"}" onclick="setExerciseLibraryGroup('${escapeAttr(g)}')">${escape(g)}</button>`;
+        return `<button class="mini-btn ${currentGroup === g ? "mini-btn-primary" : "mini-btn-ghost"}" aria-pressed="${currentGroup === g ? "true" : "false"}" onclick="setExerciseLibraryGroup('${escapeAttr(g)}')">${escape(g)}</button>`;
       }).join("")}
     </div>
     ${STATE._exerciseLibraryLoading && !visible.length ? renderExerciseLibrarySkeleton() : ""}
@@ -11501,17 +11526,19 @@ function renderLibraryExerciseRow(ex) {
   const favorite = isFavoriteExercise(ex);
   const usageCount = getExerciseUsageCount(ex);
   const isPopular = getPopularLibraryExerciseIds().has(ex.id);
-  return `<div class="card mb-8">
-    <div class="row-flex" style="gap:10px;align-items:center">
+  return `<div class="card mb-8 library-exercise-card">
+    <div class="library-exercise-row">
       <div class="ex-thumb" style="width:58px;height:58px;flex:0 0 58px;overflow:hidden;">${getExThumb(ex)}</div>
       <div style="flex:1;min-width:0">
         <div class="fw-700 text-sm">${escape(ex.name || "Exercício")}</div>
         <div class="text-xs muted" style="margin-top:3px">${escape(group)}${ex.method ? " · " + escape(ex.method) : ""}</div>
         <div class="text-xs muted" style="margin-top:3px">${hasExact ? "Imagem específica" : "Imagem por movimento"} · ${escape(imageKind)}${usageCount ? ` · usado ${usageCount}x` : ""}${isPopular ? " · popular" : ""}</div>
       </div>
-      <button class="mini-btn ${favorite ? "mini-btn-primary" : "mini-btn-ghost"}" title="${favorite ? "Remover dos favoritos" : "Favoritar exercício"}" onclick="toggleLibraryExerciseFavorite('${ex.id}', event)">${favorite ? "★" : "☆"}</button>
-      <button class="mini-btn mini-btn-ghost" onclick="openLibraryExerciseSheet('${ex.id}')">Editar</button>
-      <button class="mini-btn mini-btn-danger" title="Excluir exercício" onclick="deleteLibraryExercise('${ex.id}','${escapeAttr(ex.name || "exercício")}')">×</button>
+      <div class="library-exercise-actions">
+        <button class="mini-btn ${favorite ? "mini-btn-primary" : "mini-btn-ghost"}" title="${favorite ? "Remover dos favoritos" : "Favoritar exercício"}" aria-label="${favorite ? "Remover dos favoritos" : "Favoritar exercício"}" onclick="toggleLibraryExerciseFavorite('${ex.id}', event)">${favorite ? "★" : "☆"}</button>
+        <button class="mini-btn mini-btn-ghost" onclick="openLibraryExerciseSheet('${ex.id}')">Editar</button>
+        <button class="mini-btn mini-btn-danger" title="Excluir exercício" aria-label="Excluir exercício" onclick="deleteLibraryExercise('${ex.id}','${escapeAttr(ex.name || "exercício")}')">×</button>
+      </div>
     </div>
   </div>`;
 }
@@ -11569,6 +11596,8 @@ window.setExerciseLibraryGroup = function(group) {
 
 window.toggleLibraryExerciseFavorite = function(exId, event) {
   if (event && event.stopPropagation) event.stopPropagation();
+  const scrollTarget = getExerciseLibraryScrollContainer();
+  const scrollTop = scrollTarget ? scrollTarget.scrollTop : 0;
   const favorites = getExerciseFavoriteIds();
   if (favorites.has(exId)) {
     favorites.delete(exId);
@@ -11579,7 +11608,10 @@ window.toggleLibraryExerciseFavorite = function(exId, event) {
   }
   saveExerciseFavoriteIds(favorites);
   if (document.getElementById("ep-results")) _renderPickerResults();
-  else renderAdminWorkouts();
+  else {
+    renderAdminWorkouts();
+    preserveExerciseLibraryScrollAfterRender(scrollTop);
+  }
 };
 
 window.openLibraryExerciseSheet = function(exId = "") {
