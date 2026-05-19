@@ -888,12 +888,16 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       <p style="font-size:12px;color:var(--text-3);margin-bottom:14px">Digite seu email e enviaremos um link para criar uma nova senha.</p>
       <div class="form-group">
         <label class="form-label">Email</label>
-        <input class="input" id="forgot-email" type="email" autocomplete="email" placeholder="voce@email.com" />
+        <input class="input" id="forgot-email" type="email" autocomplete="email" placeholder="voce@email.com" oninput="setForgotPanelMessage(null); updateForgotPasswordCooldown(this.value)" />
       </div>
       <div id="forgot-success" style="display:none;padding:10px;border-radius:8px;background:rgba(0,200,100,0.1);border:1px solid rgba(0,200,100,0.3);color:#5af0a0;font-size:12px;margin-bottom:10px">
         ✓ Link enviado! Verifique sua caixa de entrada (e o spam).
       </div>
+      <div id="forgot-error" style="display:none;padding:10px;border-radius:8px;background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);color:#ffaaaa;font-size:12px;line-height:1.4;margin-bottom:10px"></div>
       <button type="button" class="btn-primary" id="forgot-submit" onclick="submitForgotPassword()">Enviar link</button>
+      <p style="font-size:11px;color:var(--text-3);line-height:1.45;margin:10px 0 0">
+        Se o envio estiver temporariamente bloqueado, peça ao seu treinador ou admin uma senha temporária.
+      </p>
       <button type="button" class="btn-ghost" style="margin-top:8px" onclick="showAuthForm()">← Voltar ao login</button>
     </div>
   </div>
@@ -2602,27 +2606,120 @@ function showForgotPanel() {
   document.getElementById("auth-form").style.display = "none";
   document.getElementById("forgot-panel").style.display = "block";
   document.getElementById("auth-error").style.display = "none";
-  document.getElementById("forgot-success").style.display = "none";
+  setForgotPanelMessage(null);
   const fe = document.getElementById("forgot-email");
   const ae = document.getElementById("auth-email");
   if (fe && ae && ae.value) fe.value = ae.value;
+  updateForgotPasswordCooldown(fe?.value || "");
 }
 function showAuthForm() {
   document.getElementById("forgot-panel").style.display = "none";
   document.getElementById("auth-form").style.display = "block";
 }
+
+let _forgotPasswordCooldownTimer = null;
+const FORGOT_PASSWORD_SEND_COOLDOWN_MS = 90 * 1000;
+const FORGOT_PASSWORD_RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000;
+
+function getForgotPasswordCooldownKey(email) {
+  return `treinova_forgot_password_until_${String(email || "").trim().toLowerCase()}`;
+}
+
+function getForgotPasswordCooldownRemainingMs(email) {
+  if (!email) return 0;
+  try {
+    const until = Number(localStorage.getItem(getForgotPasswordCooldownKey(email)) || 0);
+    return Math.max(0, until - Date.now());
+  } catch (_) {
+    return 0;
+  }
+}
+
+function setForgotPasswordCooldown(email, ms) {
+  if (!email) return;
+  try {
+    localStorage.setItem(getForgotPasswordCooldownKey(email), String(Date.now() + ms));
+  } catch (_) {}
+}
+
+function setForgotPanelMessage(type, message) {
+  const success = document.getElementById("forgot-success");
+  const error = document.getElementById("forgot-error");
+  if (success) success.style.display = "none";
+  if (error) error.style.display = "none";
+  if (!type) return;
+  const target = type === "success" ? success : error;
+  if (!target) return;
+  target.textContent = message;
+  target.style.display = "block";
+}
+
+function isForgotPasswordRateLimitError(error) {
+  return /rate limit|too many|email rate/i.test(String(error?.message || error || ""));
+}
+
+function getForgotPasswordFriendlyError(error) {
+  if (isForgotPasswordRateLimitError(error)) {
+    return "Limite temporário de envio atingido. Aguarde alguns minutos antes de tentar novamente ou peça uma senha temporária ao seu treinador/admin.";
+  }
+  return "Não foi possível enviar o link agora. Confira o e-mail e tente novamente.";
+}
+
+function updateForgotPasswordCooldown(email) {
+  clearInterval(_forgotPasswordCooldownTimer);
+  const btn = document.getElementById("forgot-submit");
+  if (!btn) return;
+  btn.style.display = "";
+  const tick = () => {
+    const remainingSeconds = Math.ceil(getForgotPasswordCooldownRemainingMs(email) / 1000);
+    if (remainingSeconds > 0) {
+      btn.disabled = true;
+      btn.textContent = `Tentar em ${remainingSeconds}s`;
+      return;
+    }
+    btn.disabled = false;
+    btn.textContent = "Enviar link";
+    clearInterval(_forgotPasswordCooldownTimer);
+    _forgotPasswordCooldownTimer = null;
+  };
+  tick();
+  if (getForgotPasswordCooldownRemainingMs(email) > 0) {
+    _forgotPasswordCooldownTimer = setInterval(tick, 1000);
+  }
+}
+
 async function submitForgotPassword() {
   const email = document.getElementById("forgot-email").value.trim();
   if (!email) { showToast("Digite seu email", "error"); return; }
   const btn = document.getElementById("forgot-submit");
+  const remainingMs = getForgotPasswordCooldownRemainingMs(email);
+  if (remainingMs > 0) {
+    const seconds = Math.ceil(remainingMs / 1000);
+    const msg = `Aguarde ${seconds}s antes de solicitar outro link.`;
+    setForgotPanelMessage("error", msg);
+    showToast(msg, "error");
+    updateForgotPasswordCooldown(email);
+    return;
+  }
+  setForgotPanelMessage(null);
   btn.disabled = true; btn.textContent = "Enviando...";
   // A-03 FIX: sempre usa a URL explicita de recovery — nunca localhost/login generico.
   const redirectTo = APP_PASSWORD_RECOVERY_URL;
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
   btn.disabled = false; btn.textContent = "Enviar link";
-  if (error) { showToast("Erro: " + error.message, "error"); return; }
-  document.getElementById("forgot-success").style.display = "block";
-  btn.style.display = "none";
+  if (error) {
+    const friendlyError = getForgotPasswordFriendlyError(error);
+    if (isForgotPasswordRateLimitError(error)) {
+      setForgotPasswordCooldown(email, FORGOT_PASSWORD_RATE_LIMIT_COOLDOWN_MS);
+      updateForgotPasswordCooldown(email);
+    }
+    setForgotPanelMessage("error", friendlyError);
+    showToast(friendlyError, "error");
+    return;
+  }
+  setForgotPasswordCooldown(email, FORGOT_PASSWORD_SEND_COOLDOWN_MS);
+  setForgotPanelMessage("success", "Link enviado! Verifique sua caixa de entrada e o spam.");
+  updateForgotPasswordCooldown(email);
 }
 
 function getAuthRedirectParams() {

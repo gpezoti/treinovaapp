@@ -3,9 +3,15 @@ import assert from "node:assert/strict";
 
 const html = fs.readFileSync("index.html", "utf8");
 const edge = fs.readFileSync("supabase/functions/admin-user/index.ts", "utf8");
+const submitForgotPasswordBlock = html.match(/async function submitForgotPassword\(\) \{[\s\S]*?\n\}/)?.[0] || "";
 
 assert.match(html, /const APP_PASSWORD_RECOVERY_URL = APP_SITE_URL \+ "\?auth=recovery"/, "Forgot-password emails must redirect to explicit recovery mode.");
 assert.match(html, /resetPasswordForEmail\(email, \{ redirectTo \}\)/, "Client reset flow must pass redirectTo.");
+assert.match(html, /id="forgot-error"/, "Forgot-password flow must render an inline error area.");
+assert.match(html, /function getForgotPasswordFriendlyError\(error\)/, "Forgot-password errors must be mapped to friendly messages.");
+assert.match(html, /Limite temporário de envio atingido/, "Rate limit errors must not be shown as raw Supabase text.");
+assert.match(html, /FORGOT_PASSWORD_RATE_LIMIT_COOLDOWN_MS = 5 \* 60 \* 1000/, "Rate-limited reset requests must apply a local cooldown.");
+assert.doesNotMatch(submitForgotPasswordBlock, /showToast\("Erro: " \+ error\.message/, "Forgot-password flow must not display raw Supabase errors.");
 assert.match(html, /function isPasswordRecoveryRedirect\(\)/, "App must detect recovery redirects directly from URL.");
 assert.match(html, /auth === "recovery"/, "Recovery URL detection must support auth=recovery.");
 assert.match(html, /type === "recovery"/, "Recovery URL detection must support Supabase type=recovery.");
