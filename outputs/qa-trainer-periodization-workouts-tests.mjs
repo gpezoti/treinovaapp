@@ -5,6 +5,7 @@ const html = fs.readFileSync("index.html", "utf8");
 const sql = fs.readFileSync("sql/trainer_periodization_types_sets_2026_05_08.sql", "utf8");
 const flexSql = fs.readFileSync("sql/fix_flex_period_and_push_subscription_2026_05_08.sql", "utf8");
 const exerciseLibrarySql = fs.readFileSync("sql/exercise_library_curated_2026_05_08.sql", "utf8");
+const exerciseLibraryDedupeSql = fs.readFileSync("supabase/migrations/20260519143000_exercise_library_dedupe_and_popular_ux.sql", "utf8");
 const edgeFn = fs.readFileSync("supabase/functions/rest-timer-push/index.ts", "utf8");
 const notifSheet = html.slice(
   html.indexOf("window.openNotificationsSheet"),
@@ -36,6 +37,12 @@ assert.match(html, /function lockPageScrollForSheet/, "Open sheets must lock bac
 assert.match(html, /unlockPageScrollForSheet/, "Closing sheets must restore page scroll");
 assert.match(html, /exercise-library-group-scroll/, "Exercise category filters must have a stable scroll container");
 assert.match(html, /_exerciseLibraryFilterScrollLeft/, "Exercise category filters must preserve horizontal scroll");
+assert.match(html, /dedupeLibraryExercises/, "Exercise library must hide duplicate library rows in the UI");
+assert.match(html, /EXERCISE_LIBRARY_MODES/, "Exercise library manager must expose focused list modes");
+assert.match(html, /POPULAR_LIBRARY_EXERCISE_NAMES/, "Exercise library must surface a curated popular exercise list");
+assert.match(html, /toggleLibraryExerciseFavorite/, "Trainer must be able to favorite library exercises");
+assert.match(html, /recordExerciseUsage/, "Exercise picker must learn the most used exercises per trainer");
+assert.match(html, /Mais usados por você/, "Exercise picker must prioritize trainer-specific frequent exercises");
 assert.match(html, /coach-finance-tabs[\s\S]*aria-label="Treinos do treinador"/, "Trainer workouts tabs must reuse the finance tab component");
 assert.match(html, /coach-finance-tabs coach-finance-tabs-3[\s\S]*aria-label="Treinos do treinador"/, "Trainer workouts tabs must fit 3 tabs on one row");
 assert.match(html, /Esse código já existe/, "Duplicate periodization type codes must show a friendly validation message");
@@ -55,6 +62,9 @@ assert.match(exerciseLibrarySql, /ACE Exercise Library, ExRx Exercise Directory 
 assert.match(exerciseLibrarySql, /'Seguir período'/, "Exercise library seed must not hard-code period training parameters");
 assert.match(exerciseLibrarySql, /where is_library = true/, "Exercise library seed must normalize existing library rows");
 assert.match(exerciseLibrarySql, /when lower\(muscle_group\) in \('peito'\) then 'Peito'/, "Exercise library seed must normalize legacy group labels");
+assert.match(exerciseLibraryDedupeSql, /delete from public\.exercises/, "Exercise library dedupe migration must remove exact duplicate library rows");
+assert.match(exerciseLibraryDedupeSql, /where is_library = true/, "Exercise library dedupe migration must be limited to library rows");
+assert.match(exerciseLibraryDedupeSql, /'Seguir período'/, "Exercise library cleanup must preserve period-driven workout parameters");
 assert.match(html, /renderPushSubscriptionCardHTML/, "Notification sheet must show production push status instead of test controls");
 assert.doesNotMatch(notifSheet, /Teste bloqueado 15s|Testar agora|Diagnóstico push/, "Notification sheet must not expose push test controls");
 assert.match(edgeFn, /request-subscription/, "Rest timer edge function must save subscriptions on login/permission renewal");

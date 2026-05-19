@@ -1144,6 +1144,25 @@ const EXERCISE_LIBRARY_GROUPS = [
   { value: "Mobilidade", cat: "mobility", label: "Mobilidade" },
   { value: "Aeróbio", cat: "cardio", label: "Aeróbio" }
 ];
+const POPULAR_LIBRARY_EXERCISE_NAMES = [
+  "Supino reto com barra", "Supino inclinado com halteres", "Crossover no cabo", "Flexão de braços",
+  "Puxada frontal pegada aberta", "Remada curvada com barra", "Remada unilateral com halter", "Barra fixa pegada pronada",
+  "Desenvolvimento com halteres", "Elevação lateral com halteres", "Face pull no cabo",
+  "Rosca direta com barra", "Rosca martelo", "Rosca scott na máquina",
+  "Tríceps corda no cabo", "Tríceps testa com barra W", "Mergulho em paralelas dips",
+  "Agachamento livre com barra", "Leg press 45°", "Cadeira extensora", "Agachamento búlgaro",
+  "Mesa flexora", "Stiff com barra", "Levantamento terra romeno",
+  "Hip thrust com barra", "Glúteo no cabo kickback", "Abdução de quadril na máquina",
+  "Panturrilha sentado", "Panturrilha no leg press",
+  "Prancha isométrica", "Crunch abdominal", "Elevação de pernas na paralela",
+  "Bike ergométrica", "Corrida na esteira", "Mobilidade de quadril 90/90 com troca", "World greatest stretch"
+];
+const EXERCISE_LIBRARY_MODES = [
+  { value: "all", label: "Todos" },
+  { value: "favorites", label: "Favoritos" },
+  { value: "used", label: "Mais usados" },
+  { value: "popular", label: "Populares" }
+];
 const _STANDARD_EXERCISE_IMAGE_CACHE = {};
 const _MISSING_EXERCISE_IMAGE_CACHE = {};
 const EXACT_EXERCISE_IMAGE_ASSETS = {
@@ -1718,7 +1737,7 @@ function getExerciseImageUrl(ex) {
 }
 
 // Retorna HTML de imagem para um exercício.
-// Prioridade: imagem própria do treinador → biblioteca com mesmo nome → asset específico por nome → placeholder neutro.
+// Prioridade: imagem própria do professor/treinador → biblioteca com mesmo nome → asset específico por nome → placeholder neutro.
 function getExThumb(ex) {
   const url = getExerciseImageUrl(ex || {});
   const fallback = getMissingExerciseImageUrl(ex || {});
@@ -10805,38 +10824,158 @@ function getLibraryExerciseGroup(ex) {
   return getExerciseGroupMeta(ex?.muscle_group || ex?.cat).value;
 }
 
+function exerciseLibraryStorageKey(name) {
+  return `treinova_${name}_${STATE.profile?.id || "coach"}`;
+}
+
+function exerciseCanonicalName(name) {
+  return normalizeExerciseText(name)
+    .replace(/[()]/g, " ")
+    .replace(/[+/_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function scoreLibraryExerciseRow(ex) {
+  let score = 0;
+  if (hasCustomExerciseImage(ex)) score += 20;
+  if (getExactExerciseAssetUrl(ex)) score += 12;
+  if (ex?.video_url) score += 8;
+  if (ex?.observations) score += 3;
+  if (ex?.method) score += 2;
+  return score;
+}
+
+function dedupeLibraryExercises(list = []) {
+  const map = new Map();
+  (list || []).filter(Boolean).forEach(ex => {
+    const key = exerciseCanonicalName(ex.name || "");
+    if (!key) return;
+    const current = map.get(key);
+    if (!current || scoreLibraryExerciseRow(ex) > scoreLibraryExerciseRow(current)) {
+      map.set(key, ex);
+    }
+  });
+  return [...map.values()];
+}
+
+function getExerciseFavoriteIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(exerciseLibraryStorageKey("favorite_exercises")) || "[]"));
+  } catch(e) {
+    return new Set();
+  }
+}
+
+function saveExerciseFavoriteIds(ids) {
+  try {
+    localStorage.setItem(exerciseLibraryStorageKey("favorite_exercises"), JSON.stringify([...ids].slice(0, 300)));
+  } catch(e) {}
+}
+
+function isFavoriteExercise(exOrId) {
+  const id = typeof exOrId === "string" ? exOrId : exOrId?.id;
+  return !!id && getExerciseFavoriteIds().has(id);
+}
+
+function getExerciseUsageStats() {
+  try {
+    return JSON.parse(localStorage.getItem(exerciseLibraryStorageKey("exercise_usage")) || "{}");
+  } catch(e) {
+    return {};
+  }
+}
+
+function saveExerciseUsageStats(stats) {
+  try {
+    localStorage.setItem(exerciseLibraryStorageKey("exercise_usage"), JSON.stringify(stats || {}));
+  } catch(e) {}
+}
+
+function getExerciseUsageCount(exOrId) {
+  const id = typeof exOrId === "string" ? exOrId : exOrId?.id;
+  const stats = getExerciseUsageStats();
+  return id && stats[id] ? Number(stats[id].count || 0) : 0;
+}
+
+function recordExerciseUsage(libExId) {
+  if (!libExId) return;
+  const stats = getExerciseUsageStats();
+  const current = stats[libExId] || { count: 0 };
+  stats[libExId] = { count: Number(current.count || 0) + 1, lastAt: new Date().toISOString() };
+  saveExerciseUsageStats(stats);
+}
+
+function getPopularLibraryExerciseIds() {
+  const library = STATE.library || [];
+  const ids = [];
+  POPULAR_LIBRARY_EXERCISE_NAMES.forEach(name => {
+    const normalized = exerciseCanonicalName(name);
+    const exact = library.find(ex => exerciseCanonicalName(ex.name || "") === normalized);
+    const fuzzy = exact || library.find(ex => exerciseCanonicalName(ex.name || "").includes(normalized) || normalized.includes(exerciseCanonicalName(ex.name || "")));
+    if (fuzzy && !ids.includes(fuzzy.id)) ids.push(fuzzy.id);
+  });
+  return new Set(ids);
+}
+
+function libraryExerciseSort(a, b) {
+  const favA = isFavoriteExercise(a) ? 1 : 0;
+  const favB = isFavoriteExercise(b) ? 1 : 0;
+  if (favA !== favB) return favB - favA;
+  const used = getExerciseUsageCount(b) - getExerciseUsageCount(a);
+  if (used) return used;
+  const popular = (getPopularLibraryExerciseIds().has(b.id) ? 1 : 0) - (getPopularLibraryExerciseIds().has(a.id) ? 1 : 0);
+  if (popular) return popular;
+  const g = getLibraryExerciseGroup(a).localeCompare(getLibraryExerciseGroup(b), "pt-BR", { sensitivity: "base" });
+  return g || String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { sensitivity: "base" });
+}
+
 function getFilteredLibraryExercises() {
   const query = normalizeExerciseText(STATE.exerciseLibraryQuery || "");
   const group = STATE.exerciseLibraryGroup || "todos";
+  const mode = STATE.exerciseLibraryMode || "all";
+  const favorites = getExerciseFavoriteIds();
+  const popular = getPopularLibraryExerciseIds();
   return (STATE.library || [])
     .filter(Boolean)
+    .filter(ex => mode !== "favorites" || favorites.has(ex.id))
+    .filter(ex => mode !== "used" || getExerciseUsageCount(ex) > 0)
+    .filter(ex => mode !== "popular" || popular.has(ex.id))
     .filter(ex => group === "todos" || getLibraryExerciseGroup(ex) === group)
     .filter(ex => {
       if (!query) return true;
       return normalizeExerciseText([ex.name, ex.muscle_group, ex.method, ex.observations].filter(Boolean).join(" ")).includes(query);
     })
-    .sort((a,b) => {
-      const g = getLibraryExerciseGroup(a).localeCompare(getLibraryExerciseGroup(b), "pt-BR", { sensitivity: "base" });
-      return g || String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { sensitivity: "base" });
-    });
+    .sort(libraryExerciseSort);
 }
 
 function renderExerciseLibraryManagerHTML() {
   const all = (STATE.library || []).filter(Boolean);
   const filtered = getFilteredLibraryExercises();
   const groups = ["todos", ...EXERCISE_LIBRARY_GROUPS.map(g => g.value)];
+  const favoriteIds = getExerciseFavoriteIds();
+  const popularIds = getPopularLibraryExerciseIds();
+  const usageStats = getExerciseUsageStats();
   const counts = all.reduce((acc, ex) => {
     const group = getLibraryExerciseGroup(ex);
     acc[group] = (acc[group] || 0) + 1;
     return acc;
   }, {});
   const currentGroup = STATE.exerciseLibraryGroup || "todos";
+  const currentMode = STATE.exerciseLibraryMode || "all";
   const query = STATE.exerciseLibraryQuery || "";
   const grouped = filtered.reduce((acc, ex) => {
     const group = getLibraryExerciseGroup(ex);
     (acc[group] = acc[group] || []).push(ex);
     return acc;
   }, {});
+  const duplicateCount = Number(STATE.exerciseLibraryDuplicateCount || 0);
+  const modeCounts = {
+    all: all.length,
+    favorites: all.filter(ex => favoriteIds.has(ex.id)).length,
+    used: all.filter(ex => Number(usageStats[ex.id]?.count || 0) > 0).length,
+    popular: all.filter(ex => popularIds.has(ex.id)).length
+  };
 
   return `
     <div class="card mb-12" style="background:linear-gradient(135deg,var(--brand-soft),transparent 70%),var(--bg-card);">
@@ -10845,8 +10984,19 @@ function renderExerciseLibraryManagerHTML() {
       <div class="row-flex" style="gap:8px;margin-top:12px;flex-wrap:wrap">
         <span class="today-pill pill-flex">${all.length} cadastrados</span>
         <span class="today-pill pill-white">${Object.keys(counts).length} grupos</span>
-        <span class="today-pill pill-yellow">imagem padrão automática</span>
+        <span class="today-pill pill-yellow">${modeCounts.popular} populares</span>
+        ${duplicateCount ? `<span class="today-pill" style="background:rgba(46,204,113,.12);border:1px solid rgba(46,204,113,.28);color:#2ecc71">${duplicateCount} duplicado${duplicateCount === 1 ? "" : "s"} oculto${duplicateCount === 1 ? "" : "s"}</span>` : ""}
+        <span class="today-pill pill-white">imagem coerente por nome</span>
       </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:10px">
+      ${EXERCISE_LIBRARY_MODES.map(mode => {
+        const active = currentMode === mode.value;
+        return `<button class="mini-btn ${active ? "mini-btn-primary" : "mini-btn-ghost"}" style="min-width:0;padding:8px 6px;line-height:1.15" aria-pressed="${active ? "true" : "false"}" onclick="setExerciseLibraryMode('${mode.value}')">
+          <span style="display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escape(mode.label)}</span>
+          <span style="display:block;font-size:10px;opacity:.72;margin-top:2px">${modeCounts[mode.value] || 0}</span>
+        </button>`;
+      }).join("")}
     </div>
     <div class="form-group">
       <input class="input" value="${escape(query)}" placeholder="Buscar por nome, grupo ou método..."
@@ -10872,19 +11022,28 @@ function renderLibraryExerciseRow(ex) {
   const group = getLibraryExerciseGroup(ex);
   const imageKind = inferExerciseImageKind(ex);
   const hasExact = Boolean(getExactExerciseAssetUrl(ex));
+  const favorite = isFavoriteExercise(ex);
+  const usageCount = getExerciseUsageCount(ex);
+  const isPopular = getPopularLibraryExerciseIds().has(ex.id);
   return `<div class="card mb-8">
     <div class="row-flex" style="gap:10px;align-items:center">
       <div class="ex-thumb" style="width:58px;height:58px;flex:0 0 58px;overflow:hidden;">${getExThumb(ex)}</div>
       <div style="flex:1;min-width:0">
         <div class="fw-700 text-sm">${escape(ex.name || "Exercício")}</div>
         <div class="text-xs muted" style="margin-top:3px">${escape(group)}${ex.method ? " · " + escape(ex.method) : ""}</div>
-        <div class="text-xs muted" style="margin-top:3px">${hasExact ? "Imagem realista específica" : "Imagem realista por categoria"} · ${escape(imageKind)}</div>
+        <div class="text-xs muted" style="margin-top:3px">${hasExact ? "Imagem específica" : "Imagem por movimento"} · ${escape(imageKind)}${usageCount ? ` · usado ${usageCount}x` : ""}${isPopular ? " · popular" : ""}</div>
       </div>
+      <button class="mini-btn ${favorite ? "mini-btn-primary" : "mini-btn-ghost"}" title="${favorite ? "Remover dos favoritos" : "Favoritar exercício"}" onclick="toggleLibraryExerciseFavorite('${ex.id}', event)">${favorite ? "★" : "☆"}</button>
       <button class="mini-btn mini-btn-ghost" onclick="openLibraryExerciseSheet('${ex.id}')">Editar</button>
       <button class="mini-btn mini-btn-danger" title="Excluir exercício" onclick="deleteLibraryExercise('${ex.id}','${escapeAttr(ex.name || "exercício")}')">×</button>
     </div>
   </div>`;
 }
+
+window.setExerciseLibraryMode = function(mode) {
+  STATE.exerciseLibraryMode = EXERCISE_LIBRARY_MODES.some(item => item.value === mode) ? mode : "all";
+  renderAdminWorkouts();
+};
 
 window.setExerciseLibraryQuery = function(value) {
   STATE.exerciseLibraryQuery = value || "";
@@ -10900,6 +11059,21 @@ window.setExerciseLibraryGroup = function(group) {
     const nextScroller = document.getElementById("exercise-library-group-scroll");
     if (nextScroller) nextScroller.scrollLeft = _exerciseLibraryFilterScrollLeft || 0;
   });
+};
+
+window.toggleLibraryExerciseFavorite = function(exId, event) {
+  if (event && event.stopPropagation) event.stopPropagation();
+  const favorites = getExerciseFavoriteIds();
+  if (favorites.has(exId)) {
+    favorites.delete(exId);
+    showToast("Removido dos favoritos", null);
+  } else {
+    favorites.add(exId);
+    showToast("Exercício favoritado", "success");
+  }
+  saveExerciseFavoriteIds(favorites);
+  if (document.getElementById("ep-results")) _renderPickerResults();
+  else renderAdminWorkouts();
 };
 
 window.openLibraryExerciseSheet = function(exId = "") {
@@ -11268,7 +11442,10 @@ window.toggleSupersetWithNext = async function(exId, nextId, code, workoutId) {
 // Biblioteca de exercícios em STATE
 async function loadExerciseLibrary() {
   const { data } = await sb.from("exercises").select("*").eq("is_library", true).order("muscle_group").order("name");
-  STATE.library = data || [];
+  const raw = data || [];
+  const deduped = dedupeLibraryExercises(raw).sort(libraryExerciseSort);
+  STATE.exerciseLibraryDuplicateCount = Math.max(0, raw.length - deduped.length);
+  STATE.library = deduped;
 }
 
 // Picker: abre busca por grupo muscular + biblioteca
@@ -11321,18 +11498,23 @@ function _saveRecentPickerId(libExId) {
     const arr = _getRecentPickerIds().filter(id => id !== libExId);
     arr.unshift(libExId);
     localStorage.setItem(key, JSON.stringify(arr.slice(0, 12)));
+    recordExerciseUsage(libExId);
   } catch(e) {}
 }
 
 function _pickerExerciseRow(e, ctx) {
   const selected = ctx.selected && ctx.selected.has(e.id);
+  const favorite = isFavoriteExercise(e);
+  const usageCount = getExerciseUsageCount(e);
+  const popular = getPopularLibraryExerciseIds().has(e.id);
   return `
     <div class="list-row ${selected ? 'selected' : ''}" onclick="toggleExercisePick('${e.id}')" style="cursor:pointer;border-color:${selected ? 'var(--brand)' : 'var(--line)'};">
       <div class="lr-avatar" style="overflow:hidden;">${getExThumb(e)}</div>
       <div class="lr-info">
-        <div class="lr-name">${escape(e.name)}</div>
-        <div class="lr-sub">${escape(e.muscle_group || "")}${e.method ? " · " + escape(e.method) : ""}</div>
+        <div class="lr-name">${escape(e.name)}${popular ? ' <span style="font-size:10px;color:var(--brand);font-weight:800">POPULAR</span>' : ""}</div>
+        <div class="lr-sub">${escape(e.muscle_group || "")}${e.method ? " · " + escape(e.method) : ""}${usageCount ? ` · usado ${usageCount}x` : ""}</div>
       </div>
+      <button class="mini-btn ${favorite ? 'mini-btn-primary' : 'mini-btn-ghost'}" title="${favorite ? 'Remover dos favoritos' : 'Favoritar'}" onclick="toggleLibraryExerciseFavorite('${e.id}', event)" style="width:34px;height:34px;padding:0">${favorite ? '★' : '☆'}</button>
       <div style="width:28px;height:28px;border-radius:999px;border:1px solid ${selected ? 'var(--brand)' : 'var(--line)'};display:grid;place-items:center;color:${selected ? 'var(--brand)' : 'var(--text-3)'}">${selected ? '✓' : '+'}</div>
     </div>`;
 }
@@ -11350,7 +11532,28 @@ function _renderPickerResults() {
 
   // Seção "Usados recentemente" — só aparece sem filtro ativo
   let recentHtml = "";
+  let favoriteHtml = "";
+  let mostUsedHtml = "";
+  let popularHtml = "";
   if (!isSearching) {
+    const favoriteIds = getExerciseFavoriteIds();
+    const favorites = (STATE.library || []).filter(e => favoriteIds.has(e.id)).slice(0, 8);
+    if (favorites.length > 0) {
+      favoriteHtml = `
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px;padding:0 2px">★ Favoritos</div>
+        ${favorites.map(e => _pickerExerciseRow(e, ctx)).join("")}
+        <div style="height:1px;background:var(--line);margin:10px 0 8px"></div>`;
+    }
+    const mostUsed = (STATE.library || [])
+      .filter(e => getExerciseUsageCount(e) > 0)
+      .sort((a,b) => getExerciseUsageCount(b) - getExerciseUsageCount(a))
+      .slice(0, 8);
+    if (mostUsed.length > 0) {
+      mostUsedHtml = `
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px;padding:0 2px">🔥 Mais usados por você</div>
+        ${mostUsed.map(e => _pickerExerciseRow(e, ctx)).join("")}
+        <div style="height:1px;background:var(--line);margin:10px 0 8px"></div>`;
+    }
     const recentIds = _getRecentPickerIds();
     const recents = recentIds
       .map(id => (STATE.library || []).find(e => e.id === id))
@@ -11360,14 +11563,25 @@ function _renderPickerResults() {
       recentHtml = `
         <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px;padding:0 2px">⚡ Usados recentemente</div>
         ${recents.map(e => _pickerExerciseRow(e, ctx)).join("")}
-        <div style="height:1px;background:var(--line);margin:10px 0 8px"></div>
-        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px;padding:0 2px">📚 Biblioteca completa</div>`;
+        <div style="height:1px;background:var(--line);margin:10px 0 8px"></div>`;
+    }
+    const popularIds = getPopularLibraryExerciseIds();
+    const popular = (STATE.library || []).filter(e => popularIds.has(e.id)).slice(0, 10);
+    if (popular.length > 0) {
+      popularHtml = `
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px;padding:0 2px">🏋️ Populares na musculação</div>
+        ${popular.map(e => _pickerExerciseRow(e, ctx)).join("")}
+        <div style="height:1px;background:var(--line);margin:10px 0 8px"></div>`;
     }
   }
+  const smartSections = favoriteHtml + mostUsedHtml + recentHtml + popularHtml;
+  const libraryTitle = smartSections
+    ? `<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:0 0 6px;padding:0 2px">📚 Biblioteca completa</div>`
+    : "";
 
-  el.innerHTML = filter.length === 0 && !recentHtml
+  el.innerHTML = filter.length === 0 && !smartSections
     ? `<div class="empty" style="padding:16px 0"><p>Nenhum exercício encontrado.</p></div>`
-    : recentHtml + (filter.length === 0
+    : smartSections + libraryTitle + (filter.length === 0
         ? `<div class="empty" style="padding:8px 0"><p>Nenhum exercício encontrado.</p></div>`
         : filter.map(e => _pickerExerciseRow(e, ctx)).join(""));
 
