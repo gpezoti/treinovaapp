@@ -120,6 +120,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .today-card.intensity-red { border-color: rgba(255,59,59,0.5); }
 .today-card.intensity-white { border-color: rgba(244,247,255,0.35); }
 .today-card.intensity-flex { border-color: rgba(46,204,113,0.4); }
+.active-workout-card { background: linear-gradient(135deg, var(--brand-soft), rgba(46,204,113,.06)), var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--brand) 48%, var(--line)); border-radius: var(--radius-lg);
+  padding: 14px; margin: -2px 0 14px; box-shadow: 0 10px 26px rgba(0,0,0,.16); }
+.active-workout-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.active-workout-kicker { font-size: 10px; font-weight: 900; color: var(--brand); text-transform: uppercase; letter-spacing: .9px; }
+.active-workout-title { font-size: 17px; font-weight: 900; margin-top: 2px; line-height: 1.15; overflow-wrap: anywhere; }
+.active-workout-meta { font-size: 12px; color: var(--text-2); margin-top: 3px; line-height: 1.35; }
+.active-workout-progress { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin-top: 10px; }
+.active-workout-track { height: 7px; border-radius: 999px; overflow: hidden; background: var(--bg-3); border: 1px solid var(--line); }
+.active-workout-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--brand), var(--green)); transition: width .3s ease; }
+.active-workout-percent { font-size: 12px; font-weight: 900; color: var(--brand); font-variant-numeric: tabular-nums; }
+.active-workout-card .btn-primary { width: 100%; justify-content: center; margin-top: 12px; padding: 13px 16px; }
 .today-eyebrow { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-3); font-weight: 700; }
 .today-title { font-size: 26px; font-weight: 900; margin: 4px 0; letter-spacing: -0.5px; }
 .today-meta { color: var(--text-2); font-size: 13px; margin: 2px 0 14px; }
@@ -3032,6 +3044,7 @@ async function loadKnownWorkoutSessions(date = todayISO()) {
   const active = (STATE.todaySessions || []).find(s => s.status === "in_progress");
   if (active && (!STATE.currentSession || STATE.currentSession.status === "completed")) {
     STATE.currentSession = active;
+    await loadSetLogs();
   }
   return STATE.todaySessions;
 }
@@ -6185,6 +6198,7 @@ function renderHome() {
       <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
       <div class="greeting-sub">${escape(STATE.branding.app_tagline || 'Melhora postural & estética · 12 semanas')}</div>
     </div>
+    <div id="active-workout-home-slot">${renderActiveWorkoutHomeCard()}</div>
     ${todayCardHTML}
     ${weekStrip}
     <div class="section-title">Atalhos</div>
@@ -6240,6 +6254,54 @@ function renderHome() {
   `;
 }
 function firstName(name) { return (name || "").split(" ")[0] || "atleta"; }
+
+function renderActiveWorkoutHomeCard() {
+  const session = (STATE.todaySessions || []).find(s => s.status === "in_progress")
+    || (STATE.currentSession && STATE.currentSession.status === "in_progress" && STATE.currentSession.date === todayISO() ? STATE.currentSession : null);
+  if (!session) return "";
+  const W = resolveWorkoutRef(session.workout_code, session.workout_id);
+  if (!W || !W.exercises || !W.exercises.length) return "";
+  const date = session.date || todayISO();
+  const info = findDayInfo(date) || {};
+  const presetCode = info.preset_code || resolvePresetForWorkoutDate(date, session.workout_code, session.workout_id);
+  const intensity = session.intensity || info.intensity || STATE.selectedIntensity || "yellow";
+  const scheme = getTrainingScheme(presetCode, intensity);
+  const totalTarget = W.exercises.reduce((s, e) => s + getExerciseTargetSets(e, scheme), 0);
+  const logs = STATE.currentSession?.id === session.id ? (STATE.setLogs || []) : [];
+  const doneCount = logs.filter(s => s.done).length;
+  const pct = totalTarget > 0 ? Math.min(100, Math.round((doneCount / totalTarget) * 100)) : 0;
+  const focusPos = logs.find(s => !s.done)?.exercise_position || W.exercises[0]?.position || null;
+  const continueAction = presetCode
+    ? `openWorkoutWithPreset('${date}','${session.workout_code}','${presetCode}','${session.workout_id || ""}')`
+    : `openWorkout('${date}','${session.workout_code}','${intensity}','${session.workout_id || ""}')`;
+  const focusText = focusPos
+    ? (W.exercises.find(e => Number(e.position) === Number(focusPos))?.name || "")
+    : "";
+  return `
+    <div class="active-workout-card">
+      <div class="active-workout-head">
+        <div style="min-width:0;flex:1">
+          <div class="active-workout-kicker">Treino em andamento</div>
+          <div class="active-workout-title">${escape(W.name || `Treino ${session.workout_code}`)}</div>
+          <div class="active-workout-meta">${doneCount} de ${totalTarget} séries${focusText ? ` · próximo: ${escape(focusText)}` : ""}</div>
+        </div>
+        <span class="today-pill" style="background:rgba(0,180,255,.12);color:var(--brand);border:1px solid rgba(0,180,255,.3)">Agora</span>
+      </div>
+      <div class="active-workout-progress">
+        <div class="active-workout-track"><div class="active-workout-fill" style="width:${pct}%"></div></div>
+        <div class="active-workout-percent">${pct}%</div>
+      </div>
+      <button class="btn-primary" onclick="${continueAction}">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Continuar agora
+      </button>
+    </div>`;
+}
+
+function refreshActiveWorkoutHomeCard() {
+  const slot = document.getElementById("active-workout-home-slot");
+  if (slot) slot.innerHTML = renderActiveWorkoutHomeCard();
+}
 window.onDayClick = function(iso) {
   const info = findDayInfo(iso);
   if (!info) return;
@@ -16309,6 +16371,7 @@ window.renderHome = function(...args) {
   setTimeout(async () => {
     if (STATE.profile && STATE.profile.role === "student") {
       await loadKnownWorkoutSessions(todayISO()).catch(() => {});
+      refreshActiveWorkoutHomeCard();
       renderTodayBlocksCard();
     }
   }, 50);
