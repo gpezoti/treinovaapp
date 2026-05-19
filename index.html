@@ -644,8 +644,17 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
 .beta-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .mobile-action-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .student-card-actions, .payment-actions-stack { display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap; min-width:0; }
-.period-toolbar { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0 12px; }
-.period-toolbar .mini-btn { min-height:40px; }
+.period-toolbar { display:grid; grid-template-columns:1.1fr 1.1fr .8fr; gap:8px; margin:10px 0 12px; }
+.period-toolbar .mini-btn { min-height:40px; padding-inline:8px; }
+.period-toolbar .mini-btn svg { flex:0 0 auto; }
+.student-flow-strip { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:14px 0 2px; }
+.student-flow-step { background:linear-gradient(135deg,var(--brand-soft),var(--bg-card)); border:1px solid color-mix(in srgb, var(--brand) 36%, var(--line));
+  border-radius:13px; padding:10px 8px; min-height:70px; color:var(--text); text-align:left; display:flex; flex-direction:column; justify-content:space-between; gap:6px; }
+.student-flow-step .step-kicker { font-size:10px; font-weight:900; color:var(--brand); text-transform:uppercase; letter-spacing:.6px; }
+.student-flow-step .step-title { font-size:12px; font-weight:900; line-height:1.15; overflow-wrap:anywhere; }
+.student-action-group { background:var(--bg-card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:10px; }
+.student-action-group .section-title { margin-top:0; }
+.student-action-group .sheet-action-grid { margin-top:8px; }
 .period-week-card { padding:12px; }
 .period-week-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
 .period-week-title { font-size:12px; font-weight:800; color:var(--text-2); text-transform:uppercase; letter-spacing:.7px; }
@@ -679,7 +688,12 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
   .finance-item-head .today-pill { margin-left:0; }
   .finance-actions { width:100%; }
   .finance-actions .mini-btn { min-width:0; }
-  .period-toolbar { grid-template-columns:1fr; }
+  .period-toolbar { grid-template-columns:1fr 1fr .78fr; gap:6px; }
+  .period-toolbar .mini-btn { min-width:0; font-size:10px; letter-spacing:.25px; white-space:nowrap; }
+  .student-flow-strip { gap:6px; }
+  .student-flow-step { min-height:66px; padding:9px 7px; }
+  .student-flow-step .step-kicker { font-size:9px; letter-spacing:.45px; }
+  .student-flow-step .step-title { font-size:11px; }
   .preset-chip-grid { grid-template-columns:1fr 1fr; }
   .sheet-action-grid { grid-template-columns:1fr; }
   .period-week-head { align-items:flex-start; flex-direction:column; }
@@ -9896,11 +9910,8 @@ window.openStudentPeriodSheet = async function(id) {
     <p style="font-size:13px;color:var(--text-2);margin:0 0 10px">Toque em um dia para editar os blocos. Você pode ter <b>vários blocos por dia</b> (ex: aeróbio + hipertrofia).</p>
     <div class="period-toolbar">
       <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ Semana</button>
-      <button class="mini-btn" style="background:var(--bg-2);color:var(--text-2);border:1px solid var(--line)" onclick="removePeriodWeek('${id}')">− Semana</button>
-      <button class="mini-btn mini-btn-ghost" onclick="openApplyTemplateSheet('${id}')" title="Aplicar template salvo"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V7H4v14h4z"/><path d="M16 21V3h-4v18h4z"/><path d="M22 21V11h-4v10h4z"/></svg> Aplicar template</button>
-      ${(grouped.length > 0) ? `<button class="mini-btn mini-btn-ghost" onclick="openSavePeriodAsTemplateSheet('${id}')" title="Salvar este ciclo como template"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Salvar template</button>` : ''}
-      <button class="mini-btn mini-btn-ghost" onclick="openPeriodConfig('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Configurar período</button>
-      <button class="mini-btn mini-btn-ghost" onclick="openPresetEditor()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Tipos</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openApplyTemplateSheet('${id}')" title="Aplicar template salvo"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V7H4v14h4z"/><path d="M16 21V3h-4v18h4z"/><path d="M22 21V11h-4v10h4z"/></svg> Template</button>
+      <button class="mini-btn mini-btn-ghost" onclick="openPeriodActionsSheet('${id}', ${grouped.length > 0 ? 'true' : 'false'})" title="Mais ações">Mais</button>
     </div>
     ${grouped.length === 0 ? `<div class="empty"><p>Nenhuma semana ainda. Clique em "+ 1 Semana".</p></div>` : grouped.map((week, wi) => `
       <div class="card mb-8 period-week-card" id="period-week-${wi}">
@@ -9938,6 +9949,30 @@ window.openStudentPeriodSheet = async function(id) {
     <button class="btn-ghost" onclick="${isSelfPeriod ? "closeSheet();loadPeriodization().then(()=>{renderHome();})" : `onStudentDetail('${id}')`}">Voltar</button>
   `;
   openSheet(html);
+};
+
+window.openPeriodActionsSheet = function(studentId, hasWeeks) {
+  openSheet(`
+    <h3>Ações da periodização</h3>
+    <p>Use estas opções para organizar o ciclo completo sem poluir a grade principal.</p>
+    <div class="student-action-group">
+      <div class="section-title">Semanas</div>
+      <div class="sheet-action-grid">
+        <button class="btn-ghost" onclick="addPeriodWeek('${studentId}')">+ Adicionar semana</button>
+        <button class="btn-ghost" onclick="removePeriodWeek('${studentId}')" style="color:var(--orange);border-color:var(--orange-soft)">Remover última semana</button>
+      </div>
+    </div>
+    <div class="student-action-group">
+      <div class="section-title">Templates e tipos</div>
+      <div class="sheet-action-grid">
+        <button class="btn-ghost" onclick="openApplyTemplateSheet('${studentId}')">Aplicar template</button>
+        ${hasWeeks ? `<button class="btn-ghost" onclick="openSavePeriodAsTemplateSheet('${studentId}')">Salvar como template</button>` : ""}
+        <button class="btn-ghost" onclick="openPeriodConfig('${studentId}')">Configurar período</button>
+        <button class="btn-ghost" onclick="openPresetEditor()">Editar tipos</button>
+      </div>
+    </div>
+    <button class="btn-ghost" onclick="openStudentPeriodSheet('${studentId}')">Voltar para periodização</button>
+  `);
 };
 
 window.addPeriodWeek = async function(studentId) {
@@ -10875,6 +10910,8 @@ window.onStudentDetail = async function(id) {
     </div>`;
   }).join("") : `<div class="empty"><p>Sem treinos ainda</p></div>`;
   const isAdmin = STATE.profile.role === 'admin';
+  const studentNameSafe = escape(prof.full_name || prof.email).replace(/'/g, "&#39;");
+  const studentEmailSafe = escape(prof.email || "");
   openSheet(`
     <h3>${escape(prof.full_name || prof.email)}</h3>
     <p>${escape(prof.email)}${prof.phone ? ' · ' + escape(prof.phone) : ''}</p>
@@ -10893,19 +10930,50 @@ window.onStudentDetail = async function(id) {
       </div>
     ` : ''}
 
-    <div class="section-title">Ações</div>
-    <div class="sheet-action-grid">
-      <button class="btn-ghost" onclick="openEditStudentSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar dados</button>
-      <button class="btn-ghost" onclick="openStudentPeriodSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Periodização</button>
-      <button class="btn-ghost" onclick="openStudentWorkoutsSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11M6.5 17.5h11"/><path d="M3 8.5V15.5a1 1 0 0 0 1 1h1V7.5H4a1 1 0 0 0-1 1z"/><path d="M21 8.5a1 1 0 0 0-1-1h-1v9h1a1 1 0 0 0 1-1v-7z"/><path d="M6.5 7.5v9a1 1 0 0 0 1 1h1v-11h-1a1 1 0 0 0-1 1z"/><path d="M17.5 7.5a1 1 0 0 0-1-1h-1v11h1a1 1 0 0 0 1-1v-9z"/></svg> Treinos personalizados</button>
-      <button class="btn-ghost" onclick="openStudentProgressPhotos('${id}','${escape(prof.full_name || prof.email).replace(/'/g, "&#39;")}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Fotos de progresso</button>
-      <button class="btn-ghost" onclick="openStudentTempPasswordSheet('${id}','${escape(prof.full_name || prof.email).replace(/'/g, "&#39;")}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 16v2"/></svg> Senha temporária</button>
-      <button class="btn-ghost" onclick="exportStudentPDF('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Relatório (PDF)</button>
-      <button class="btn-ghost" onclick="openChatThread('${id}')">\n              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Conversar</button>
-      ${!isAdmin && prof.status === 'approved' ? `<button class="btn-ghost" onclick="onBlock('${id}')" style="color:var(--orange); border-color:var(--orange-soft);">🚫 Bloquear</button>` : ''}
+    <div class="section-title">Fluxo guiado</div>
+    <div class="student-flow-strip">
+      <button class="student-flow-step" onclick="openStudentPeriodSheet('${id}')">
+        <span class="step-kicker">1</span>
+        <span class="step-title">Periodização</span>
+      </button>
+      <button class="student-flow-step" onclick="openStudentWorkoutsSheet('${id}')">
+        <span class="step-kicker">2</span>
+        <span class="step-title">Treinos</span>
+      </button>
+      <button class="student-flow-step" onclick="openPaymentSheet('${id}','${studentNameSafe}')">
+        <span class="step-kicker">3</span>
+        <span class="step-title">Cobrança</span>
+      </button>
     </div>
-    <div style="margin-top:8px;">
-      <button class="btn-ghost" onclick="deleteStudent('${id}','${escape(prof.email||'')}')" style="color:var(--red); border-color:var(--red-soft);"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Excluir aluno</button>
+
+    <div class="student-action-group">
+      <div class="section-title">Treino e acompanhamento</div>
+      <div class="sheet-action-grid">
+        <button class="btn-ghost" onclick="openStudentPeriodSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Periodização</button>
+        <button class="btn-ghost" onclick="openStudentWorkoutsSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11M6.5 17.5h11"/><path d="M3 8.5V15.5a1 1 0 0 0 1 1h1V7.5H4a1 1 0 0 0-1 1z"/><path d="M21 8.5a1 1 0 0 0-1-1h-1v9h1a1 1 0 0 0 1-1v-7z"/><path d="M6.5 7.5v9a1 1 0 0 0 1 1h1v-11h-1a1 1 0 0 0-1 1z"/><path d="M17.5 7.5a1 1 0 0 0-1-1h-1v11h1a1 1 0 0 0 1-1v-9z"/></svg> Treinos personalizados</button>
+        <button class="btn-ghost" onclick="openStudentProgressPhotos('${id}','${studentNameSafe}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Fotos de progresso</button>
+        <button class="btn-ghost" onclick="exportStudentPDF('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Relatório (PDF)</button>
+      </div>
+    </div>
+
+    <div class="student-action-group">
+      <div class="section-title">Gestão e comunicação</div>
+      <div class="sheet-action-grid">
+        <button class="btn-ghost" onclick="openChatThread('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Conversar</button>
+        <button class="btn-ghost" onclick="openEditStudentSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar dados</button>
+        <button class="btn-ghost" onclick="openStudentTempPasswordSheet('${id}','${studentNameSafe}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 16v2"/></svg> Senha temporária</button>
+        ${!isAdmin && prof.status === 'approved' ? `<button class="btn-ghost" onclick="onBlock('${id}')" style="color:var(--orange); border-color:var(--orange-soft);">Bloquear acesso</button>` : ''}
+      </div>
+    </div>
+
+    <div class="student-action-group">
+      <div class="section-title">Financeiro</div>
+      <button class="btn-ghost" onclick="openPaymentSheet('${id}','${studentNameSafe}')">Abrir cobranças do aluno</button>
+    </div>
+
+    <div class="student-action-group">
+      <div class="section-title">Zona de risco</div>
+      <button class="btn-ghost" onclick="deleteStudent('${id}','${studentEmailSafe}')" style="color:var(--red); border-color:var(--red-soft);"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Excluir aluno</button>
     </div>
 
     <div class="section-title">Últimos 20 treinos</div>
