@@ -13705,6 +13705,66 @@ function closeComments() {
 }
 window.closeComments = closeComments;
 
+function getCommentAuthorFallback(userId) {
+  if (STATE.profile?.id === userId) {
+    return {
+      id: STATE.profile.id,
+      full_name: STATE.profile.full_name,
+      email: STATE.profile.email,
+      avatar_emoji: STATE.profile.avatar_emoji,
+      avatar_url: STATE.profile.avatar_url,
+    };
+  }
+  return {};
+}
+
+async function hydrateCommentAuthors(comments = []) {
+  const ids = [...new Set((comments || []).map(c => c.user_id).filter(Boolean))];
+  if (!ids.length) return comments || [];
+  let byId = new Map();
+  try {
+    const { data, error } = await sb.from("profiles")
+      .select("id, full_name, email, avatar_emoji, avatar_url")
+      .in("id", ids);
+    if (error) throw error;
+    byId = new Map((data || []).map(p => [p.id, p]));
+  } catch (e) {
+    console.warn("[feed comments authors]", e);
+  }
+  return (comments || []).map(c => ({
+    ...c,
+    author: byId.get(c.user_id) || c.author || getCommentAuthorFallback(c.user_id),
+  }));
+}
+
+function renderCommentAuthorAvatar(author = {}) {
+  if (author.avatar_url) {
+    return `<img src="${escapeHtml(author.avatar_url)}" alt="">`;
+  }
+  return escapeHtml(author.avatar_emoji || "👤");
+}
+
+function renderCommentItems(comments = [], postId) {
+  return comments.map(c => {
+    const a = c.author || getCommentAuthorFallback(c.user_id);
+    const canDel = STATE.profile.id === c.user_id || STATE.profile.role === "admin" || STATE.profile.role === "coach";
+    const authorName = a.full_name || (a.email ? a.email.split("@")[0] : "") || "Usuário";
+    return `<div class="cm-item">
+      <div class="cm-av">${renderCommentAuthorAvatar(a)}</div>
+      <div class="cm-content">
+        <div class="cm-meta">
+          <div class="cm-name">${escapeHtml(authorName)}</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <div class="cm-time">${timeAgo(c.created_at)}</div>
+            ${canDel ? `<button class="cm-del" onclick="deleteComment('${c.id}', '${postId}')">apagar</button>` : ''}
+          </div>
+        </div>
+        <div class="cm-text">${escapeHtml(c.content)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 async function openComments(postId) {
   // Remove overlay anterior se existir (ex: chamado via deleteComment)
   const existing = document.getElementById("cm-overlay");
@@ -13752,9 +13812,8 @@ async function openComments(postId) {
   }
 
   async function load() {
-    // Sem hint FK — PostgREST infere automaticamente quando há só uma FK entre as tabelas
     const { data, error } = await sb.from("feed_comments")
-      .select("*, author:profiles(id, full_name, avatar_emoji, avatar_url)")
+      .select("id, post_id, user_id, content, created_at")
       .eq("post_id", postId).order("created_at", { ascending: true });
     const list = document.getElementById("cm-list");
     if (!list) return; // overlay pode ter sido fechado
@@ -13767,23 +13826,8 @@ async function openComments(postId) {
       list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-3)">Seja o primeiro a comentar</div>`;
       return;
     }
-    list.innerHTML = data.map(c => {
-      const a = c.author || {};
-      const canDel = STATE.profile.id === c.user_id || STATE.profile.role === "admin" || STATE.profile.role === "coach";
-      return `<div class="cm-item">
-        <div class="cm-av">${a.avatar_url ? `<img src="${a.avatar_url}">` : (a.avatar_emoji || '👤')}</div>
-        <div class="cm-content">
-          <div class="cm-meta">
-            <div class="cm-name">${escapeHtml(a.full_name || 'Usuário')}</div>
-            <div style="display:flex;gap:6px;align-items:center">
-              <div class="cm-time">${timeAgo(c.created_at)}</div>
-              ${canDel ? `<button class="cm-del" onclick="deleteComment('${c.id}', '${postId}')">apagar</button>` : ''}
-            </div>
-          </div>
-          <div class="cm-text">${escapeHtml(c.content)}</div>
-        </div>
-      </div>`;
-    }).join('');
+    const hydrated = await hydrateCommentAuthors(data);
+    list.innerHTML = renderCommentItems(hydrated, postId);
     list.scrollTop = list.scrollHeight;
   }
   await load();
@@ -13815,30 +13859,15 @@ async function deleteComment(id, postId) {
   if (error) { showToast(error.message, "error"); return; }
   // Recarrega a lista sem fechar/reabrir o overlay
   const { data } = await sb.from("feed_comments")
-    .select("*, author:profiles(id, full_name, avatar_emoji, avatar_url)")
+    .select("id, post_id, user_id, content, created_at")
     .eq("post_id", postId).order("created_at", { ascending: true });
   const list = document.getElementById("cm-list");
   if (!list) return;
   if (!data || !data.length) {
     list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-3)">Seja o primeiro a comentar</div>`;
   } else {
-    list.innerHTML = data.map(c => {
-      const a = c.author || {};
-      const canDel = STATE.profile.id === c.user_id || STATE.profile.role === "admin" || STATE.profile.role === "coach";
-      return `<div class="cm-item">
-        <div class="cm-av">${a.avatar_url ? `<img src="${a.avatar_url}">` : (a.avatar_emoji || '👤')}</div>
-        <div class="cm-content">
-          <div class="cm-meta">
-            <div class="cm-name">${escapeHtml(a.full_name || 'Usuário')}</div>
-            <div style="display:flex;gap:6px;align-items:center">
-              <div class="cm-time">${timeAgo(c.created_at)}</div>
-              ${canDel ? `<button class="cm-del" onclick="deleteComment('${c.id}', '${postId}')">apagar</button>` : ''}
-            </div>
-          </div>
-          <div class="cm-text">${escapeHtml(c.content)}</div>
-        </div>
-      </div>`;
-    }).join('');
+    const hydrated = await hydrateCommentAuthors(data);
+    list.innerHTML = renderCommentItems(hydrated, postId);
   }
   loadFeed && loadFeed().then(() => { if (STATE.view === 'feed') renderFeed(); });
 }
