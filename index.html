@@ -1966,6 +1966,7 @@ const STATE = {
   selectedPresetCode: null,
   expandedEx: null,
   currentSession: null,  // active session row
+  todaySessions: [],     // sessions do dia para refletir Iniciar/Continuar/Concluído na Home
   setLogs: [],           // current session set_logs
   lastLoads: {},         // {exercise_name: load_kg}
   feed: [],
@@ -2993,19 +2994,87 @@ async function loadLastLoads() {
   STATE.lastLoads = m;
 }
 
+function pickBestWorkoutSession(rows = [], workoutId = null) {
+  const candidates = workoutId
+    ? rows.filter(s => !s.workout_id || String(s.workout_id) === String(workoutId))
+    : rows;
+  const list = candidates.length ? candidates : rows;
+  return list.find(s => s.status === "in_progress")
+    || list.find(s => s.status === "completed")
+    || list[0]
+    || null;
+}
+
+function findKnownSessionForWorkout(date, workoutCode, workoutId = null) {
+  const rows = (STATE.todaySessions || []).filter(s =>
+    String(s.date || "") === String(date || "") &&
+    String(s.workout_code || "") === String(workoutCode || "")
+  );
+  return pickBestWorkoutSession(rows, workoutId);
+}
+
+async function loadKnownWorkoutSessions(date = todayISO()) {
+  if (!STATE.profile || !["student", "coach"].includes(STATE.profile.role)) {
+    STATE.todaySessions = [];
+    return [];
+  }
+  const { data, error } = await sb.from("sessions")
+    .select("*")
+    .eq("student_id", STATE.profile.id)
+    .eq("date", date)
+    .in("status", ["in_progress", "completed"]);
+  if (error) {
+    console.warn("[workout] Falha ao carregar sessões do dia", error);
+    STATE.todaySessions = [];
+    return [];
+  }
+  STATE.todaySessions = data || [];
+  const active = (STATE.todaySessions || []).find(s => s.status === "in_progress");
+  if (active && (!STATE.currentSession || STATE.currentSession.status === "completed")) {
+    STATE.currentSession = active;
+  }
+  return STATE.todaySessions;
+}
+
+async function loadExistingSession(date, workoutCode, workoutId = null) {
+  if (!STATE.profile || !workoutCode) return null;
+  const { data, error } = await sb.from("sessions")
+    .select("*")
+    .eq("student_id", STATE.profile.id)
+    .eq("date", date)
+    .eq("workout_code", workoutCode)
+    .limit(5);
+  if (error) {
+    console.warn("[workout] Falha ao buscar sessão existente", error);
+    return null;
+  }
+  const existing = pickBestWorkoutSession(data || [], workoutId);
+  if (!existing) return null;
+  STATE.currentSession = existing;
+  if (String(date) === String(todayISO())) {
+    STATE.todaySessions = [
+      ...(STATE.todaySessions || []).filter(s => String(s.id) !== String(existing.id)),
+      existing
+    ];
+  }
+  await loadSetLogs();
+  return existing;
+}
+
 async function loadOrCreateSession(date, workoutCode, intensity) {
   // procura sessão do dia
-  const { data: existing, error: existingError } = await sb.from("sessions")
+  const w = STATE.workouts[workoutCode];
+  const { data: existingRows, error: existingError } = await sb.from("sessions")
     .select("*").eq("student_id", STATE.profile.id)
-    .eq("date", date).eq("workout_code", workoutCode).maybeSingle();
+    .eq("date", date).eq("workout_code", workoutCode).limit(5);
   if (existingError) {
     console.error("[workout] Falha ao buscar sessão", existingError);
     throw existingError;
   }
+  const existing = pickBestWorkoutSession(existingRows || [], w?.id || null);
   if (existing) {
     STATE.currentSession = existing;
   } else {
-    const w = STATE.workouts[workoutCode];
     const { data, error } = await sb.from("sessions").insert({
       student_id: STATE.profile.id, date, workout_code: workoutCode,
       workout_id: w ? w.id : null, intensity, status: "in_progress"
@@ -3015,6 +3084,12 @@ async function loadOrCreateSession(date, workoutCode, intensity) {
       throw error;
     }
     STATE.currentSession = data;
+  }
+  if (String(date) === String(todayISO()) && STATE.currentSession) {
+    STATE.todaySessions = [
+      ...(STATE.todaySessions || []).filter(s => String(s.id) !== String(STATE.currentSession.id)),
+      STATE.currentSession
+    ];
   }
   await loadSetLogs();
   return STATE.currentSession;
@@ -6048,6 +6123,8 @@ function renderHome() {
 	      const [pillCls, pillTxt] = intensityPill(info.intensity);
 	      const scheme = getTrainingScheme(info.preset_code, info.intensity);
 	      const totalSets = W.exercises ? W.exercises.reduce((a,e)=>a+getExerciseTargetSets(e, scheme),0) : 0;
+        const knownSession = findKnownSessionForWorkout(today, info.workout_code, info.workout_id);
+        const ctaLabel = knownSession?.status === "completed" ? "Ver treino" : knownSession?.status === "in_progress" ? "Continuar treino" : "Iniciar treino";
 	      todayCardHTML = `
         <div class="today-card ${intensityClass(info.intensity)}">
           <div class="today-eyebrow">Hoje · ${WEEKDAY_FULL[new Date(today+"T00:00:00").getDay()]} · ${fmtDateBR(today)}</div>
@@ -6058,9 +6135,9 @@ function renderHome() {
           <div style="margin-top:14px">
             <button class="btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px" onclick="${info.preset_code ? `openWorkoutWithPreset('${today}','${info.workout_code}','${info.preset_code}','${info.workout_id || ""}')` : `openWorkout('${today}','${info.workout_code}','${info.intensity}','${info.workout_id || ""}')`}">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Iniciar treino
+              ${ctaLabel}
             </button>
-            <div style="font-size:12px;color:var(--text-2);margin-top:10px;line-height:1.4">Comece por aqui. Suas cargas são salvas automaticamente para a próxima sessão.</div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:10px;line-height:1.4">${knownSession?.status === "completed" ? "Treino concluído hoje. Você ainda pode revisar as séries e cargas." : knownSession?.status === "in_progress" ? "Seu treino está em andamento. Toque para continuar de onde parou." : "Comece por aqui. Suas cargas são salvas automaticamente para a próxima sessão."}</div>
             <div style="display:flex;gap:8px;margin-top:8px">
               <div style="flex:1;background:rgba(0,0,0,.15);border-radius:10px;padding:10px;text-align:center">
                 <div style="font-size:18px;font-weight:800;color:var(--brand-on)">${W.exercises ? W.exercises.length : 0}</div>
@@ -7665,6 +7742,11 @@ async function renderWorkout() {
   if (STATE.currentSession && (STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code)) {
     STATE.currentSession = null;
     STATE.setLogs = [];
+  }
+  // Se o aluno já tinha iniciado ou concluído este treino em outra navegação/reload,
+  // carregar a sessão existente antes de mostrar o CTA de início.
+  if (!STATE.currentSession) {
+    await loadExistingSession(date, code, STATE.selectedWorkoutId);
   }
   // Se há sessão ativa para este treino, garantir logs carregados
   if (STATE.currentSession && (!STATE.setLogs || STATE.setLogs.length === 0)) {
@@ -12845,6 +12927,7 @@ async function postSignIn() {
     safeLoad("follows", loadFollows),
     safeLoad("presets", loadPresets),
     safeLoad("today blocks", loadTodayBlocks),
+    safeLoad("today sessions", () => loadKnownWorkoutSessions(todayISO())),
     safeLoad("periodization", loadPeriodization),
     safeLoad("last loads", loadLastLoads),
   ]);
@@ -16223,8 +16306,9 @@ if (_origRenderProfile) {
 const _origRenderHome2 = window.renderHome;
 window.renderHome = function(...args) {
   const r = _origRenderHome2.apply(this, args);
-  setTimeout(() => {
+  setTimeout(async () => {
     if (STATE.profile && STATE.profile.role === "student") {
+      await loadKnownWorkoutSessions(todayISO()).catch(() => {});
       renderTodayBlocksCard();
     }
   }, 50);
@@ -16247,18 +16331,25 @@ function renderTodayBlocksCard() {
     const W = b.workout_code ? resolveWorkoutRef(b.workout_code, b.workout_id) : null;
 	    const scheme = getTrainingScheme(b.preset_code, "yellow");
 	    const hasRepRange = p.rep_min && p.rep_max;
+    const session = b.workout_code ? findKnownSessionForWorkout(today, b.workout_code, b.workout_id) : null;
+    const ctaLabel = session?.status === "completed" ? "Ver" : session?.status === "in_progress" ? "Continuar" : "Iniciar";
+    const statusBadge = session?.status === "completed"
+      ? `<span class="today-pill pill-approved" style="font-size:9px;padding:3px 7px;margin-left:6px">Concluído</span>`
+      : session?.status === "in_progress"
+        ? `<span class="today-pill" style="background:rgba(0,180,255,.12);color:var(--brand);border:1px solid rgba(0,180,255,.3);font-size:9px;padding:3px 7px;margin-left:6px">Em andamento</span>`
+        : "";
     return `
       <div style="background:var(--bg-2);border:1px solid var(--line);border-left:4px solid ${p.color};border-radius:12px;padding:14px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
           <div style="flex:1;min-width:0">
-            <div style="font-weight:800;color:${p.color};font-size:11px;text-transform:uppercase;letter-spacing:.6px">${escape(p.label)}</div>
+            <div style="font-weight:800;color:${p.color};font-size:11px;text-transform:uppercase;letter-spacing:.6px">${escape(p.label)}${statusBadge}</div>
             <div style="font-size:16px;color:var(--text);font-weight:700;margin-top:3px">${W ? escape(W.name) : (p.is_workout ? '— sem treino atribuído —' : escape(p.label))}</div>
 	            ${hasRepRange || p.sets_count ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px">${scheme.sets} séries · ${scheme.reps} reps · pausa ${scheme.pause}</div>` : ''}
             ${W && W.focus ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px">${escape(W.focus)}</div>` : ''}
           </div>
           ${b.workout_code && W ? `
             <button class="btn-primary" style="padding:9px 14px;font-size:12px;width:auto;flex-shrink:0" onclick="openWorkoutWithPreset('${today}','${b.workout_code}','${b.preset_code}','${b.workout_id || ""}')">
-              Iniciar
+              ${ctaLabel}
             </button>
           ` : (b.preset_code === 'aero' ? `
             <button class="btn-ghost" style="padding:9px 14px;font-size:12px;width:auto;flex-shrink:0" onclick="navTo('aero')">
