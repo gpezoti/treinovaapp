@@ -9926,6 +9926,7 @@ window.openStudentPeriodSheet = async function(id) {
             <button class="mini-btn mini-btn-ghost" onclick="movePeriodWeek('${id}',${wi},1)" ${wi === grouped.length - 1 ? 'disabled' : ''}>↓ Descer</button>
             <button class="mini-btn mini-btn-ghost" onclick="openRepeatPeriodWeekSheet('${id}',${wi})" ${wi >= grouped.length - 1 ? 'disabled' : ''}>Repetir</button>
             <button class="mini-btn mini-btn-primary" onclick="duplicatePeriodWeek('${id}',${wi})">Duplicar</button>
+            <button class="mini-btn mini-btn-danger" onclick="removePeriodWeekAt('${id}',${wi})">Remover</button>
           </div>
         </div>
         <div class="week-grid">
@@ -10095,6 +10096,27 @@ async function movePeriodWeekClientFallback(studentId, weekIndex, dir) {
   }
 }
 
+async function removePeriodWeekAtClientFallback(studentId, weekIndex) {
+  const days = await loadPeriodDaysOrdered(studentId);
+  const start = weekIndex * 7;
+  const week = days.slice(start, start + 7);
+  const later = days.slice(start + 7);
+  if (!week.length) throw new Error("Semana não encontrada.");
+  const weekIds = week.map(day => day.id);
+  const { error: blocksError } = await sb.from("periodization_blocks").delete().in("day_id", weekIds);
+  if (blocksError) throw blocksError;
+  const { error: daysError } = await sb.from("periodization_days").delete().in("id", weekIds);
+  if (daysError) throw daysError;
+  if (!later.length) return;
+  const tempBase = "2800-01-01";
+  for (let i = 0; i < later.length; i++) {
+    await updatePeriodDayDate(later[i].id, addDaysISO(tempBase, i));
+  }
+  for (const day of later) {
+    await updatePeriodDayDate(day.id, addDaysISO(day.date, -7));
+  }
+}
+
 function canManagePeriodBulk() {
   if (!["coach", "admin"].includes(STATE.profile?.role)) {
     showToast("Apenas treinador pode editar em massa a periodização.", "error");
@@ -10259,6 +10281,30 @@ window.movePeriodWeek = async function(studentId, weekIndex, dir) {
     await openStudentPeriodSheet(studentId);
   } catch (e) {
     showToast("Erro ao mover: " + (e.message || "tente novamente"), "error");
+    setPeriodWeekBusy(weekIndex, false);
+  } finally {
+    STATE._periodWeekAction = false;
+  }
+};
+
+window.removePeriodWeekAt = async function(studentId, weekIndex) {
+  if (!canManagePeriodWeeks()) return;
+  const ok = await showConfirm({
+    title: `Remover semana ${weekIndex + 1}?`,
+    msg: "Os 7 dias desta semana serão apagados. As semanas seguintes sobem automaticamente para manter o ciclo contínuo.",
+    confirm: "Remover semana",
+    danger: true
+  });
+  if (!ok) return;
+  STATE._periodWeekAction = true;
+  setPeriodWeekBusy(weekIndex, true);
+  showToast("Removendo semana...");
+  try {
+    await removePeriodWeekAtClientFallback(studentId, weekIndex);
+    showToast("Semana removida", "success");
+    await openStudentPeriodSheet(studentId);
+  } catch (e) {
+    showToast("Erro ao remover: " + (e.message || "tente novamente"), "error");
     setPeriodWeekBusy(weekIndex, false);
   } finally {
     STATE._periodWeekAction = false;
