@@ -1061,6 +1061,7 @@ const SUPABASE_ANON = "sb_publishable_vkR2Gtm-axw0038KWy8LWA_vBFSIk_r";
 const APP_SITE_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
   ? "https://treinovaapp.vercel.app/"
   : window.location.origin + "/";
+const APP_PASSWORD_RECOVERY_URL = APP_SITE_URL + "?auth=recovery";
 
 /* =============================================================================
    ICONS — SVG dos exercícios (categoria → svg)
@@ -2615,8 +2616,8 @@ async function submitForgotPassword() {
   if (!email) { showToast("Digite seu email", "error"); return; }
   const btn = document.getElementById("forgot-submit");
   btn.disabled = true; btn.textContent = "Enviando...";
-  // A-03 FIX: sempre usa APP_SITE_URL — nunca localhost
-  const redirectTo = APP_SITE_URL;
+  // A-03 FIX: sempre usa a URL explicita de recovery — nunca localhost/login generico.
+  const redirectTo = APP_PASSWORD_RECOVERY_URL;
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
   btn.disabled = false; btn.textContent = "Enviar link";
   if (error) { showToast("Erro: " + error.message, "error"); return; }
@@ -2624,10 +2625,60 @@ async function submitForgotPassword() {
   btn.style.display = "none";
 }
 
-// A-03 FIX: modal para nova senha — disparado pelo evento PASSWORD_RECOVERY
+function getAuthRedirectParams() {
+  const params = new URLSearchParams(window.location.search || "");
+  const hash = new URLSearchParams(String(window.location.hash || "").replace(/^#/, ""));
+  for (const [key, value] of hash.entries()) {
+    if (!params.has(key)) params.set(key, value);
+  }
+  return params;
+}
+
+function isPasswordRecoveryRedirect() {
+  const params = getAuthRedirectParams();
+  const type = String(params.get("type") || "").toLowerCase();
+  const auth = String(params.get("auth") || "").toLowerCase();
+  return auth === "recovery"
+    || type === "recovery"
+    || !!params.get("recovery_token")
+    || (!!params.get("code") && auth === "recovery");
+}
+
+async function handlePasswordRecoveryRedirect() {
+  if (!isPasswordRecoveryRedirect()) return false;
+  STATE._passwordRecoveryMode = true;
+  const params = getAuthRedirectParams();
+  const code = params.get("code");
+  if (code && sb?.auth?.exchangeCodeForSession) {
+    const { error } = await sb.auth.exchangeCodeForSession(code);
+    if (error) {
+      console.warn("[password recovery exchange]", error);
+      showAuth(); setAuthMode("signin");
+      showToast("Link de redefinição expirado ou inválido. Solicite um novo link.", "error");
+      return true;
+    }
+  } else {
+    try {
+      await sb.auth.getSession();
+    } catch (e) {
+      console.warn("[password recovery session]", e);
+    }
+  }
+  showPasswordRecoveryModal();
+  return true;
+}
+
+function clearPasswordRecoveryUrl() {
+  const cleanUrl = window.location.origin + window.location.pathname;
+  window.history.replaceState({}, document.title, cleanUrl);
+  STATE._passwordRecoveryMode = false;
+}
+
+// A-03 FIX: modal para nova senha — disparado pelo evento PASSWORD_RECOVERY ou pelo redirect de recovery
 function showPasswordRecoveryModal() {
   // Remover modal anterior se existir
   document.getElementById("pw-recovery-modal")?.remove();
+  showAuth();
   const el = document.createElement("div");
   el.id = "pw-recovery-modal";
   el.innerHTML = `
@@ -2666,6 +2717,10 @@ window.submitPasswordRecovery = async function() {
   }
   showToast("Senha atualizada com sucesso!", "success");
   document.getElementById("pw-recovery-modal")?.remove();
+  clearPasswordRecoveryUrl();
+  await sb.auth.signOut();
+  showAuth(); setAuthMode("signin");
+  showToast("Entre novamente com a nova senha.", "success");
 };
 
 async function loadProfile() {
@@ -12330,7 +12385,14 @@ async function boot() {
     if (!SUPABASE_URL || !SUPABASE_ANON) { doneBoot(); showCfg(); return; }
     if (!window.supabase) { doneBoot(); showToast("Falha ao carregar SDK", "error"); showCfg(); return; }
 
-    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: {
+        detectSessionInUrl: true,
+        persistSession: true,
+        autoRefreshToken: true
+      }
+    });
+    STATE._passwordRecoveryMode = isPasswordRecoveryRedirect();
 
     // Aplica branding do sistema (definido pelo admin) na tela de login
     applyAuthBranding();
@@ -12343,6 +12405,11 @@ async function boot() {
     // Durante o boot, getSession() abaixo cuida do postSignIn inicial.
     sb.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN") {
+        if (STATE._passwordRecoveryMode) {
+          STATE.user = session?.user || STATE.user;
+          showPasswordRecoveryModal();
+          return;
+        }
         if (STATE.profile && session?.user?.id === STATE.profile.id) {
           STATE.user = session.user;
           repairInteractionLayer("auth-signed-in-existing-session");
@@ -12366,10 +12433,13 @@ async function boot() {
       } else if (event === "PASSWORD_RECOVERY") {
         // A-03 FIX: processar token de reset de senha em PWA/deep-link
         // Mostra modal para o usuário definir nova senha
+        STATE._passwordRecoveryMode = true;
         showPasswordRecoveryModal();
       }
       // TOKEN_REFRESHED: atualiza token silenciosamente, sem recarregar nada
     });
+
+    const handledRecoveryRedirect = await handlePasswordRecoveryRedirect();
 
     // getSession com timeout próprio (evita travar em conexão ruim)
     const sessionPromise = sb.auth.getSession();
@@ -12381,6 +12451,11 @@ async function boot() {
     } catch(e) {
       console.warn("getSession falhou:", e);
       session = null;
+    }
+
+    if (handledRecoveryRedirect) {
+      doneBoot();
+      return;
     }
 
     if (session) {

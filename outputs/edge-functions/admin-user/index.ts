@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL         = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SUPABASE_ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY")!;
+const APP_SITE_URL         = (Deno.env.get("APP_SITE_URL") ?? "https://treinovaapp.vercel.app/").replace(/\/?$/, "/");
 
 const sbAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
@@ -40,9 +41,31 @@ function cleanText(value: unknown) {
   return String(value || "").trim();
 }
 
+function passwordMeetsPolicy(value: unknown) {
+  const password = String(value || "");
+  return password.length >= 8
+    && /[a-z]/.test(password)
+    && /[A-Z]/.test(password)
+    && /\d/.test(password);
+}
+
 function assertAdmin(caller: { role: string }) {
   if (caller.role !== "admin") {
     return json({ error: "Apenas admin pode executar esta ação." }, 403);
+  }
+  return null;
+}
+
+async function findAuthUserByEmail(email: string) {
+  const target = cleanEmail(email);
+  const perPage = 1000;
+  for (let page = 1; page <= 10; page += 1) {
+    const { data, error } = await sbAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const users = data?.users || [];
+    const match = users.find((user) => cleanEmail(user.email) === target);
+    if (match) return match;
+    if (users.length < perPage) break;
   }
   return null;
 }
@@ -82,7 +105,18 @@ async function createAuthUserOrReuseProfile(params: {
 
   const message = createErr?.message || "Falha ao criar usuário.";
   if (/already|registered|exists|duplicate/i.test(message)) {
-    throw new Error("Este email já existe no Auth, mas não há profile correspondente para gerenciar pelo painel. Corrija o usuário no Supabase Authentication ou use outro email.");
+    const orphanAuthUser = await findAuthUserByEmail(email);
+    if (orphanAuthUser?.id) {
+      const { error: updateErr } = await sbAdmin.auth.admin.updateUserById(orphanAuthUser.id, {
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName, role },
+      });
+      if (updateErr) throw new Error(updateErr.message);
+      return { userId: orphanAuthUser.id, reused: true };
+    }
+    throw new Error("Este email já existe no Auth, mas não foi possível localizar o usuário para reaproveitar.");
   }
   throw new Error(message);
 }
@@ -146,8 +180,8 @@ serve(async (req) => {
       const phone = String(body.phone || "").trim();
       const coachId = caller.role === "coach" ? caller.id : (body.coach_id || null);
 
-      if (!fullName || !email.includes("@") || password.length < 8) {
-        return json({ error: "Nome, email válido e senha 8+ são obrigatórios." }, 400);
+      if (!fullName || !email.includes("@") || !passwordMeetsPolicy(password)) {
+        return json({ error: "Nome, email válido e senha com 8+ caracteres, maiúscula, minúscula e número são obrigatórios." }, 400);
       }
       if (caller.role === "admin" && coachId) {
         const { data: coach } = await sbAdmin
@@ -186,8 +220,9 @@ serve(async (req) => {
       const email = String(body.email || "").trim().toLowerCase();
       const password = String(body.password || "");
       const fullName = String(body.full_name || "").trim();
-      if (!fullName || !email.includes("@") || password.length < 8) {
-        return json({ error: "Nome, email válido e senha 8+ são obrigatórios." }, 400);
+      const asaasWalletId = cleanText(body.asaas_wallet_id);
+      if (!fullName || !email.includes("@") || !passwordMeetsPolicy(password)) {
+        return json({ error: "Nome, email válido e senha com 8+ caracteres, maiúscula, minúscula e número são obrigatórios." }, 400);
       }
 
       const created = await createAuthUserOrReuseProfile({ email, password, fullName, role: "coach" });
@@ -201,6 +236,7 @@ serve(async (req) => {
           role: "coach",
           status: "approved",
           coach_id: null,
+          asaas_wallet_id: asaasWalletId || null,
           must_reset_password: true,
         }, { onConflict: "id" });
       if (profileErr) return json({ error: profileErr.message }, 500);
@@ -235,6 +271,9 @@ serve(async (req) => {
       const { error } = await sbAdmin.auth.admin.generateLink({
         type: "recovery",
         email: target.email,
+        options: {
+          redirectTo: `${APP_SITE_URL}?auth=recovery`,
+        },
       });
       if (error) return json({ error: error.message }, 500);
       return json({ ok: true, action: "send_password_reset" });
@@ -257,6 +296,7 @@ serve(async (req) => {
       const email = cleanEmail(body.email);
       const phone = cleanText(body.phone);
       const avatarEmoji = cleanText(body.avatar_emoji);
+      const asaasWalletId = cleanText(body.asaas_wallet_id);
       const status = cleanText(body.status || target.status);
       const role = cleanText(body.role || target.role);
       const password = String(body.password || "");
@@ -270,8 +310,8 @@ serve(async (req) => {
       if (!["coach", "student"].includes(role)) {
         return json({ error: "Papel inválido." }, 400);
       }
-      if (password && password.length < 8) {
-        return json({ error: "A nova senha precisa ter pelo menos 8 caracteres." }, 400);
+      if (password && !passwordMeetsPolicy(password)) {
+        return json({ error: "A nova senha precisa ter 8+ caracteres, maiúscula, minúscula e número." }, 400);
       }
 
       const authPatch: Record<string, unknown> = {
@@ -292,6 +332,7 @@ serve(async (req) => {
         status,
         role,
         coach_id: role === "coach" ? null : body.coach_id || null,
+        asaas_wallet_id: role === "coach" ? (asaasWalletId || null) : null,
       };
       if (password) profilePatch.must_reset_password = false;
 
@@ -330,6 +371,7 @@ serve(async (req) => {
           role: "student",
           status: "blocked",
           coach_id: null,
+          asaas_wallet_id: null,
           must_reset_password: true,
         })
         .eq("id", user_id);
