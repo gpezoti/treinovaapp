@@ -1773,20 +1773,14 @@ function normalizePeriodColor(color) {
 
 function renderPeriodColorPicker(value, id, cardCode = "") {
   const current = normalizePeriodColor(value);
-  return `<div class="period-color-picker" data-color-picker="${id}">
+  return `<div class="form-group period-color-picker" data-color-picker="${id}">
+    <label class="form-label">Cor</label>
     <input type="hidden" id="${id}" value="${escape(current)}" />
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-      ${PERIOD_COLOR_OPTIONS.map(c => `
-        <button type="button" class="period-color-swatch ${c.value.toLowerCase() === current.toLowerCase() ? 'active' : ''}"
-          title="${escape(c.name)}" aria-label="${escape(c.name)}"
-          onclick="setPeriodColor('${id}','${c.value}','${escapeAttr(cardCode)}')"
-          style="height:42px;border-radius:10px;border:2px solid ${c.value.toLowerCase() === current.toLowerCase() ? 'var(--text)' : 'var(--line)'};background:${c.value};box-shadow:inset 0 0 0 1px rgba(0,0,0,.16)">
-        </button>`).join("")}
-    </div>
-    <label class="row-flex" style="margin-top:8px;gap:8px">
-      <span class="text-xs muted" style="font-weight:800;text-transform:uppercase;letter-spacing:.5px">Personalizada</span>
-      <input type="color" value="${escape(current)}" style="width:52px;height:38px;padding:2px;border-radius:8px;border:1px solid var(--line);background:var(--bg-2)"
+    <label class="row-flex" style="gap:10px;align-items:center;min-height:48px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg-2)">
+      <input type="color" value="${escape(current)}" aria-label="Cor"
+        style="width:46px;height:34px;padding:2px;border-radius:9px;border:1px solid var(--line);background:var(--bg)"
         oninput="setPeriodColor('${id}', this.value, '${escapeAttr(cardCode)}')" />
+      <span class="text-sm fw-700">Personalizar cor</span>
     </label>
   </div>`;
 }
@@ -2667,31 +2661,37 @@ async function loadWorkouts() {
   let q = sb.from("workouts").select("*").order("code");
   const role = STATE.profile && STATE.profile.role;
   const myId = STATE.profile && STATE.profile.id;
+  // Para alunos vinculados a um treinador: o modelo atual do treinador e a fonte
+  // principal. Clones antigos por aluno ficam como fallback para contas legadas.
+  const isStudent = role === "student";
+  const isCoach = role === "coach";
+  const studentCoachId = isStudent ? STATE.profile.coach_id : null;
   if (role === "student") {
     const coachId = STATE.profile && STATE.profile.coach_id;
     q = coachId
-      ? q.or(`is_global.eq.true,student_id.eq.${myId},coach_id.eq.${coachId}`)
-      : q.or(`is_global.eq.true,student_id.eq.${myId}`);
+      ? q.or(`student_id.eq.${myId},coach_id.eq.${coachId}`)
+      : q.eq("student_id", myId);
   } else if (role === "coach") {
-    q = q.or(`is_global.eq.true,coach_id.eq.${myId}`);
+    q = q.eq("coach_id", myId).is("student_id", null);
   }
   const { data: workouts, error } = await q;
   if (error) { console.error(error); return; }
+  const scopedWorkouts = (workouts || []).filter(w => {
+    if (!w) return false;
+    if (isStudent) return w.student_id === myId || (studentCoachId && w.coach_id === studentCoachId && !w.student_id);
+    if (isCoach) return w.coach_id === myId && !w.student_id;
+    return true;
+  });
   // Só exercises de workout (não biblioteca)
-  const workoutIds = (workouts || []).map(w => w.id).filter(Boolean);
+  const workoutIds = scopedWorkouts.map(w => w.id).filter(Boolean);
   let exQ = sb.from("exercises").select("*").not("workout_id","is",null).order("position");
   if (workoutIds.length) exQ = exQ.in("workout_id", workoutIds);
   const { data: exercises, error: e2 } = workoutIds.length ? await exQ : { data: [], error: null };
   if (e2) { console.error(e2); return; }
   const map = {};
   const byId = {};
-  // Para alunos vinculados a um treinador: o modelo atual do treinador e a fonte
-  // principal. Clones antigos por aluno ficam como fallback para contas legadas.
-  const isStudent = STATE.profile && STATE.profile.role === "student";
-  const isCoach = STATE.profile && STATE.profile.role === "coach";
-  const studentCoachId = isStudent ? STATE.profile.coach_id : null;
   const grouped = {};
-  (workouts || []).forEach(w => {
+  scopedWorkouts.forEach(w => {
     if (hiddenSet.has(w.id)) return; // ocultos por este coach
     byId[w.id] = { ...w, exercises: [] };
     if (!grouped[w.code]) grouped[w.code] = [];
@@ -2703,10 +2703,9 @@ async function loadWorkouts() {
     if (isStudent) {
       chosen = list.find(w => w.coach_id === studentCoachId && !w.student_id)
         || list.find(w => w.student_id === myId)
-        || list.find(w => w.is_global)
         || list[0];
     } else if (isCoach) {
-      chosen = list.find(w => w.coach_id === myId && !w.student_id) || list.find(w => w.is_global) || list[0];
+      chosen = list.find(w => w.coach_id === myId && !w.student_id) || list[0];
     } else {
       chosen = list.find(w => w.is_global) || list[0];
     }
@@ -9410,8 +9409,8 @@ async function loadPeriodWorkoutOptions(studentId) {
   const coachId = await resolvePeriodStudentCoachId(studentId);
   let q = sb.from("workouts").select("*").order("code");
   q = coachId
-    ? q.or(`is_global.eq.true,student_id.eq.${studentId},coach_id.eq.${coachId}`)
-    : q.or(`is_global.eq.true,student_id.eq.${studentId}`);
+    ? q.or(`student_id.eq.${studentId},coach_id.eq.${coachId}`)
+    : q.eq("student_id", studentId);
   const { data, error } = await q;
   if (error) {
     console.warn("[loadPeriodWorkoutOptions]", error);
@@ -9419,7 +9418,7 @@ async function loadPeriodWorkoutOptions(studentId) {
   }
   const grouped = {};
   (data || [])
-    .filter(w => w && (w.is_global || w.student_id === studentId || (coachId && w.coach_id === coachId && !w.student_id)))
+    .filter(w => w && (w.student_id === studentId || (coachId && w.coach_id === coachId && !w.student_id)))
     .forEach(w => {
       (grouped[w.code] = grouped[w.code] || []).push(w);
     });
@@ -9428,7 +9427,6 @@ async function loadPeriodWorkoutOptions(studentId) {
     const list = grouped[code];
     map[code] = list.find(w => coachId && w.coach_id === coachId && !w.student_id)
       || list.find(w => w.student_id === studentId)
-      || list.find(w => w.is_global)
       || list[0];
   });
   return map;
@@ -11004,11 +11002,15 @@ function onExerciseLibraryScroll() {
 }
 
 window.addEventListener("scroll", onExerciseLibraryScroll, { passive: true });
+document.addEventListener("scroll", onExerciseLibraryScroll, { passive: true, capture: true });
 
 function renderExerciseLibraryManagerHTML() {
   const groups = EXERCISE_LIBRARY_GROUPS.map(g => g.value);
   const currentGroup = STATE.exerciseLibraryGroup || "todos";
   const query = STATE.exerciseLibraryQuery || "";
+  const currentMode = STATE.exerciseLibraryMode || "all";
+  const favoriteCount = getExerciseFavoriteIds().size;
+  const usedCount = Object.keys(getExerciseUsageStats()).length;
   const page = getExerciseLibraryVisibleGroups();
   const visible = page.visible;
   const grouped = page.grouped;
@@ -11018,6 +11020,12 @@ function renderExerciseLibraryManagerHTML() {
       <input class="input" value="${escape(query)}" placeholder="Buscar por nome, grupo ou método..."
         autocomplete="off" autocorrect="off" autocapitalize="off"
         oninput="setExerciseLibraryQuery(this.value)" />
+    </div>
+    <div id="exercise-library-mode-scroll" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px">
+      ${EXERCISE_LIBRARY_MODES.map(mode => {
+        const count = mode.value === "favorites" ? favoriteCount : mode.value === "used" ? usedCount : "";
+        return `<button class="mini-btn ${currentMode === mode.value ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" aria-pressed="${currentMode === mode.value ? "true" : "false"}" onclick="setExerciseLibraryMode('${escapeAttr(mode.value)}')">${escape(mode.label)}${count !== "" ? ` · ${count}` : ""}</button>`;
+      }).join("")}
     </div>
     <div id="exercise-library-group-scroll" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px">
       <button class="mini-btn ${currentGroup === "todos" ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" aria-pressed="${currentGroup === "todos" ? "true" : "false"}" onclick="setExerciseLibraryGroup('todos')">Todos</button>
@@ -11030,7 +11038,7 @@ function renderExerciseLibraryManagerHTML() {
       <div class="section-title">${escape(group)} (${grouped[group].length})</div>
       ${grouped[group].map(ex => renderLibraryExerciseRow(ex)).join("")}
     `).join("") : (!STATE._exerciseLibraryLoading ? `<div class="empty"><p>Nenhum exercício encontrado.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openLibraryExerciseSheet()">Criar exercício</button></div></div>` : "")}
-    ${visible.length && STATE._exerciseLibraryHasMore ? `<div id="exercise-library-sentinel" class="card" style="padding:14px;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--bg-2)"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div><span class="text-xs muted">${STATE._exerciseLibraryLoading ? "Carregando mais exercícios..." : "Role para carregar mais"}</span></div>` : ""}
+    ${visible.length && STATE.exerciseLibraryHasMore ? `<div id="exercise-library-sentinel" class="card" style="padding:14px;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--bg-2)"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div><span class="text-xs muted">${STATE._exerciseLibraryLoading ? "Carregando mais exercícios..." : "Role para carregar mais"}</span></div>` : ""}
   `;
 }
 
@@ -11075,7 +11083,15 @@ function renderLibraryExerciseRow(ex) {
 window.setExerciseLibraryMode = function(mode) {
   STATE.exerciseLibraryMode = EXERCISE_LIBRARY_MODES.some(item => item.value === mode) ? mode : "all";
   resetExerciseLibraryViewport();
+  STATE._exerciseLibraryLoading = true;
   renderAdminWorkouts();
+  loadExerciseLibraryPage({ reset: true }).catch((e) => {
+    console.error("[setExerciseLibraryMode]", e);
+    showToast("Erro ao filtrar exercícios", "error");
+  }).finally(() => {
+    STATE._exerciseLibraryLoading = false;
+    renderAdminWorkouts();
+  });
 };
 
 window.setExerciseLibraryQuery = function(value) {
@@ -11529,12 +11545,24 @@ async function loadExerciseLibrary(force = false) {
 function buildExerciseLibraryPageQuery() {
   const query = normalizeExerciseText(STATE.exerciseLibraryQuery || "").trim();
   const group = STATE.exerciseLibraryGroup || "todos";
+  const mode = STATE.exerciseLibraryMode || "all";
   let q = sb
     .from("exercises")
     .select("id,name,cat,muscle_group,method,observations,image_url,video_url,cadence")
     .eq("is_library", true)
     .order("muscle_group")
     .order("name");
+  if (mode === "favorites") {
+    const ids = [...getExerciseFavoriteIds()].filter(Boolean);
+    if (!ids.length) return null;
+    q = q.in("id", ids);
+  } else if (mode === "used") {
+    const ids = Object.keys(getExerciseUsageStats()).filter(Boolean);
+    if (!ids.length) return null;
+    q = q.in("id", ids);
+  } else if (mode === "popular") {
+    q = q.in("name", POPULAR_LIBRARY_EXERCISE_NAMES);
+  }
   if (group !== "todos") q = q.eq("muscle_group", group);
   if (query) {
     const token = query.replace(/[%,'"()]/g, " ").trim();
@@ -11547,6 +11575,7 @@ async function loadExerciseLibraryPage({ reset = false } = {}) {
   const requestKey = JSON.stringify({
     q: STATE.exerciseLibraryQuery || "",
     g: STATE.exerciseLibraryGroup || "todos",
+    m: STATE.exerciseLibraryMode || "all",
     reset
   });
   if (reset) {
@@ -11558,11 +11587,18 @@ async function loadExerciseLibraryPage({ reset = false } = {}) {
   if (!STATE.exerciseLibraryHasMore && !reset) return STATE.exerciseLibraryPageItems;
   const start = reset ? 0 : Number(STATE.exerciseLibraryOffset || 0);
   const end = start + EXERCISE_LIBRARY_PAGE_SIZE - 1;
-  const { data, error } = await buildExerciseLibraryPageQuery().range(start, end);
+  const query = buildExerciseLibraryPageQuery();
+  if (!query) {
+    STATE.exerciseLibraryPageItems = reset ? [] : STATE.exerciseLibraryPageItems;
+    STATE.exerciseLibraryHasMore = false;
+    return STATE.exerciseLibraryPageItems;
+  }
+  const { data, error } = await query.range(start, end);
   if (error) throw error;
   if (STATE._exerciseLibraryPageRequestKey && reset && STATE._exerciseLibraryPageRequestKey !== requestKey) return STATE.exerciseLibraryPageItems;
   const rows = (data || []).filter(Boolean);
-  STATE.exerciseLibraryPageItems = reset ? rows : [...STATE.exerciseLibraryPageItems, ...rows];
+  const next = reset ? rows : [...STATE.exerciseLibraryPageItems, ...rows];
+  STATE.exerciseLibraryPageItems = [...new Map(next.map(item => [item.id, item])).values()];
   STATE.exerciseLibraryOffset = start + rows.length;
   STATE.exerciseLibraryHasMore = rows.length === EXERCISE_LIBRARY_PAGE_SIZE;
   return STATE.exerciseLibraryPageItems;
