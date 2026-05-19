@@ -47,6 +47,8 @@ assert.match(html, /Mais usados por você/, "Exercise picker must prioritize tra
 assert.match(html, /maybeLoadMoreExerciseLibrary/, "Exercise library must progressively load more cards on scroll");
 assert.match(html, /exercise-library-sentinel/, "Exercise library must render a sentinel for infinite scrolling");
 assert.match(html, /STATE\._exerciseLibraryLoading = true/, "Exercise library tab should show loading state before the library query resolves");
+assert.match(html, /function loadExerciseLibraryPage/, "Exercise library manager must fetch paginated rows from the backend");
+assert.doesNotMatch(html, /safeLoad\("exercise library", loadExerciseLibrary\)/, "Exercise library should not block the main sign-in boot flow");
 assert.match(html, /coach-finance-tabs[\s\S]*aria-label="Treinos do treinador"/, "Trainer workouts tabs must reuse the finance tab component");
 assert.match(html, /coach-finance-tabs coach-finance-tabs-3[\s\S]*aria-label="Treinos do treinador"/, "Trainer workouts tabs must fit 3 tabs on one row");
 assert.match(html, /Esse código já existe/, "Duplicate periodization type codes must show a friendly validation message");

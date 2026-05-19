@@ -96,6 +96,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .view { display: none; padding: 16px; animation: fadein 0.2s ease; min-width: 0; max-width: 100%; overflow-x: hidden; }
 .view.active { display: block; }
 @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 .view-title { font-size: 22px; font-weight: 800; margin: 4px 0 4px; letter-spacing: -0.2px; }
 .view-subtitle { color: var(--text-2); margin: 0 0 16px; font-size: 13px; }
@@ -1891,6 +1892,10 @@ const STATE = {
   students: [],          // coach view
   trainers: [],          // admin view
   library: [],           // exercise library
+  exerciseLibraryPageItems: [],
+  exerciseLibraryHasMore: true,
+  exerciseLibraryOffset: 0,
+  exerciseLibraryLoadedAt: 0,
   exerciseLibraryQuery: "",
   exerciseLibraryGroup: "todos",
   exerciseLibraryMode: "all",
@@ -10762,7 +10767,6 @@ function renderAdminWorkouts() {
   const workouts = Object.values(STATE.workouts || {})
     .filter(Boolean)
     .sort((a,b) => String(a.code || "").localeCompare(String(b.code || ""), "pt-BR", { numeric: true }));
-  const library = (STATE.library || []).filter(Boolean);
   const activePresets = (_PRESETS || []).filter(p => p.active !== false);
   const actionButton = tab === "periodization"
     ? `<button class="mini-btn mini-btn-primary" onclick="openNewPresetSheet()">Novo período</button>`
@@ -10786,7 +10790,7 @@ function renderAdminWorkouts() {
       </button>
       <button type="button" role="tab" aria-selected="${tab === "exercises" ? "true" : "false"}" class="coach-finance-tab ${tab === "exercises" ? "active" : ""}" onclick="setAdminWorkoutTab('exercises')">
         <span class="coach-finance-tab-label">Exercícios</span>
-        <span class="coach-finance-tab-sub">${library.length} item${library.length === 1 ? "" : "s"}</span>
+        <span class="coach-finance-tab-sub">Biblioteca</span>
       </button>
     </div>
     ${tab === "periodization" ? renderPresetManagerHTML() : tab === "exercises" ? renderExerciseLibraryManagerHTML() : (workouts.length ? workouts.map(w => {
@@ -10817,7 +10821,7 @@ window.setAdminWorkoutTab = async function(tab) {
     resetExerciseLibraryViewport();
     STATE._exerciseLibraryLoading = true;
     renderAdminWorkouts();
-    await loadExerciseLibrary();
+    await loadExerciseLibraryPage({ reset: true });
     STATE._exerciseLibraryLoading = false;
   }
   renderAdminWorkouts();
@@ -10966,71 +10970,48 @@ function resetExerciseLibraryViewport() {
   STATE.exerciseLibraryVisibleCount = EXERCISE_LIBRARY_PAGE_SIZE;
 }
 
-function getExerciseLibraryRenderModel() {
-  const filtered = getFilteredLibraryExercises();
-  const visibleCount = Math.max(EXERCISE_LIBRARY_PAGE_SIZE, Number(STATE.exerciseLibraryVisibleCount || 0));
-  const visible = filtered.slice(0, visibleCount);
+function getExerciseLibraryVisibleGroups() {
+  const visible = (STATE.exerciseLibraryPageItems || []).filter(Boolean);
   const grouped = visible.reduce((acc, ex) => {
     const group = getLibraryExerciseGroup(ex);
     (acc[group] = acc[group] || []).push(ex);
     return acc;
   }, {});
-  return {
-    filtered,
-    visible,
-    grouped,
-    visibleCount,
-    hasMore: filtered.length > visible.length
-  };
+  return { visible, grouped };
 }
 
-function maybeLoadMoreExerciseLibrary() {
+async function maybeLoadMoreExerciseLibrary() {
   if (STATE.view !== "admin-workouts" || STATE.adminWorkoutTab !== "exercises") return;
+  if (STATE._exerciseLibraryLoading || !STATE.exerciseLibraryHasMore) return;
   const sentinel = document.getElementById("exercise-library-sentinel");
   if (!sentinel) return;
   const rect = sentinel.getBoundingClientRect();
   if (rect.top > window.innerHeight + 180) return;
-  const model = getExerciseLibraryRenderModel();
-  if (!model.hasMore) return;
-  STATE.exerciseLibraryVisibleCount = Math.min(model.filtered.length, model.visibleCount + EXERCISE_LIBRARY_PAGE_SIZE);
+  STATE._exerciseLibraryLoading = true;
+  renderAdminWorkouts();
+  await loadExerciseLibraryPage({ reset: false });
+  STATE._exerciseLibraryLoading = false;
   renderAdminWorkouts();
 }
 
 function onExerciseLibraryScroll() {
   if (_exerciseLibraryScrollTicking) return;
   _exerciseLibraryScrollTicking = true;
-  requestAnimationFrame(() => {
+  requestAnimationFrame(async () => {
     _exerciseLibraryScrollTicking = false;
-    maybeLoadMoreExerciseLibrary();
+    await maybeLoadMoreExerciseLibrary();
   });
 }
 
 window.addEventListener("scroll", onExerciseLibraryScroll, { passive: true });
 
 function renderExerciseLibraryManagerHTML() {
-  const all = (STATE.library || []).filter(Boolean);
   const groups = EXERCISE_LIBRARY_GROUPS.map(g => g.value);
-  const favoriteIds = getExerciseFavoriteIds();
-  const popularIds = getPopularLibraryExerciseIds();
-  const usageStats = getExerciseUsageStats();
-  const counts = all.reduce((acc, ex) => {
-    const group = getLibraryExerciseGroup(ex);
-    acc[group] = (acc[group] || 0) + 1;
-    return acc;
-  }, {});
   const currentGroup = STATE.exerciseLibraryGroup || "todos";
-  const currentMode = STATE.exerciseLibraryMode || "all";
   const query = STATE.exerciseLibraryQuery || "";
-  const model = getExerciseLibraryRenderModel();
-  const filtered = model.filtered;
-  const grouped = model.grouped;
-  const duplicateCount = Number(STATE.exerciseLibraryDuplicateCount || 0);
-  const modeCounts = {
-    all: all.length,
-    favorites: all.filter(ex => favoriteIds.has(ex.id)).length,
-    used: all.filter(ex => Number(usageStats[ex.id]?.count || 0) > 0).length,
-    popular: all.filter(ex => popularIds.has(ex.id)).length
-  };
+  const page = getExerciseLibraryVisibleGroups();
+  const visible = page.visible;
+  const grouped = page.grouped;
 
   return `
     <div class="form-group" style="margin-bottom:10px">
@@ -11038,31 +11019,35 @@ function renderExerciseLibraryManagerHTML() {
         autocomplete="off" autocorrect="off" autocapitalize="off"
         oninput="setExerciseLibraryQuery(this.value)" />
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:8px">
-      ${EXERCISE_LIBRARY_MODES.map(mode => {
-        const active = currentMode === mode.value;
-        return `<button class="mini-btn ${active ? "mini-btn-primary" : "mini-btn-ghost"}" style="min-width:0;padding:8px 6px;line-height:1.15" aria-pressed="${active ? "true" : "false"}" onclick="setExerciseLibraryMode('${mode.value}')">
-          <span style="display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escape(mode.label)}</span>
-          <span style="display:block;font-size:10px;opacity:.72;margin-top:2px">${modeCounts[mode.value] || 0}</span>
-        </button>`;
-      }).join("")}
-    </div>
     <div id="exercise-library-group-scroll" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px">
-      <button class="mini-btn ${currentGroup === "todos" ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" aria-pressed="${currentGroup === "todos" ? "true" : "false"}" onclick="setExerciseLibraryGroup('todos')">Grupos · ${Object.keys(counts).length}</button>
+      <button class="mini-btn ${currentGroup === "todos" ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" aria-pressed="${currentGroup === "todos" ? "true" : "false"}" onclick="setExerciseLibraryGroup('todos')">Todos</button>
       ${groups.map(g => {
-        const active = currentGroup === g;
-        const count = counts[g] || 0;
-        return `<button class="mini-btn ${active ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" aria-pressed="${active ? "true" : "false"}" onclick="setExerciseLibraryGroup('${escapeAttr(g)}')">${escape(g)} · ${count}</button>`;
+        return `<button class="mini-btn ${currentGroup === g ? "mini-btn-primary" : "mini-btn-ghost"}" style="white-space:nowrap" aria-pressed="${currentGroup === g ? "true" : "false"}" onclick="setExerciseLibraryGroup('${escapeAttr(g)}')">${escape(g)}</button>`;
       }).join("")}
     </div>
-    ${STATE._exerciseLibraryLoading && !all.length ? `<div class="card" style="padding:18px"><div class="loading"><div class="spinner"></div></div><div class="text-xs muted" style="text-align:center;margin-top:10px">Carregando exercícios...</div></div>` : ""}
-    ${!STATE._exerciseLibraryLoading && filtered.length ? Object.keys(grouped).map(group => `
+    ${STATE._exerciseLibraryLoading && !visible.length ? renderExerciseLibrarySkeleton() : ""}
+    ${!STATE._exerciseLibraryLoading && visible.length ? Object.keys(grouped).map(group => `
       <div class="section-title">${escape(group)} (${grouped[group].length})</div>
       ${grouped[group].map(ex => renderLibraryExerciseRow(ex)).join("")}
     `).join("") : (!STATE._exerciseLibraryLoading ? `<div class="empty"><p>Nenhum exercício encontrado.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openLibraryExerciseSheet()">Criar exercício</button></div></div>` : "")}
-    ${!STATE._exerciseLibraryLoading && model.hasMore ? `<div id="exercise-library-sentinel" class="card" style="padding:14px;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--bg-2)"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div><span class="text-xs muted">Carregando mais exercícios...</span></div>` : ""}
-    ${!STATE._exerciseLibraryLoading && !model.hasMore && filtered.length ? `<div class="text-xs muted" style="text-align:center;padding:6px 4px 2px">${filtered.length} exercício${filtered.length === 1 ? "" : "s"} carregado${filtered.length === 1 ? "" : "s"}${duplicateCount ? ` · ${duplicateCount} duplicado${duplicateCount === 1 ? "" : "s"} oculto${duplicateCount === 1 ? "" : "s"}` : ""}</div>` : ""}
+    ${visible.length && STATE._exerciseLibraryHasMore ? `<div id="exercise-library-sentinel" class="card" style="padding:14px;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--bg-2)"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div><span class="text-xs muted">${STATE._exerciseLibraryLoading ? "Carregando mais exercícios..." : "Role para carregar mais"}</span></div>` : ""}
   `;
+}
+
+function renderExerciseLibrarySkeleton(count = 6) {
+  return Array.from({ length: count }).map(() => `
+    <div class="card mb-8" style="padding:12px">
+      <div class="row-flex" style="gap:10px;align-items:center">
+        <div style="width:58px;height:58px;border-radius:14px;background:linear-gradient(90deg,var(--bg-3),var(--bg-2),var(--bg-3));background-size:200% 100%;animation:shimmer 1.1s linear infinite;flex:0 0 58px"></div>
+        <div style="flex:1;min-width:0">
+          <div style="height:14px;width:62%;border-radius:999px;background:linear-gradient(90deg,var(--bg-3),var(--bg-2),var(--bg-3));background-size:200% 100%;animation:shimmer 1.1s linear infinite;"></div>
+          <div style="height:11px;width:46%;margin-top:8px;border-radius:999px;background:linear-gradient(90deg,var(--bg-3),var(--bg-2),var(--bg-3));background-size:200% 100%;animation:shimmer 1.1s linear infinite;"></div>
+        </div>
+        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(90deg,var(--bg-3),var(--bg-2),var(--bg-3));background-size:200% 100%;animation:shimmer 1.1s linear infinite;"></div>
+        <div style="width:64px;height:34px;border-radius:10px;background:linear-gradient(90deg,var(--bg-3),var(--bg-2),var(--bg-3));background-size:200% 100%;animation:shimmer 1.1s linear infinite;"></div>
+      </div>
+    </div>
+  `).join("");
 }
 
 function renderLibraryExerciseRow(ex) {
@@ -11096,7 +11081,18 @@ window.setExerciseLibraryMode = function(mode) {
 window.setExerciseLibraryQuery = function(value) {
   STATE.exerciseLibraryQuery = value || "";
   resetExerciseLibraryViewport();
+  clearTimeout(STATE._exerciseLibrarySearchTimer);
+  STATE._exerciseLibraryLoading = true;
   renderAdminWorkouts();
+  STATE._exerciseLibrarySearchTimer = setTimeout(() => {
+    loadExerciseLibraryPage({ reset: true }).catch((e) => {
+      console.error("[setExerciseLibraryQuery]", e);
+      showToast("Erro ao buscar exercícios", "error");
+    }).finally(() => {
+      STATE._exerciseLibraryLoading = false;
+      renderAdminWorkouts();
+    });
+  }, 180);
 };
 
 window.setExerciseLibraryGroup = function(group) {
@@ -11104,10 +11100,18 @@ window.setExerciseLibraryGroup = function(group) {
   if (scroller) _exerciseLibraryFilterScrollLeft = scroller.scrollLeft || 0;
   STATE.exerciseLibraryGroup = group || "todos";
   resetExerciseLibraryViewport();
+  STATE._exerciseLibraryLoading = true;
   renderAdminWorkouts();
-  requestAnimationFrame(() => {
-    const nextScroller = document.getElementById("exercise-library-group-scroll");
-    if (nextScroller) nextScroller.scrollLeft = _exerciseLibraryFilterScrollLeft || 0;
+  loadExerciseLibraryPage({ reset: true }).catch((e) => {
+    console.error("[setExerciseLibraryGroup]", e);
+    showToast("Erro ao filtrar exercícios", "error");
+  }).finally(() => {
+    STATE._exerciseLibraryLoading = false;
+    renderAdminWorkouts();
+    requestAnimationFrame(() => {
+      const nextScroller = document.getElementById("exercise-library-group-scroll");
+      if (nextScroller) nextScroller.scrollLeft = _exerciseLibraryFilterScrollLeft || 0;
+    });
   });
 };
 
@@ -11127,7 +11131,9 @@ window.toggleLibraryExerciseFavorite = function(exId, event) {
 };
 
 window.openLibraryExerciseSheet = function(exId = "") {
-  const ex = exId ? (STATE.library || []).find(item => item.id === exId) : null;
+  const ex = exId
+    ? ((STATE.exerciseLibraryPageItems || []).find(item => item.id === exId) || (STATE.library || []).find(item => item.id === exId))
+    : null;
   const groupMeta = getExerciseGroupMeta(ex?.muscle_group || ex?.cat || "Peito");
   const previewEx = ex || { name: "Novo exercício", cat: groupMeta.cat, muscle_group: groupMeta.value };
   openSheet(`
@@ -11192,7 +11198,14 @@ window.saveLibraryExercise = async function(exId = "") {
     image_url: null
   };
   try {
-    const duplicate = (STATE.library || []).find(e => e.id !== exId && normalizeExerciseText(e.name) === normalizeExerciseText(name));
+    const { data: duplicateRows, error: duplicateError } = await sb
+      .from("exercises")
+      .select("id,name")
+      .eq("is_library", true)
+      .ilike("name", name)
+      .limit(5);
+    if (duplicateError) throw duplicateError;
+    const duplicate = (duplicateRows || []).find(e => e.id !== exId && normalizeExerciseText(e.name) === normalizeExerciseText(name));
     if (duplicate) { showToast("Já existe exercício com esse nome na biblioteca", "error"); return; }
     const q = exId
       ? sb.from("exercises").update(payload).eq("id", exId).eq("is_library", true)
@@ -11200,7 +11213,9 @@ window.saveLibraryExercise = async function(exId = "") {
     const { error } = await q;
     if (error) throw error;
     showToast(exId ? "Exercício salvo" : "Exercício criado", "success");
-    await loadExerciseLibrary();
+    STATE.library = [];
+    STATE.exerciseLibraryLoadedAt = 0;
+    await loadExerciseLibraryPage({ reset: true });
     closeSheet();
     renderAdminWorkouts();
   } catch (e) {
@@ -11224,7 +11239,9 @@ window.deleteLibraryExercise = async function(exId, name) {
   const { error } = await sb.from("exercises").delete().eq("id", exId).eq("is_library", true);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
   showToast("Exercício removido", "success");
-  await loadExerciseLibrary();
+  STATE.library = [];
+  STATE.exerciseLibraryLoadedAt = 0;
+  await loadExerciseLibraryPage({ reset: true });
   renderAdminWorkouts();
 };
 
@@ -11490,12 +11507,65 @@ window.toggleSupersetWithNext = async function(exId, nextId, code, workoutId) {
 
 
 // Biblioteca de exercícios em STATE
-async function loadExerciseLibrary() {
-  const { data } = await sb.from("exercises").select("*").eq("is_library", true).order("muscle_group").order("name");
-  const raw = data || [];
-  const deduped = dedupeLibraryExercises(raw).sort(libraryExerciseSort);
-  STATE.exerciseLibraryDuplicateCount = Math.max(0, raw.length - deduped.length);
-  STATE.library = deduped;
+async function loadExerciseLibrary(force = false) {
+  if (!force && STATE.library && STATE.library.length > 0) return STATE.library;
+  if (!force && STATE._exerciseLibraryFullPromise) return STATE._exerciseLibraryFullPromise;
+  STATE._exerciseLibraryFullPromise = (async () => {
+    const { data } = await sb.from("exercises").select("*").eq("is_library", true).order("muscle_group").order("name");
+    const raw = data || [];
+    const deduped = dedupeLibraryExercises(raw).sort(libraryExerciseSort);
+    STATE.exerciseLibraryDuplicateCount = Math.max(0, raw.length - deduped.length);
+    STATE.library = deduped;
+    STATE.exerciseLibraryLoadedAt = Date.now();
+    return deduped;
+  })();
+  try {
+    return await STATE._exerciseLibraryFullPromise;
+  } finally {
+    STATE._exerciseLibraryFullPromise = null;
+  }
+}
+
+function buildExerciseLibraryPageQuery() {
+  const query = normalizeExerciseText(STATE.exerciseLibraryQuery || "").trim();
+  const group = STATE.exerciseLibraryGroup || "todos";
+  let q = sb
+    .from("exercises")
+    .select("id,name,cat,muscle_group,method,observations,image_url,video_url,cadence")
+    .eq("is_library", true)
+    .order("muscle_group")
+    .order("name");
+  if (group !== "todos") q = q.eq("muscle_group", group);
+  if (query) {
+    const token = query.replace(/[%,'"()]/g, " ").trim();
+    if (token) q = q.or(`name.ilike.%${token}%,muscle_group.ilike.%${token}%,method.ilike.%${token}%`);
+  }
+  return q;
+}
+
+async function loadExerciseLibraryPage({ reset = false } = {}) {
+  const requestKey = JSON.stringify({
+    q: STATE.exerciseLibraryQuery || "",
+    g: STATE.exerciseLibraryGroup || "todos",
+    reset
+  });
+  if (reset) {
+    STATE.exerciseLibraryPageItems = [];
+    STATE.exerciseLibraryOffset = 0;
+    STATE.exerciseLibraryHasMore = true;
+    STATE._exerciseLibraryPageRequestKey = requestKey;
+  }
+  if (!STATE.exerciseLibraryHasMore && !reset) return STATE.exerciseLibraryPageItems;
+  const start = reset ? 0 : Number(STATE.exerciseLibraryOffset || 0);
+  const end = start + EXERCISE_LIBRARY_PAGE_SIZE - 1;
+  const { data, error } = await buildExerciseLibraryPageQuery().range(start, end);
+  if (error) throw error;
+  if (STATE._exerciseLibraryPageRequestKey && reset && STATE._exerciseLibraryPageRequestKey !== requestKey) return STATE.exerciseLibraryPageItems;
+  const rows = (data || []).filter(Boolean);
+  STATE.exerciseLibraryPageItems = reset ? rows : [...STATE.exerciseLibraryPageItems, ...rows];
+  STATE.exerciseLibraryOffset = start + rows.length;
+  STATE.exerciseLibraryHasMore = rows.length === EXERCISE_LIBRARY_PAGE_SIZE;
+  return STATE.exerciseLibraryPageItems;
 }
 
 // Picker: abre busca por grupo muscular + biblioteca
@@ -12177,11 +12247,10 @@ async function postSignIn() {
     if (desktopHeaderSub) desktopHeaderSub.textContent = roleLabel + (profile.full_name || profile.email);
 
   // === GRUPO 1: loaders independentes — executam em paralelo ===
-  // (branding, workouts, library, follows, presets, blocks, periodização, cargas)
+  // (branding, workouts, follows, presets, blocks, periodização, cargas)
   await Promise.all([
     safeLoad("branding", loadBranding),
     safeLoad("workouts", loadWorkouts),
-    safeLoad("exercise library", loadExerciseLibrary),
     safeLoad("follows", loadFollows),
     safeLoad("presets", loadPresets),
     safeLoad("today blocks", loadTodayBlocks),
