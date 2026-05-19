@@ -10979,6 +10979,23 @@ function getExerciseLibraryVisibleGroups() {
   return { visible, grouped };
 }
 
+function getExerciseLibraryScrollContainer() {
+  const view = document.getElementById("view-admin-workouts");
+  if (view) {
+    const style = window.getComputedStyle ? window.getComputedStyle(view) : null;
+    const canScroll = view.scrollHeight > view.clientHeight + 1;
+    if (canScroll && (!style || /(auto|scroll)/.test(style.overflowY || ""))) return view;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+
+function preserveExerciseLibraryScrollAfterRender(scrollTop) {
+  requestAnimationFrame(() => {
+    const target = getExerciseLibraryScrollContainer();
+    if (target) target.scrollTop = scrollTop;
+  });
+}
+
 async function maybeLoadMoreExerciseLibrary() {
   if (STATE.view !== "admin-workouts" || STATE.adminWorkoutTab !== "exercises") return;
   if (STATE._exerciseLibraryLoading || !STATE.exerciseLibraryHasMore) return;
@@ -10986,11 +11003,16 @@ async function maybeLoadMoreExerciseLibrary() {
   if (!sentinel) return;
   const rect = sentinel.getBoundingClientRect();
   if (rect.top > window.innerHeight + 180) return;
+  const scrollTarget = getExerciseLibraryScrollContainer();
+  const scrollTop = scrollTarget ? scrollTarget.scrollTop : 0;
   STATE._exerciseLibraryLoading = true;
-  renderAdminWorkouts();
-  await loadExerciseLibraryPage({ reset: false });
-  STATE._exerciseLibraryLoading = false;
-  renderAdminWorkouts();
+  try {
+    await loadExerciseLibraryPage({ reset: false });
+  } finally {
+    STATE._exerciseLibraryLoading = false;
+    renderAdminWorkouts();
+    preserveExerciseLibraryScrollAfterRender(scrollTop);
+  }
 }
 
 function onExerciseLibraryScroll() {

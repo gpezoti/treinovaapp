@@ -49,6 +49,13 @@ assert.match(html, /exercise-library-sentinel/, "Exercise library must render a 
 assert.match(html, /STATE\.exerciseLibraryHasMore \? `<div id="exercise-library-sentinel"/, "Exercise library sentinel must use the active pagination flag");
 assert.doesNotMatch(html, /STATE\._exerciseLibraryHasMore/, "Exercise library must not use the old pagination flag");
 assert.match(html, /document\.addEventListener\("scroll", onExerciseLibraryScroll, \{ passive: true, capture: true \}\)/, "Exercise library infinite scroll must work inside nested scroll containers");
+assert.match(html, /function getExerciseLibraryScrollContainer/, "Exercise library must detect the active scroll container");
+assert.match(html, /function preserveExerciseLibraryScrollAfterRender/, "Exercise library must preserve scroll position after appending more rows");
+assert.doesNotMatch(
+  html.slice(html.indexOf("async function maybeLoadMoreExerciseLibrary"), html.indexOf("function onExerciseLibraryScroll")),
+  /STATE\._exerciseLibraryLoading = true;\s*renderAdminWorkouts\(\);/,
+  "Exercise library must not re-render before loading the next page because it resets scroll"
+);
 assert.match(html, /STATE\._exerciseLibraryLoading = true/, "Exercise library tab should show loading state before the library query resolves");
 assert.match(html, /function loadExerciseLibraryPage/, "Exercise library manager must fetch paginated rows from the backend");
 assert.match(html, /mode === "favorites"[\s\S]*getExerciseFavoriteIds/, "Exercise library manager must keep the favorites filter available");
