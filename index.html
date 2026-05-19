@@ -10801,6 +10801,7 @@ function renderAdminWorkouts() {
             <div class="text-xs muted">${escape(code)}${w.focus ? " · " + escape(w.focus) : ""}</div>
           </div>
           <div class="row-flex" style="gap:6px;flex:0 0 auto;">
+            <button class="mini-btn mini-btn-ghost" onclick="openEditWorkoutTypeSheet('${w.id || ''}')">Renomear</button>
             <button class="mini-btn mini-btn-primary" onclick="openWorkoutEditor('${escapeAttr(code)}','${w.id || ''}')">Editar</button>
             ${canDelete ? `<button class="mini-btn mini-btn-danger" title="Excluir tipo de treino" onclick="deleteWorkoutType('${w.id || ''}','${escapeAttr(code)}','${escapeAttr(w.name || code)}')">×</button>` : ""}
           </div>
@@ -11325,6 +11326,73 @@ window.createWorkoutType = async function() {
     showToast("Erro ao criar tipo: " + (e.message || "verifique permissões"), "error");
   } finally {
     STATE._creatingWorkoutType = false;
+  }
+};
+
+window.openEditWorkoutTypeSheet = function(workoutId) {
+  if (!["admin", "coach"].includes(STATE.profile?.role)) {
+    showToast("Sem permissão para editar modelos de treino", "error");
+    return;
+  }
+  const workout = Object.values(STATE.workouts || {}).find(w => w && w.id === workoutId)
+    || (STATE.workoutsById && STATE.workoutsById[workoutId]);
+  if (!workout) {
+    showToast("Modelo de treino não encontrado", "error");
+    return;
+  }
+  openSheet(`
+    <h3>Renomear modelo</h3>
+    <p style="font-size:13px;color:var(--text-2);margin-top:0">O código ${escape(workout.code || "")} continua igual para não quebrar periodizações já montadas.</p>
+    <div class="form-group">
+      <label class="form-label">Nome</label>
+      <input class="input" id="edit-workout-name" maxlength="60" value="${escape(workout.name || "")}" placeholder="Ex.: Treino A" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Foco/objetivo</label>
+      <input class="input" id="edit-workout-focus" maxlength="80" value="${escape(workout.focus || "")}" placeholder="Ex.: Inferiores, força, mobilidade" />
+    </div>
+    <button class="btn-primary" onclick="saveWorkoutTypeName('${workout.id}')">Salvar alterações</button>
+    <button class="btn-ghost" onclick="closeSheet()">Cancelar</button>
+  `);
+  setTimeout(() => document.getElementById("edit-workout-name")?.focus(), 50);
+};
+
+window.saveWorkoutTypeName = async function(workoutId) {
+  if (STATE._savingWorkoutTypeName) return;
+  const nameEl = document.getElementById("edit-workout-name");
+  const focusEl = document.getElementById("edit-workout-focus");
+  const name = String(nameEl?.value || "").trim();
+  const focus = String(focusEl?.value || "").trim();
+  if (!name) {
+    showToast("Informe o nome do modelo", "error");
+    nameEl?.focus();
+    return;
+  }
+  if (name.length > 60) {
+    showToast("Nome muito longo. Use até 60 caracteres.", "error");
+    nameEl?.focus();
+    return;
+  }
+  if (focus.length > 80) {
+    showToast("Foco muito longo. Use até 80 caracteres.", "error");
+    focusEl?.focus();
+    return;
+  }
+  STATE._savingWorkoutTypeName = true;
+  try {
+    let query = sb.from("workouts").update({ name, focus }).eq("id", workoutId);
+    if (STATE.profile?.role === "coach") query = query.eq("coach_id", STATE.profile.id).is("student_id", null);
+    const { error } = await query;
+    if (error) throw error;
+    showToast("Modelo atualizado", "success");
+    await loadWorkouts();
+    closeSheet();
+    renderAdminWorkouts();
+  } catch (e) {
+    console.error("[saveWorkoutTypeName]", e);
+    showToast("Erro ao salvar: " + (e.message || "verifique permissões"), "error");
+  } finally {
+    STATE._savingWorkoutTypeName = false;
   }
 };
 

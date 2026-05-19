@@ -62,6 +62,9 @@ assert.match(html, /<label class="form-label">Cor<\/label>/, "Period type forms 
 assert.match(html, /q = q\.eq\("coach_id", myId\)\.is\("student_id", null\)/, "Coach workout models must only load the trainer's own models");
 assert.match(html, /const scopedWorkouts = \(workouts \|\| \[\]\)\.filter/, "Workout loading must scope returned rows before reading exercises");
 assert.doesNotMatch(html.slice(html.indexOf("async function loadPeriodWorkoutOptions"), html.indexOf("const grouped = {};")), /is_global\.eq\.true/, "Periodization workout options must not fall back to global workouts");
+assert.match(html, /openEditWorkoutTypeSheet/, "Trainer must be able to edit workout model names");
+assert.match(html, /saveWorkoutTypeName/, "Workout model name edits must persist to Supabase");
+assert.match(html, /eq\("coach_id", STATE\.profile\.id\)\.is\("student_id", null\)/, "Coach workout rename must be scoped to owned model workouts");
 assert.match(html, /addSelectedExercisesToWorkout/, "Exercise picker must support adding multiple exercises");
 assert.match(html, /new Set\(\)/, "Exercise picker must track multi-selection");
 assert.doesNotMatch(html, /id="ne-sets"|id="ne-reps"|id="ne-pause"/, "New exercise form must not configure sets, reps, or pause");
