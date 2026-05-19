@@ -279,6 +279,39 @@ serve(async (req) => {
       return json({ ok: true, action: "send_password_reset" });
     }
 
+    if (action === "set_student_password") {
+      const password = String(body.password || "");
+      if (!passwordMeetsPolicy(password)) {
+        return json({ error: "A senha temporária precisa ter 8+ caracteres, maiúscula, minúscula e número." }, 400);
+      }
+
+      const { data: target } = await sbAdmin
+        .from("profiles")
+        .select("id, role, coach_id, email")
+        .eq("id", user_id)
+        .single();
+
+      if (!target) return json({ error: "Aluno não encontrado." }, 404);
+      if (target.role !== "student") return json({ error: "Esta ação só pode ser usada para alunos." }, 400);
+      if (caller.role === "coach" && target.coach_id !== caller.id) {
+        return json({ error: "Você não tem permissão para alterar a senha deste aluno." }, 403);
+      }
+
+      const { error: authErr } = await sbAdmin.auth.admin.updateUserById(user_id, {
+        password,
+        email_confirm: true,
+      });
+      if (authErr) return json({ error: authErr.message }, 500);
+
+      const { error: profileErr } = await sbAdmin
+        .from("profiles")
+        .update({ must_reset_password: true })
+        .eq("id", user_id);
+      if (profileErr) return json({ error: profileErr.message }, 500);
+
+      return json({ ok: true, action: "set_student_password" });
+    }
+
     if (action === "update_trainer") {
       const denied = assertAdmin(caller);
       if (denied) return denied;
