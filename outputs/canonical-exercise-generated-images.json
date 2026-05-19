@@ -1,0 +1,289 @@
+[
+  {
+    "name": "ab wheel",
+    "src": "assets/exercises/exact/ab_wheel_roda_abdominal.webp",
+    "dest": "assets/exercises/exact/ab_wheel.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_abdominal_crunch.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "abdominal infra",
+    "src": "assets/exercises/exact/abdominal_infra_elevacao_de_pernas.webp",
+    "dest": "assets/exercises/exact/abdominal_infra.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_abdominal_crunch.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "adutor no cabo",
+    "src": "assets/exercises/exact/cadeira_adutora_e_cadeira_abdutora_90_graus.webp",
+    "dest": "assets/exercises/exact/adutor_no_cabo.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_leg_press.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "afundo",
+    "src": "assets/exercises/exact/afundo_lunge.webp",
+    "dest": "assets/exercises/exact/afundo.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_walking_lunge.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "alongamento dinamico",
+    "src": "assets/exercises/exact/world_greatest_stretch.webp",
+    "dest": "assets/exercises/exact/alongamento_dinamico.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_mobility_stretch.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "barra fixa",
+    "src": "assets/exercises/exact/barra_fixa_pullup.webp",
+    "dest": "assets/exercises/exact/barra_fixa.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_lat_pulldown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "barra fixa supinada",
+    "src": "assets/exercises/exact/barra_fixa_pegada_supinada.webp",
+    "dest": "assets/exercises/exact/barra_fixa_supinada.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_lat_pulldown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "cadeira abdutora",
+    "src": "assets/exercises/exact/abducao_de_quadril_na_maquina.webp",
+    "dest": "assets/exercises/exact/cadeira_abdutora.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_leg_press.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "cadeira adutora",
+    "src": "assets/exercises/exact/cadeira_adutora_e_cadeira_abdutora_90_graus.webp",
+    "dest": "assets/exercises/exact/cadeira_adutora.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_leg_press.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "caminhada",
+    "src": "assets/exercises/exact/caminhada_ao_ar_livre.webp",
+    "dest": "assets/exercises/exact/caminhada.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_functional_strength.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "corda naval",
+    "src": "assets/exercises/exact/battle_rope_waves.webp",
+    "dest": "assets/exercises/exact/corda_naval.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_functional_strength.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "corrida",
+    "src": "assets/exercises/exact/corrida_leve_ao_ar_livre.webp",
+    "dest": "assets/exercises/exact/corrida.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_functional_strength.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "cossack squat",
+    "src": "assets/exercises/exact/cossack_squat_mobilidade.webp",
+    "dest": "assets/exercises/exact/cossack_squat.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_barbell_squat.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "crucifixo com halteres",
+    "src": "assets/exercises/exact/crucifixo_no_banco_plano.webp",
+    "dest": "assets/exercises/exact/crucifixo_com_halteres.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_chest_fly.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "crucifixo inverso",
+    "src": "assets/exercises/exact/crucifixo_inverso_com_halteres.webp",
+    "dest": "assets/exercises/exact/crucifixo_inverso.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_dumbbell_row.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "elevacao de pernas",
+    "src": "assets/exercises/exact/elevacao_de_pernas_deitado.webp",
+    "dest": "assets/exercises/exact/elevacao_de_pernas.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_abdominal_crunch.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "escada",
+    "src": "assets/exercises/exact/escada_step_machine.webp",
+    "dest": "assets/exercises/exact/escada.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_functional_strength.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "gluteo no cabo",
+    "src": "assets/exercises/exact/gluteo_no_cabo_kickback.webp",
+    "dest": "assets/exercises/exact/gluteo_no_cabo.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_hip_thrust.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "gluteo quatro apoios",
+    "src": "assets/exercises/exact/gluteo_quatro_apoios_com_caneleira.webp",
+    "dest": "assets/exercises/exact/gluteo_quatro_apoios.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_hip_thrust.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "mergulho nas paralelas",
+    "src": "assets/exercises/exact/mergulho_em_paralelas_dips.webp",
+    "dest": "assets/exercises/exact/mergulho_nas_paralelas.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_triceps_pushdown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "mobilidade de quadril 90/90",
+    "src": "assets/exercises/exact/mobilidade_de_quadril_90_90_com_troca.webp",
+    "dest": "assets/exercises/exact/mobilidade_de_quadril_90_90.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_mobility_stretch.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "mobilidade toracica",
+    "src": "assets/exercises/exact/mobilidade_toracica_em_quatro_apoios.webp",
+    "dest": "assets/exercises/exact/mobilidade_toracica.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_mobility_stretch.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "panturrilha em pe",
+    "src": "assets/exercises/exact/panturrilha_em_pe_na_maquina.webp",
+    "dest": "assets/exercises/exact/panturrilha_em_pe.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_calf_raise.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "panturrilha sentada",
+    "src": "assets/exercises/exact/panturrilha_sentado.webp",
+    "dest": "assets/exercises/exact/panturrilha_sentada.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_calf_raise.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "passada caminhando",
+    "src": "assets/exercises/exact/afundo_caminhando.webp",
+    "dest": "assets/exercises/exact/passada_caminhando.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_walking_lunge.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "prancha",
+    "src": "assets/exercises/exact/prancha_isometrica.webp",
+    "dest": "assets/exercises/exact/prancha.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_forearm_plank.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "pular corda",
+    "src": "assets/exercises/exact/corda_jump_rope.webp",
+    "dest": "assets/exercises/exact/pular_corda.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_functional_strength.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "puxada alta na polia",
+    "src": "assets/exercises/exact/pulley_frente_pegada_aberta.webp",
+    "dest": "assets/exercises/exact/puxada_alta_na_polia.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_lat_pulldown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "puxada neutra na polia",
+    "src": "assets/exercises/exact/puxada_frontal_pegada_neutra.webp",
+    "dest": "assets/exercises/exact/puxada_neutra_na_polia.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_lat_pulldown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "remada baixa",
+    "src": "assets/exercises/exact/remada_baixa_com_triangulo.webp",
+    "dest": "assets/exercises/exact/remada_baixa.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_dumbbell_row.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "rosca direta",
+    "src": "assets/exercises/exact/rosca_direta_com_barra.webp",
+    "dest": "assets/exercises/exact/rosca_direta.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_biceps_curl.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "rosca na polia",
+    "src": "assets/exercises/exact/rosca_direta_no_cabo.webp",
+    "dest": "assets/exercises/exact/rosca_na_polia.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_biceps_curl.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "rosca scott",
+    "src": "assets/exercises/exact/rosca_scott_na_maquina.webp",
+    "dest": "assets/exercises/exact/rosca_scott.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_biceps_curl.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "stiff",
+    "src": "assets/exercises/exact/stiff_com_barra.webp",
+    "dest": "assets/exercises/exact/stiff.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_deadlift.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "tibialis raise",
+    "src": "assets/exercises/exact/tibialis_raise_na_parede.webp",
+    "dest": "assets/exercises/exact/tibialis_raise.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_calf_raise.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "triceps banco",
+    "src": "assets/exercises/exact/triceps_mergulho_no_banco.webp",
+    "dest": "assets/exercises/exact/triceps_banco.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_triceps_pushdown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "triceps coice",
+    "src": "assets/exercises/exact/triceps_coice_com_halter.webp",
+    "dest": "assets/exercises/exact/triceps_coice.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_triceps_pushdown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "triceps corda",
+    "src": "assets/exercises/exact/triceps_corda_no_cabo.webp",
+    "dest": "assets/exercises/exact/triceps_corda.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_triceps_pushdown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "triceps frances",
+    "src": "assets/exercises/exact/triceps_frances_com_halter.webp",
+    "dest": "assets/exercises/exact/triceps_frances.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_triceps_pushdown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "triceps pulley",
+    "src": "assets/exercises/exact/triceps_pulley_com_barra.webp",
+    "dest": "assets/exercises/exact/triceps_pulley.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_triceps_pushdown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  },
+  {
+    "name": "triceps testa",
+    "src": "assets/exercises/exact/triceps_testa_com_barra_w.webp",
+    "dest": "assets/exercises/exact/triceps_testa.webp",
+    "generated_from_standard_asset": "assets/exercises/realistic_triceps_pushdown.webp",
+    "generation_mode": "standard_realistic_local_asset"
+  }
+]
