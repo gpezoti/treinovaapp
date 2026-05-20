@@ -5330,6 +5330,7 @@ window.addEventListener('popstate', (e) => {
   if (cmOverlay) {
     _cmInHistory = false;
     cmOverlay.remove();
+    unlockPageScrollForSheet();
     return;
   }
   // Sheet bottom
@@ -13991,6 +13992,7 @@ let _cmInHistory = false;
 function closeComments() {
   const el = document.getElementById("cm-overlay");
   if (el) el.remove();
+  unlockPageScrollForSheet();
   if (_cmInHistory) {
     _cmInHistory = false;
     try { history.back(); } catch(e){}
@@ -14000,33 +14002,26 @@ window.closeComments = closeComments;
 
 function getCommentAuthorFallback(userId) {
   if (STATE.profile?.id === userId) {
-    return {
+    const me = {
       id: STATE.profile.id,
       full_name: STATE.profile.full_name,
       email: STATE.profile.email,
       avatar_emoji: STATE.profile.avatar_emoji,
       avatar_url: STATE.profile.avatar_url,
     };
+    cacheSocialProfiles([me]);
+    return me;
   }
-  return {};
+  return (STATE._socialProfilesById && STATE._socialProfilesById[userId]) || {};
 }
 
 async function hydrateCommentAuthors(comments = []) {
   const ids = [...new Set((comments || []).map(c => c.user_id).filter(Boolean))];
   if (!ids.length) return comments || [];
-  let byId = new Map();
-  try {
-    const { data, error } = await sb.from("profiles")
-      .select("id, full_name, email, avatar_emoji, avatar_url")
-      .in("id", ids);
-    if (error) throw error;
-    byId = new Map((data || []).map(p => [p.id, p]));
-  } catch (e) {
-    console.warn("[feed comments authors]", e);
-  }
+  const profilesById = await loadSocialProfilesByIds(ids);
   return (comments || []).map(c => ({
     ...c,
-    author: byId.get(c.user_id) || c.author || getCommentAuthorFallback(c.user_id),
+    author: profilesById[c.user_id] || c.author || getCommentAuthorFallback(c.user_id),
   }));
 }
 
@@ -14041,7 +14036,7 @@ function renderCommentItems(comments = [], postId) {
   return comments.map(c => {
     const a = c.author || getCommentAuthorFallback(c.user_id);
     const canDel = STATE.profile.id === c.user_id || STATE.profile.role === "admin" || STATE.profile.role === "coach";
-    const authorName = a.full_name || (a.email ? a.email.split("@")[0] : "") || "Usuário";
+    const authorName = personDisplayName(a, "Usuário");
     return `<div class="cm-item">
       <div class="cm-av">${renderCommentAuthorAvatar(a)}</div>
       <div class="cm-content">
@@ -14067,27 +14062,32 @@ async function openComments(postId) {
   sheet.id = "cm-overlay";
   sheet.innerHTML = `
     <style>
-      #cm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9500;display:flex;align-items:flex-end;animation:fadeIn .2s}
-      #cm-overlay .cm-card{background:var(--bg);border-top-left-radius:18px;border-top-right-radius:18px;width:100%;max-height:80vh;display:flex;flex-direction:column}
-      #cm-overlay .cm-head{padding:14px 16px;display:flex;align-items:center;border-bottom:1px solid var(--line)}
-      #cm-overlay .cm-list{flex:1;overflow:auto;padding:8px 16px}
-      #cm-overlay .cm-item{padding:10px 0;border-bottom:1px solid var(--line);display:flex;gap:10px}
-      #cm-overlay .cm-av{width:32px;height:32px;border-radius:50%;background:var(--bg-card);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;overflow:hidden}
+      #cm-overlay{position:fixed;top:var(--vv-top);left:0;right:0;height:var(--vv-height);background:rgba(0,0,0,.64);z-index:9500;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s;overscroll-behavior:contain}
+      #cm-overlay .cm-card{background:var(--bg);border:1px solid var(--line);border-bottom:0;border-top-left-radius:22px;border-top-right-radius:22px;width:100%;max-width:520px;height:min(56vh,calc(var(--vv-height) * .58));min-height:390px;max-height:calc(var(--vv-height) - 18px);display:flex;flex-direction:column;box-shadow:0 -18px 40px rgba(0,0,0,.34);overflow:hidden}
+      #cm-overlay .cm-drag{width:52px;height:5px;border-radius:999px;background:var(--line-2);margin:10px auto 0;opacity:.85;flex:0 0 auto}
+      #cm-overlay .cm-head{padding:14px 18px 16px;display:flex;align-items:center;border-bottom:1px solid var(--line)}
+      #cm-overlay .cm-list{flex:1;overflow:auto;padding:10px 18px 4px;-webkit-overflow-scrolling:touch}
+      #cm-overlay .cm-item{padding:14px 0;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+      #cm-overlay .cm-av{width:40px;height:40px;border-radius:50%;background:var(--bg-card);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;overflow:hidden}
       #cm-overlay .cm-av img{width:100%;height:100%;object-fit:cover}
-      #cm-overlay .cm-content{flex:1}
-      #cm-overlay .cm-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
-      #cm-overlay .cm-name{font-size:13px;font-weight:700;color:var(--text)}
-      #cm-overlay .cm-time{font-size:11px;color:var(--text-3)}
-      #cm-overlay .cm-text{font-size:14px;color:var(--text);line-height:1.4}
-      #cm-overlay .cm-form{padding:10px 12px;border-top:1px solid var(--line);display:flex;gap:8px;background:var(--bg-2)}
-      #cm-overlay .cm-input{flex:1;padding:11px 14px;border-radius:20px;border:1px solid var(--line);background:var(--bg-card);color:var(--text)}
-      #cm-overlay .cm-send{background:var(--brand);color:var(--brand-on);border:0;border-radius:20px;padding:0 16px;font-weight:700}
+      #cm-overlay .cm-content{flex:1;min-width:0}
+      #cm-overlay .cm-meta{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px}
+      #cm-overlay .cm-name{font-size:14px;font-weight:800;color:var(--text);line-height:1.2;overflow-wrap:anywhere}
+      #cm-overlay .cm-time{font-size:12px;color:var(--text-3);white-space:nowrap}
+      #cm-overlay .cm-text{font-size:15px;color:var(--text);line-height:1.45;overflow-wrap:anywhere}
+      #cm-overlay .cm-form{padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;background:color-mix(in srgb,var(--bg-2) 94%,transparent)}
+      #cm-overlay .cm-input{width:100%;min-width:0;padding:13px 16px;border-radius:18px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font-size:16px;outline:none}
+      #cm-overlay .cm-input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+      #cm-overlay .cm-send{background:var(--brand);color:var(--brand-on);border:0;border-radius:18px;padding:0 18px;font-weight:900;min-height:50px}
+      #cm-overlay .cm-send:disabled{opacity:.55}
       #cm-overlay .cm-del{background:transparent;border:0;color:var(--red);font-size:12px;padding:4px}
+      @media (max-width:420px){#cm-overlay .cm-card{height:min(58vh,calc(var(--vv-height) * .6));min-height:360px}#cm-overlay .cm-send{padding:0 15px}}
     </style>
     <div class="cm-card">
+      <div class="cm-drag"></div>
       <div class="cm-head">
-        <div style="font-size:16px;font-weight:700;flex:1">Comentários</div>
-        <button onclick="closeComments()" style="background:transparent;border:0;color:var(--text-2);font-size:24px">×</button>
+        <div style="font-size:22px;font-weight:900;flex:1">Comentários</div>
+        <button onclick="closeComments()" aria-label="Fechar comentários" style="width:38px;height:38px;border-radius:12px;background:var(--bg-card);border:1px solid var(--line);color:var(--text-2);font-size:26px;display:grid;place-items:center">×</button>
       </div>
       <div class="cm-list" id="cm-list"><div style="padding:20px;text-align:center;color:var(--text-3)">Carregando…</div></div>
       <div class="cm-form">
@@ -14096,6 +14096,7 @@ async function openComments(postId) {
       </div>
     </div>`;
   document.body.appendChild(sheet);
+  lockPageScrollForSheet();
   sheet.addEventListener("click", (e) => { if (e.target === sheet) closeComments(); });
 
   // History API — botão voltar fecha o overlay
@@ -14131,6 +14132,7 @@ async function openComments(postId) {
     const content = (input.value || '').trim();
     if (!content) return;
     btn.disabled = true;
+    cacheSocialProfiles([getCommentAuthorFallback(STATE.profile.id)]);
     const { error } = await sb.from("feed_comments").insert({
       post_id: postId, user_id: STATE.profile.id, content
     });
@@ -14142,7 +14144,6 @@ async function openComments(postId) {
   };
   btn.onclick = submit;
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
-  setTimeout(() => input && input.focus(), 200);
 }
 window.openComments = openComments;
 
