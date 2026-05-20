@@ -17,6 +17,9 @@ assert.match(html, /--cm-keyboard-offset/, "Comments composer must use a keyboar
 assert.match(html, /const iosAccessoryClearance = keyboardBottom > 0 \? 88 : 0;/, "Comment composer must clear the iOS keyboard accessory bar.");
 assert.match(html, /const fallbackKeyboardBottom = _cmInputFocused && reportedKeyboardBottom < 80 \? Math\.round\(layoutH \* 0\.34\) : 0;/, "Comment composer must have a fallback when iOS does not report keyboard height.");
 assert.match(html, /_cmInputFocused = true;[\s\S]*\[40, 180, 360\]\.forEach/, "Comment viewport must be recalculated during the iOS keyboard animation.");
+assert.match(html, /function setCommentsKeyboardMode\(active\)/, "Comments sheet must have a dedicated keyboard mode.");
+assert.match(html, /cm-keyboard-mode \.cm-form\{position:absolute;left:18px;right:18px;top:88px/s, "Focused comment composer must move inside the visible sheet instead of staying under the iOS keyboard.");
+assert.match(html, /setCommentsKeyboardMode\(true\)/, "Comment input focus must enable keyboard mode.");
 assert.match(html, /cm-form\{[^}]*transform:translateY\(calc\(-1 \* var\(--cm-keyboard-offset\)\)\)/s, "Only the comment composer should move above the keyboard.");
 assert.match(html, /cm-list\{[^}]*padding:10px 18px calc\(12px \+ var\(--cm-keyboard-offset\)\)/s, "Comments list must reserve space when the composer moves.");
 assert.match(html, /#cm-overlay \.cm-card\{.*height:min\(56vh,520px\)/s, "Comments sheet should open around half the screen.");

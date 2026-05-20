@@ -14061,6 +14061,15 @@ function applyCommentsViewport() {
   overlay.style.setProperty("--cm-keyboard-offset", `${Math.round(keyboardOffset)}px`);
 }
 
+function setCommentsKeyboardMode(active) {
+  const overlay = document.getElementById("cm-overlay");
+  if (!overlay) return;
+  overlay.classList.toggle("cm-keyboard-mode", Boolean(active));
+  if (active) {
+    overlay.style.setProperty("--cm-keyboard-offset", "0px");
+  }
+}
+
 function closeComments() {
   const el = document.getElementById("cm-overlay");
   if (el) el.remove();
@@ -14157,6 +14166,8 @@ async function openComments(postId) {
       #cm-overlay .cm-time{font-size:12px;color:var(--text-3);white-space:nowrap}
       #cm-overlay .cm-text{font-size:15px;color:var(--text);line-height:1.45;overflow-wrap:anywhere}
       #cm-overlay .cm-form{position:relative;z-index:2;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;background:color-mix(in srgb,var(--bg-2) 94%,transparent);transform:translateY(calc(-1 * var(--cm-keyboard-offset)));transition:transform .16s ease}
+      #cm-overlay.cm-keyboard-mode .cm-list{padding-top:86px;padding-bottom:18px}
+      #cm-overlay.cm-keyboard-mode .cm-form{position:absolute;left:18px;right:18px;top:88px;z-index:6;padding:10px 0 12px;border-top:0;border-bottom:1px solid var(--line);background:linear-gradient(180deg,var(--bg) 0%,color-mix(in srgb,var(--bg) 88%,transparent) 100%);transform:none}
       #cm-overlay .cm-input{width:100%;min-width:0;padding:13px 16px;border-radius:18px;border:1px solid var(--line);background:var(--bg-card);color:var(--text);font-size:16px;outline:none}
       #cm-overlay .cm-input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
       #cm-overlay .cm-send{background:var(--brand);color:var(--brand-on);border:0;border-radius:18px;padding:0 18px;font-weight:900;min-height:50px}
@@ -14219,6 +14230,7 @@ async function openComments(postId) {
   const btn = document.getElementById("cm-send");
   input.addEventListener("focus", () => {
     _cmInputFocused = true;
+    setCommentsKeyboardMode(true);
     [40, 180, 360].forEach((delay) => setTimeout(() => {
       applyCommentsViewport();
       window.scrollTo(0, _cmScrollY || 0);
@@ -14226,7 +14238,10 @@ async function openComments(postId) {
   });
   input.addEventListener("blur", () => {
     _cmInputFocused = false;
-    setTimeout(applyCommentsViewport, 80);
+    setTimeout(() => {
+      setCommentsKeyboardMode(false);
+      applyCommentsViewport();
+    }, 120);
   });
   const submit = async () => {
     const content = (input.value || '').trim();
