@@ -574,9 +574,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .fp-stat .l { font-size: 9px; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-3); margin-top: 2px; }
 .fp-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 10px; padding-top: 10px;
   border-top: 1px solid var(--line); }
-.fp-action-btns { display: flex; align-items: center; gap: 12px; width: 100%; }
-.fp-like { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 13px; font-weight: 700; }
+.fp-action-btns { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); align-items: stretch; gap: 6px; width: 100%; }
+.fp-like { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 40px; padding: 8px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); color: var(--text-2); font-size: 11px; font-weight: 800; line-height: 1.1; text-align: center; }
 .fp-like.liked { color: var(--red); }
+.fp-like svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.fp-action-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-delete-btn { color: var(--red); border-color: rgba(255, 75, 75, .28); background: rgba(255, 75, 75, .07); }
+.fp-meta-line { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11px; color: var(--text-3); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Lists (students, workouts admin) */
 .list-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px;
@@ -5330,7 +5334,7 @@ window.addEventListener('popstate', (e) => {
   if (cmOverlay) {
     _cmInHistory = false;
     cmOverlay.remove();
-    unlockPageScrollForSheet();
+    unlockCommentsScroll();
     return;
   }
   // Sheet bottom
@@ -8332,6 +8336,11 @@ function feedPostHTML(p, compact) {
     : escape((p.student && p.student.avatar_emoji) || "💪");
   const intCls = p.intensity === "red" ? "pill-red" : (p.intensity === "yellow" ? "pill-yellow" : "pill-flex");
   const intLabel = p.intensity === "red" ? "Força" : (p.intensity === "yellow" ? "Hipertrofia" : "Mobilidade");
+  const viewCount = Number(p.view_count || 0);
+  const commentCount = Number(p.comments_count || 0);
+  const viewsLabel = viewCount === 1 ? "1 visualização" : `${viewCount} visualizações`;
+  const commentsLabel = commentCount === 1 ? "1 comentário" : `${commentCount} comentários`;
+  const commentActionLabel = commentCount ? `Comentar ${commentCount}` : "Comentar";
   return `<div class="feed-post" data-id="${p.id}">
     <div class="fp-head">
       <div class="fp-avatar" style="overflow:hidden;">${avatarInner}</div>
@@ -8364,24 +8373,28 @@ function feedPostHTML(p, compact) {
             ${reactionsBar ? `<div style="display:flex;gap:4px;flex-wrap:wrap;width:100%">${reactionsBar}</div>` : ''}
             <div class="fp-action-btns">
               <button class="fp-like" onclick="openReactionPicker('${p.id}')">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Reagir
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span class="fp-action-label">Reagir</span>
               </button>
               <button class="fp-like" onclick="openComments('${p.id}')">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                Comentar${p.comments_count ? ` (${p.comments_count})` : ''}
+                <span class="fp-action-label">${commentActionLabel}</span>
               </button>
               ${canShare ? `<button class="fp-like" onclick="shareFeedWorkout('${p.id}')">
                 <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98"/><path d="M15.41 6.51L8.59 10.49"/></svg>
-                Compartilhar
+                <span class="fp-action-label">Compart.</span>
               </button>` : ""}
-              ${(isMine || isCoach) ? `<button class="btn-link" onclick="onDeletePost('${p.id}')" style="color:var(--red);margin-left:auto">Apagar</button>` : ""}
+              ${(isMine || isCoach) ? `<button class="fp-like fp-delete-btn" onclick="onDeletePost('${p.id}')">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>
+                <span class="fp-action-label">Apagar</span>
+              </button>` : ""}
             </div>`;
         })()}
       </div>
       ${isMine ? `
-        <div style="font-size:11px;color:var(--text-3);margin-top:6px;padding-top:6px;border-top:1px solid var(--line)">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> ${p.view_count||0} visualização${(p.view_count||0)!==1?'ões':''}
-          · ${p.comments_count||0} comentário${(p.comments_count||0)!==1?'s':''}
+        <div class="fp-meta-line">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>${viewsLabel} · ${commentsLabel}</span>
         </div>` : ""}` : ""}
   </div>`;
 }
@@ -13988,11 +14001,51 @@ async function loadCommentsCounts() {
 }
 
 let _cmInHistory = false;
+let _cmScrollY = 0;
+let _cmViewportHandler = null;
+let _cmInitialTop = 0;
+let _cmInitialHeight = 0;
+
+function lockCommentsScroll() {
+  _cmScrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+  document.body.classList.add("no-scroll");
+  document.body.style.overflow = "hidden";
+}
+
+function unlockCommentsScroll() {
+  document.body.classList.remove("no-scroll");
+  document.body.style.overflow = "";
+  window.scrollTo(0, _cmScrollY || 0);
+  _cmScrollY = 0;
+}
+
+function applyCommentsViewport() {
+  const overlay = document.getElementById("cm-overlay");
+  const card = overlay && overlay.querySelector(".cm-card");
+  if (!overlay || !card) return;
+  const vv = window.visualViewport;
+  const layoutH = window.innerHeight || document.documentElement.clientHeight || 1;
+  const viewportH = vv ? Math.max(1, vv.height || layoutH) : layoutH;
+  if (!_cmInitialHeight) {
+    _cmInitialHeight = Math.min(Math.round(layoutH * 0.56), layoutH - 18);
+  }
+  const minHeight = Math.min(320, Math.max(230, viewportH - 24));
+  let height = Math.min(_cmInitialHeight, Math.max(minHeight, viewportH - 12));
+  card.style.height = `${Math.round(height)}px`;
+  card.style.bottom = "0px";
+}
 
 function closeComments() {
   const el = document.getElementById("cm-overlay");
   if (el) el.remove();
-  unlockPageScrollForSheet();
+  if (_cmViewportHandler && window.visualViewport) {
+    window.visualViewport.removeEventListener("resize", _cmViewportHandler);
+    window.visualViewport.removeEventListener("scroll", _cmViewportHandler);
+  }
+  _cmViewportHandler = null;
+  _cmInitialTop = 0;
+  _cmInitialHeight = 0;
+  unlockCommentsScroll();
   if (_cmInHistory) {
     _cmInHistory = false;
     try { history.back(); } catch(e){}
@@ -14062,8 +14115,8 @@ async function openComments(postId) {
   sheet.id = "cm-overlay";
   sheet.innerHTML = `
     <style>
-      #cm-overlay{position:fixed;top:var(--vv-top);left:0;right:0;height:var(--vv-height);background:rgba(0,0,0,.64);z-index:9500;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s;overscroll-behavior:contain}
-      #cm-overlay .cm-card{background:var(--bg);border:1px solid var(--line);border-bottom:0;border-top-left-radius:22px;border-top-right-radius:22px;width:100%;max-width:520px;height:min(56vh,calc(var(--vv-height) * .58));min-height:390px;max-height:calc(var(--vv-height) - 18px);display:flex;flex-direction:column;box-shadow:0 -18px 40px rgba(0,0,0,.34);overflow:hidden}
+      #cm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.64);z-index:9500;animation:fadeIn .2s;overscroll-behavior:contain;touch-action:none}
+      #cm-overlay .cm-card{position:absolute;left:50%;bottom:0;transform:translateX(-50%);background:var(--bg);border:1px solid var(--line);border-bottom:0;border-top-left-radius:22px;border-top-right-radius:22px;width:100%;max-width:520px;height:min(56vh,520px);min-height:0;max-height:calc(100vh - 18px);display:flex;flex-direction:column;box-shadow:0 -18px 40px rgba(0,0,0,.34);overflow:hidden;transition:height .16s ease,bottom .16s ease}
       #cm-overlay .cm-drag{width:52px;height:5px;border-radius:999px;background:var(--line-2);margin:10px auto 0;opacity:.85;flex:0 0 auto}
       #cm-overlay .cm-head{padding:14px 18px 16px;display:flex;align-items:center;border-bottom:1px solid var(--line)}
       #cm-overlay .cm-list{flex:1;overflow:auto;padding:10px 18px 4px;-webkit-overflow-scrolling:touch}
@@ -14081,7 +14134,7 @@ async function openComments(postId) {
       #cm-overlay .cm-send{background:var(--brand);color:var(--brand-on);border:0;border-radius:18px;padding:0 18px;font-weight:900;min-height:50px}
       #cm-overlay .cm-send:disabled{opacity:.55}
       #cm-overlay .cm-del{background:transparent;border:0;color:var(--red);font-size:12px;padding:4px}
-      @media (max-width:420px){#cm-overlay .cm-card{height:min(58vh,calc(var(--vv-height) * .6));min-height:360px}#cm-overlay .cm-send{padding:0 15px}}
+      @media (max-width:420px){#cm-overlay .cm-card{height:min(58vh,500px)}#cm-overlay .cm-send{padding:0 15px}}
     </style>
     <div class="cm-card">
       <div class="cm-drag"></div>
@@ -14096,7 +14149,15 @@ async function openComments(postId) {
       </div>
     </div>`;
   document.body.appendChild(sheet);
-  lockPageScrollForSheet();
+  lockCommentsScroll();
+  _cmInitialTop = 0;
+  _cmInitialHeight = 0;
+  _cmViewportHandler = () => requestAnimationFrame(applyCommentsViewport);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", _cmViewportHandler, { passive: true });
+    window.visualViewport.addEventListener("scroll", _cmViewportHandler, { passive: true });
+  }
+  applyCommentsViewport();
   sheet.addEventListener("click", (e) => { if (e.target === sheet) closeComments(); });
 
   // History API — botão voltar fecha o overlay
@@ -14128,6 +14189,13 @@ async function openComments(postId) {
 
   const input = document.getElementById("cm-input");
   const btn = document.getElementById("cm-send");
+  input.addEventListener("focus", () => {
+    setTimeout(() => {
+      applyCommentsViewport();
+      window.scrollTo(0, _cmScrollY || 0);
+    }, 60);
+  });
+  input.addEventListener("blur", () => setTimeout(applyCommentsViewport, 80));
   const submit = async () => {
     const content = (input.value || '').trim();
     if (!content) return;
