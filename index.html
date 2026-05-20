@@ -1976,7 +1976,8 @@ const DEFAULT_BRANDING = {
   logo_url: null,
   primary_color: "#00b4ff",
   accent_color: "#0086d4",
-  default_theme: "dark"
+  default_theme: "dark",
+  instagram_handle: null
 };
 const STATE = {
   user: null,
@@ -2073,10 +2074,31 @@ function intensityPill(int) {
 }
 function workoutPretty(w) { if (!w || w === "OFF") return "OFF"; return w; }
 function escape(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+function normalizeInstagramHandle(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+    .replace(/^instagram\.com\//i, "")
+    .replace(/^@+/, "")
+    .split(/[/?#\s]/)[0]
+    .replace(/[^a-zA-Z0-9._]/g, "")
+    .slice(0, 30);
+}
+function displayInstagramHandle(raw) {
+  const handle = normalizeInstagramHandle(raw);
+  return handle ? "@" + handle : "";
+}
+function profileInitials(p) {
+  const base = personDisplayName(p, "") || p?.email || "";
+  const parts = String(base).trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  return parts.slice(0, 2).map(part => part[0]).join("").toUpperCase();
+}
 function avatarEmoji(p) { return (p && p.avatar_emoji) || "💪"; }
 function avatarHTML(p) {
-  if (p && p.avatar_url) return `<img src="${escape(p.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`;
-  return escape((p && p.avatar_emoji) || "💪");
+  const fallback = (p && p.avatar_emoji) || profileInitials(p) || "💪";
+  if (p && p.avatar_url) return `<img src="${escape(p.avatar_url)}" alt="" data-fallback="${escape(fallback)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.parentElement.textContent=this.dataset.fallback||'💪';this.remove();" />`;
+  return escape(fallback);
 }
 function userFacingErrorMessage(msg) {
   const raw = String(msg == null ? "" : msg).trim();
@@ -2405,9 +2427,18 @@ async function saveBranding(patch) {
   if (!STATE.profile) return null;
   const role = STATE.profile.role;
   if (role === "coach") {
-    const { data, error } = await sb.from("coach_branding")
+    let { data, error } = await sb.from("coach_branding")
       .upsert({ coach_id: STATE.profile.id, ...patch, updated_at: new Date().toISOString() })
       .select().single();
+    if (error && /instagram_handle|column .* does not exist|schema cache/i.test(error.message || "") && Object.prototype.hasOwnProperty.call(patch, "instagram_handle")) {
+      const { instagram_handle, ...safePatch } = patch;
+      const retry = await sb.from("coach_branding")
+        .upsert({ coach_id: STATE.profile.id, ...safePatch, updated_at: new Date().toISOString() })
+        .select().single();
+      data = retry.data;
+      error = retry.error;
+      if (!error) showToast("Identidade salva. Aplique a migration do Instagram para salvar o @.", "error");
+    }
     if (error) { showToast("Erro: " + error.message, "error"); return null; }
     applyBranding(data);
     return data;
@@ -8341,9 +8372,7 @@ function feedPostHTML(p, compact) {
   const canShare = canShareFeedWorkout(p);
   const studentName = personDisplayName(p.student, "Usuário");
   const role = p.student && p.student.role === "coach" ? ' <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>' : (p.student && p.student.role === "admin" ? ' <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zM4 20h16"/></svg>' : "");
-  const avatarInner = (p.student && p.student.avatar_url)
-    ? `<img src="${escape(p.student.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
-    : escape((p.student && p.student.avatar_emoji) || "💪");
+  const avatarInner = avatarHTML(p.student || {});
   const intCls = p.intensity === "red" ? "pill-red" : (p.intensity === "yellow" ? "pill-yellow" : "pill-flex");
   const intLabel = p.intensity === "red" ? "Força" : (p.intensity === "yellow" ? "Hipertrofia" : "Mobilidade");
   const viewCount = Number(p.view_count || 0);
@@ -8452,6 +8481,8 @@ function getFeedWorkoutSharePayload(p) {
     duration: Number(p.duration_seconds || 0),
     setsDone: Number(p.set_count || p.sets_done || p.set_count_done || 0),
     studentName: (p.student && p.student.full_name) || STATE.profile?.full_name || "",
+    studentAvatarUrl: (p.student && p.student.avatar_url) || STATE.profile?.avatar_url || "",
+    studentAvatarEmoji: (p.student && p.student.avatar_emoji) || STATE.profile?.avatar_emoji || "",
     dateLabel: postDate ? postDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : "",
     workoutTime,
     muscleGroups,
@@ -9059,6 +9090,12 @@ function renderBrandingPanel() {
         <label class="form-label">Tagline</label>
         <input class="input" id="br-tagline" value="${escape(b.app_tagline || '')}" maxlength="80" />
       </div>
+      ${STATE.profile?.role === "coach" ? `
+      <div class="form-group">
+        <label class="form-label">Instagram do treinador</label>
+        <input class="input" id="br-instagram" value="${escape(displayInstagramHandle(b.instagram_handle || ''))}" maxlength="31" placeholder="@seuinstagram" autocapitalize="none" autocomplete="off" />
+        <p class="text-xs muted" style="margin-top:6px;">Usado nos cards de compartilhamento do Feed e Stories. Se ficar vazio, o card não inventa @ automático.</p>
+      </div>` : ""}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
         <div class="form-group">
           <label class="form-label">Logo emoji</label>
@@ -9162,6 +9199,9 @@ window.saveBrandingForm = async function() {
     accent_color: get('br-accent-hex').value.trim() || '#0086d4',
     default_theme: STATE.branding.default_theme || 'dark'
   };
+  if (STATE.profile?.role === "coach") {
+    patch.instagram_handle = normalizeInstagramHandle(get('br-instagram')?.value || "");
+  }
   const saved = await saveBranding(patch);
   if (saved) {
     showToast('Identidade salva', 'success');
@@ -14116,10 +14156,7 @@ async function hydrateCommentAuthors(comments = []) {
 }
 
 function renderCommentAuthorAvatar(author = {}) {
-  if (author.avatar_url) {
-    return `<img src="${escapeHtml(author.avatar_url)}" alt="">`;
-  }
-  return escapeHtml(author.avatar_emoji || "👤");
+  return avatarHTML(author);
 }
 
 function renderCommentItems(comments = [], postId) {
@@ -15830,7 +15867,9 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
     muscleGroups,
     workoutTime,
     dateLabel,
-    studentName: STATE.profile?.full_name || ''
+    studentName: STATE.profile?.full_name || '',
+    studentAvatarUrl: STATE.profile?.avatar_url || '',
+    studentAvatarEmoji: STATE.profile?.avatar_emoji || ''
   };
 
   const overlay = document.createElement("div");
@@ -15926,9 +15965,10 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     // ---------- data ----------
     const brand = (STATE.branding && (STATE.branding.primary_color || STATE.branding.brand_color)) || "#13baf2";
     const appName = ((STATE.branding && STATE.branding.app_name) || "TREINOVA").toUpperCase();
-    const handleName = ((STATE.branding && STATE.branding.app_name) || "treinova").toLowerCase().replace(/\s+/g, "");
+    const instagramHandle = normalizeInstagramHandle(STATE.branding && STATE.branding.instagram_handle);
     const studentName = meta.studentName || STATE.profile?.full_name || "";
     const firstName = (studentName.split(" ")[0] || "").trim();
+    const studentInitials = profileInitials({ full_name: studentName, email: STATE.profile?.email, avatar_emoji: meta.studentAvatarEmoji }) || "EU";
     const isFeed = meta.source === "feed";
     const dateLabel = meta.dateLabel || new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
     const workoutTime = meta.workoutTime || "";
@@ -15938,32 +15978,26 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     const sets  = Math.max(0, Number(setsDone || 0));
 
     // ---------- load images ----------
-    const logoUrl = STATE.branding?.logo_url || null;
-    let logoImg = null;
-    if (logoUrl) {
+    const loadCardImage = async (url, timeout = 4000) => {
+      if (!url) return null;
       try {
-        logoImg = await new Promise((res) => {
+        return await new Promise((res) => {
+          let done = false;
+          const finish = (img) => { if (!done) { done = true; res(img); } };
           const img = new Image(); img.crossOrigin = "anonymous";
-          img.onload = () => res(img); img.onerror = () => res(null);
-          img.src = logoUrl; setTimeout(() => res(null), 4000);
+          img.onload = () => finish(img);
+          img.onerror = () => finish(null);
+          img.src = url;
+          setTimeout(() => finish(null), timeout);
         });
-      } catch(e) { logoImg = null; }
-    }
+      } catch(e) { return null; }
+    };
+    const logoUrl = STATE.branding?.logo_url || null;
+    const logoImg = await loadCardImage(logoUrl);
+    const studentAvatarImg = await loadCardImage(meta.studentAvatarUrl || STATE.profile?.avatar_url);
     const treinovaIconUrl = (window.location.origin || "") + "/assets/apple-touch-icon.png";
-    let treinovaLogoImg = null;
-    try {
-      treinovaLogoImg = await new Promise((res) => {
-        const img = new Image(); img.crossOrigin = "anonymous";
-        img.onload = () => res(img);
-        img.onerror = () => {
-          const img2 = new Image(); img2.crossOrigin = "anonymous";
-          img2.onload = () => res(img2); img2.onerror = () => res(null);
-          img2.src = (window.location.origin || "") + "/assets/icon-192.png";
-          setTimeout(() => res(null), 3000);
-        };
-        img.src = treinovaIconUrl; setTimeout(() => res(null), 4000);
-      });
-    } catch(e) { treinovaLogoImg = null; }
+    let treinovaLogoImg = await loadCardImage(treinovaIconUrl);
+    if (!treinovaLogoImg) treinovaLogoImg = await loadCardImage((window.location.origin || "") + "/assets/icon-192.png", 3000);
 
     // ---------- utils ----------
     const hexToRgb = (hex) => {
@@ -16053,6 +16087,32 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
       ctx.beginPath(); ctx.arc(0,-sz*0.28,sz*0.20,0,Math.PI*2); ctx.fill();
       ctx.beginPath(); ctx.arc(0,sz*0.18,sz*0.32,Math.PI,0); ctx.closePath(); ctx.fill();
       ctx.restore();
+    };
+    const drawAvatarChip = (cx, cy, size) => {
+      const r = size / 2;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+      if (studentAvatarImg) {
+        const scale = Math.max(size / studentAvatarImg.width, size / studentAvatarImg.height);
+        const iw = studentAvatarImg.width * scale;
+        const ih = studentAvatarImg.height * scale;
+        ctx.drawImage(studentAvatarImg, cx - iw / 2, cy - ih / 2, iw, ih);
+      } else {
+        const aGrd = ctx.createLinearGradient(cx-r, cy-r, cx+r, cy+r);
+        aGrd.addColorStop(0, rgba(brand, 0.95));
+        aGrd.addColorStop(1, "rgba(255,255,255,0.16)");
+        ctx.fillStyle = aGrd;
+        ctx.fillRect(cx-r, cy-r, size, size);
+        const emoji = meta.studentAvatarEmoji && /\p{Extended_Pictographic}/u.test(meta.studentAvatarEmoji) ? meta.studentAvatarEmoji : "";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = `900 ${Math.round((emoji ? 21 : 16) * sc)}px -apple-system,system-ui,sans-serif`;
+        ctx.fillText(emoji || studentInitials, cx, cy + (emoji ? 1 : 0));
+        ctx.textBaseline = "alphabetic";
+      }
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(cx, cy, r - 1, 0, Math.PI * 2);
+      ctx.strokeStyle = rgba("#ffffff", 0.28); ctx.lineWidth = 2; ctx.stroke();
     };
 
     // ============================================================
@@ -16183,15 +16243,15 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     if (firstName || studentName) {
       const who = (firstName || studentName).toUpperCase();
       ctx.font=`800 ${Math.round(23*sc)}px -apple-system,system-ui,sans-serif`;
-      const nW=ctx.measureText(who).width, nH=Math.round(46*sc);
-      const iconR=Math.round(13*sc), nPad=Math.round(12*sc);
-      const totalPW=iconR*2+nPad+nW+nPad;
+      const nW=ctx.measureText(who).width, nH=Math.round(54*sc);
+      const avatarS=Math.round(38*sc), nPad=Math.round(13*sc);
+      const totalPW=avatarS+nPad+nW+nPad;
       roundRect(PAD,cursor,totalPW,nH,nH/2);
       ctx.fillStyle=rgba("#ffffff",0.09); ctx.fill();
       ctx.strokeStyle=rgba("#ffffff",0.18); ctx.lineWidth=1.5; ctx.stroke();
-      drawPerson(PAD+iconR,cursor+nH/2,iconR*0.95,rgba("#f4f7ff",0.68));
+      drawAvatarChip(PAD+nH/2,cursor+nH/2,avatarS);
       ctx.fillStyle="#ffffff"; ctx.textBaseline="middle"; ctx.textAlign="left";
-      ctx.fillText(who,PAD+iconR*2+nPad,cursor+nH/2); ctx.textBaseline="alphabetic";
+      ctx.fillText(who,PAD+avatarS+nPad,cursor+nH/2); ctx.textBaseline="alphabetic";
       cursor += nH + Math.round(16*sc);
     }
 
@@ -16294,10 +16354,14 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
 
     const ftIconSz=Math.round(27*sc), ftTxtY=footerY+Math.round(35*sc);
 
-    // IG icon + @handle
-    drawInstagram(PAD+ftIconSz/2, footerY+Math.round(24*sc), ftIconSz, rgba("#f4f7ff",0.55));
+    // Social handle configured by the coach. Do not invent an automatic @.
     ctx.fillStyle=rgba("#f4f7ff",0.55); ctx.font=`700 ${Math.round(18*sc)}px -apple-system,system-ui,sans-serif`; ctx.textAlign="left";
-    ctx.fillText(`@${handleName}`, PAD+ftIconSz+Math.round(10*sc), ftTxtY);
+    if (instagramHandle) {
+      drawInstagram(PAD+ftIconSz/2, footerY+Math.round(24*sc), ftIconSz, rgba("#f4f7ff",0.55));
+      ctx.fillText(`@${instagramHandle}`, PAD+ftIconSz+Math.round(10*sc), ftTxtY);
+    } else {
+      ctx.fillText("Compartilhe sua evolução", PAD, ftTxtY);
+    }
 
     // Treinova logo + "Powered by TREINOVA"
     const pbTxt="Powered by TREINOVA";
