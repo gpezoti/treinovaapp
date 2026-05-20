@@ -13294,6 +13294,14 @@ window.addEventListener("beforeinstallprompt", (e) => {
   DEFERRED_INSTALL_PROMPT = e;
 });
 
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+function isStandalonePWA() {
+  return window.navigator.standalone === true || window.matchMedia?.("(display-mode: standalone)")?.matches === true;
+}
+
 async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   try {
@@ -13325,12 +13333,13 @@ async function registerServiceWorker() {
   } catch (e) { console.warn("SW falhou:", e); }
 }
 
-function showIOSInstallHintIfNeeded() {
+function showIOSInstallHintIfNeeded(opts = {}) {
   // [UX-06] iOS Safari não dispara beforeinstallprompt — exibir instrução manual
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  const isStandalone = window.navigator.standalone === true;
-  if (!isIOS || isStandalone) return; // já instalado ou não é iOS
-  if (localStorage.getItem("ios_install_dismissed") === "1") return;
+  const force = opts.force === true;
+  const isIOS = isIOSDevice();
+  const isStandalone = isStandalonePWA();
+  if (!isIOS || isStandalone) return false; // já instalado ou não é iOS
+  if (!force && localStorage.getItem("ios_install_dismissed") === "1") return false;
   if (document.getElementById("ios-install-hint")) return;
   const div = document.createElement("div");
   div.id = "ios-install-hint";
@@ -13351,6 +13360,25 @@ function showIOSInstallHintIfNeeded() {
     localStorage.setItem("ios_install_dismissed", "1");
     div.remove();
   };
+  return true;
+}
+
+async function requestPWAInstall(opts = {}) {
+  const source = opts.source || "manual";
+  if (isStandalonePWA()) return { status: "installed", source };
+  if (DEFERRED_INSTALL_PROMPT) {
+    DEFERRED_INSTALL_PROMPT.prompt();
+    const r = await DEFERRED_INSTALL_PROMPT.userChoice;
+    DEFERRED_INSTALL_PROMPT = null;
+    if (r.outcome === "accepted") localStorage.setItem("install_dismissed", "1");
+    return { status: r.outcome === "accepted" ? "accepted" : "dismissed", source };
+  }
+  if (isIOSDevice()) {
+    showIOSInstallHintIfNeeded({ force: true });
+    return { status: "manual-ios", source };
+  }
+  showInstallBannerIfPossible();
+  return { status: "manual-browser", source };
 }
 
 function showInstallBannerIfPossible() {
@@ -13371,11 +13399,7 @@ function showInstallBannerIfPossible() {
     </div>`;
   document.body.appendChild(div);
   document.getElementById("install-yes").onclick = async () => {
-    if (!DEFERRED_INSTALL_PROMPT) return;
-    DEFERRED_INSTALL_PROMPT.prompt();
-    const r = await DEFERRED_INSTALL_PROMPT.userChoice;
-    DEFERRED_INSTALL_PROMPT = null;
-    if (r.outcome === "accepted") localStorage.setItem("install_dismissed", "1");
+    await requestPWAInstall({ source: "install-banner" });
     div.remove();
   };
   document.getElementById("install-no").onclick = () => {
@@ -13702,6 +13726,8 @@ function showOnboarding() {
   const profile = STATE.profile;
   const branding = STATE.branding || {};
   const coachName = (STATE.coachInfo && STATE.coachInfo.full_name) || branding.brand_name || "seu treinador";
+  const installInitialState = isStandalonePWA() ? "✓ Instalado" : (isIOSDevice() ? "Ver guia" : "Tocar");
+  const installInitialColor = isStandalonePWA() ? "var(--green)" : "var(--text-3)";
   const overlay = document.createElement("div");
   overlay.id = "onb-overlay";
   overlay.innerHTML = `
@@ -13757,7 +13783,7 @@ function showOnboarding() {
       <div class="onb-card" id="onb-perm-install" style="cursor:pointer">
         <div class="ic"></div>
         <div style="flex:1"><div class="ti">Instalar como app</div><div class="sub">Ícone na tela inicial, abre em tela cheia</div></div>
-        <div id="onb-install-state" style="font-size:12px;color:var(--text-3)">Tocar</div>
+        <div id="onb-install-state" style="font-size:12px;color:${installInitialColor}">${installInitialState}</div>
       </div>
       <div class="onb-cta">
         <button class="onb-skip" data-act="back">Voltar</button>
@@ -13801,13 +13827,24 @@ function showOnboarding() {
       if (st) st.textContent = ok ? "✓ Ativadas" : "Não ativadas";
       if (ok) st.style.color = "var(--green)";
     } else if (e.target.closest("#onb-perm-install")) {
-      if (DEFERRED_INSTALL_PROMPT) {
-        DEFERRED_INSTALL_PROMPT.prompt();
-        const r = await DEFERRED_INSTALL_PROMPT.userChoice;
-        const st = document.getElementById("onb-install-state");
-        if (st) st.textContent = r.outcome === "accepted" ? "✓ Instalado" : "Tente depois";
+      const st = document.getElementById("onb-install-state");
+      if (st) {
+        st.textContent = "Abrindo...";
+        st.style.color = "var(--text-2)";
+      }
+      const result = await requestPWAInstall({ source: "student-onboarding" });
+      if (!st) return;
+      if (result.status === "installed" || result.status === "accepted") {
+        st.textContent = "✓ Instalado";
+        st.style.color = "var(--green)";
+      } else if (result.status === "manual-ios") {
+        st.textContent = "Siga o guia";
+        st.style.color = "var(--brand)";
+        showToast("Siga os passos para adicionar o app à tela inicial.", "info");
       } else {
-        showToast("Use 'Adicionar à tela inicial' do navegador", "info");
+        st.textContent = "Tente depois";
+        st.style.color = "var(--text-3)";
+        showToast("Se o botão nativo não aparecer, use a opção do navegador para instalar.", "info");
       }
     }
   });
