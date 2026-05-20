@@ -14024,6 +14024,7 @@ let _cmScrollY = 0;
 let _cmViewportHandler = null;
 let _cmInitialTop = 0;
 let _cmInitialHeight = 0;
+let _cmInputFocused = false;
 
 function lockCommentsScroll() {
   _cmScrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
@@ -14046,12 +14047,15 @@ function applyCommentsViewport() {
   const layoutH = window.innerHeight || document.documentElement.clientHeight || 1;
   const viewportH = vv ? Math.max(1, vv.height || layoutH) : layoutH;
   const viewportBottom = vv ? Math.max(1, (vv.offsetTop || 0) + viewportH) : layoutH;
-  const keyboardBottom = Math.max(0, layoutH - viewportBottom);
+  const reportedKeyboardBottom = Math.max(0, layoutH - viewportBottom);
+  const fallbackKeyboardBottom = _cmInputFocused && reportedKeyboardBottom < 80 ? Math.round(layoutH * 0.34) : 0;
+  const keyboardBottom = Math.max(reportedKeyboardBottom, fallbackKeyboardBottom);
   if (!_cmInitialHeight) {
     _cmInitialHeight = Math.min(Math.round(layoutH * 0.56), layoutH - 18);
   }
   const height = Math.min(_cmInitialHeight, layoutH - 18);
-  const keyboardOffset = Math.min(keyboardBottom, Math.max(0, height - 96));
+  const iosAccessoryClearance = keyboardBottom > 0 ? 88 : 0;
+  const keyboardOffset = Math.min(keyboardBottom + iosAccessoryClearance, Math.max(0, height - 132));
   card.style.height = `${Math.round(height)}px`;
   card.style.bottom = "0px";
   overlay.style.setProperty("--cm-keyboard-offset", `${Math.round(keyboardOffset)}px`);
@@ -14067,6 +14071,7 @@ function closeComments() {
   _cmViewportHandler = null;
   _cmInitialTop = 0;
   _cmInitialHeight = 0;
+  _cmInputFocused = false;
   if (el) el.style.removeProperty("--cm-keyboard-offset");
   unlockCommentsScroll();
   if (_cmInHistory) {
@@ -14213,12 +14218,16 @@ async function openComments(postId) {
   const input = document.getElementById("cm-input");
   const btn = document.getElementById("cm-send");
   input.addEventListener("focus", () => {
-    setTimeout(() => {
+    _cmInputFocused = true;
+    [40, 180, 360].forEach((delay) => setTimeout(() => {
       applyCommentsViewport();
       window.scrollTo(0, _cmScrollY || 0);
-    }, 60);
+    }, delay));
   });
-  input.addEventListener("blur", () => setTimeout(applyCommentsViewport, 80));
+  input.addEventListener("blur", () => {
+    _cmInputFocused = false;
+    setTimeout(applyCommentsViewport, 80);
+  });
   const submit = async () => {
     const content = (input.value || '').trim();
     if (!content) return;
