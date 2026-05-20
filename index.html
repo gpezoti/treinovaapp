@@ -8421,7 +8421,7 @@ function feedPostHTML(p, compact) {
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span class="fp-action-label">${commentActionLabel}</span>
               </button>
-              ${canShare ? `<button class="fp-like" onclick="shareFeedWorkout('${p.id}')" title="Compartilhar treino" aria-label="Compartilhar treino">
+              ${canShare ? `<button class="fp-like" onclick="openFeedShareFormatSheet('${p.id}')" title="Compartilhar treino" aria-label="Compartilhar treino">
                 <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98"/><path d="M15.41 6.51L8.59 10.49"/></svg>
                 <span class="fp-action-label">Compart.</span>
               </button>` : ""}
@@ -8490,14 +8490,43 @@ function getFeedWorkoutSharePayload(p) {
   };
 }
 
-window.shareFeedWorkout = async function(postId) {
+window.openFeedShareFormatSheet = function(postId) {
+  const post = (STATE.feed || []).find(p => p.id === postId);
+  if (!post || !canShareFeedWorkout(post)) {
+    showToast("Você só pode compartilhar treinos do seu próprio feed.", "error");
+    return;
+  }
+  openSheet(`
+    <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0 8px">
+      <div>
+        <h2 style="margin:0 0 6px;color:var(--text)">Compartilhar treino</h2>
+        <p style="margin:0;color:var(--text-2);font-size:13px;line-height:1.45">Escolha o formato correto para Instagram, WhatsApp ou salvar a imagem.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button class="btn-primary" onclick="closeSheet(); shareFeedWorkout('${postId}', 'post')" style="min-height:116px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>
+          <span>Post</span>
+          <small style="opacity:.75;font-size:11px">1080 × 1350</small>
+        </button>
+        <button class="btn-ghost" onclick="closeSheet(); shareFeedWorkout('${postId}', 'stories')" style="min-height:116px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-color:var(--brand);color:var(--brand)">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="3"/></svg>
+          <span>Stories</span>
+          <small style="opacity:.75;font-size:11px">1080 × 1920</small>
+        </button>
+      </div>
+      <button class="btn-ghost" onclick="closeSheet()">Cancelar</button>
+    </div>
+  `);
+};
+
+window.shareFeedWorkout = async function(postId, format = "post") {
   const post = (STATE.feed || []).find(p => p.id === postId);
   if (!post || !canShareFeedWorkout(post)) {
     showToast("Você só pode compartilhar treinos do seu próprio feed.", "error");
     return;
   }
   const payload = getFeedWorkoutSharePayload(post);
-  await shareWorkout(payload.totalVolume, payload.duration, payload.name, payload.setsDone, payload);
+  await shareWorkout(payload.totalVolume, payload.duration, payload.name, payload.setsDone, payload, format);
 };
 
 window.onLikeToggle = (id) => toggleLike(id);

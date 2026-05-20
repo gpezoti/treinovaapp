@@ -10,8 +10,11 @@ assert.doesNotMatch(html, /\.delete\(\)\s*\.eq\("user_id", userId\)\s*\.neq\("en
 assert.match(html, /forceRenewPushSubscription/);
 
 assert.match(html, /function canShareFeedWorkout\(p\)/);
-assert.match(html, /window\.shareFeedWorkout = async function\(postId\)/);
-assert.match(html, /onclick="shareFeedWorkout\('\$\{p\.id\}'\)"/);
+assert.match(html, /window\.openFeedShareFormatSheet = function\(postId\)/);
+assert.match(html, /window\.shareFeedWorkout = async function\(postId, format = "post"\)/);
+assert.match(html, /onclick="openFeedShareFormatSheet\('\$\{p\.id\}'\)"/);
+assert.match(html, /shareFeedWorkout\('\$\{postId\}', 'stories'\)/);
+assert.match(html, /shareWorkout\(payload\.totalVolume, payload\.duration, payload\.name, payload\.setsDone, payload, format\)/);
 assert.match(html, /const pillTxt = isFeed \? "DO FEED" : "CONCLUÍDO"/);
 assert.match(html, /ctx\.fillText\("TREINO"/);
 assert.match(html, /const W = 1080, H = format === "stories" \? 1920 : 1350;/);
