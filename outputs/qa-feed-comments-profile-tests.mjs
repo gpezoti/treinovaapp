@@ -13,6 +13,9 @@ assert.doesNotMatch(html, /author:profiles\(id, full_name, avatar_emoji, avatar_
 assert.match(html, /function lockCommentsScroll\(\)/, "Comments sheet must use a dedicated scroll lock.");
 assert.match(html, /function applyCommentsViewport\(\)/, "Comments sheet must react to visual viewport changes.");
 assert.match(html, /card\.style\.bottom = "0px"/, "Comments sheet should remain anchored instead of being pushed above the keyboard.");
+assert.match(html, /--cm-keyboard-offset/, "Comments composer must use a keyboard offset variable.");
+assert.match(html, /cm-form\{[^}]*transform:translateY\(calc\(-1 \* var\(--cm-keyboard-offset\)\)\)/s, "Only the comment composer should move above the keyboard.");
+assert.match(html, /cm-list\{[^}]*padding:10px 18px calc\(12px \+ var\(--cm-keyboard-offset\)\)/s, "Comments list must reserve space when the composer moves.");
 assert.match(html, /#cm-overlay \.cm-card\{.*height:min\(56vh,520px\)/s, "Comments sheet should open around half the screen.");
 
 console.log("qa-feed-comments-profile-tests: ok");
