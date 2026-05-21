@@ -13,6 +13,9 @@ assert.match(html, /class="shortcut-error"/, "progress menu should show an error
 assert.match(html, /class="photo-grid"/, "progress gallery should use the polished grid");
 assert.match(html, /data-full-url=/, "full photo preview should avoid unsafe inline URL interpolation");
 assert.doesNotMatch(html, /p\.url\.split\('\/'\)\.slice\(-2\)/, "delete should not derive storage path from the last URL segments");
+assert.doesNotMatch(html, /Histórico \(últimos 20\)/, "student profile should not duplicate workout history because feed is the history surface");
+assert.doesNotMatch(html, /let historyHTML = "";/, "student profile should not build a dedicated workout history list");
+assert.doesNotMatch(html, /Sem treinos concluídos ainda\. Bora começar!/, "student profile should not render the old empty history block");
 
 for (const fn of ["renderHistory", "renderRanking", "renderProgress", "renderAero", "renderOneRM"]) {
   assert.ok(html.includes(`async function ${fn}(`), `${fn} should be present`);

@@ -8595,8 +8595,7 @@ async function renderProfile() {
   const isStaff = isCoach || isAdmin;
   if (isCoach) await loadMyPaymentAccounts();
 
-  // load history (students only)
-  let historyHTML = "";
+  // load student performance summary only. The feed is the workout history surface.
   let performanceSummaryHTML = "";
   if (!isStaff) {
     el.innerHTML = `<div class="loading"><div class="spinner"></div>Carregando perfil...</div>`;
@@ -8663,24 +8662,6 @@ async function renderProfile() {
         </div>`;
     }
 
-    if (hist.length === 0) {
-      historyHTML = `<div class="empty"><p>Sem treinos concluídos ainda. Bora começar!</p></div>`;
-    } else {
-      historyHTML = hist.map(s => {
-        const wname = STATE.workouts[s.workout_code] ? STATE.workouts[s.workout_code].name : ("Treino " + s.workout_code);
-        const intCls = s.intensity === "red" ? "pill-red" : (s.intensity === "yellow" ? "pill-yellow" : "pill-flex");
-        return `<div class="hist-row">
-          <div>
-            <div class="fw-700 text-sm">${escape(wname)}</div>
-            <div class="hr-date">${fmtFullDateBR(s.date)}</div>
-          </div>
-          <div style="text-align:right">
-            <div class="hr-load">${Math.round(s.total_volume_kg||0)} kg</div>
-            <div class="text-xs muted">${s.set_count_done || ""} ${fmtDuration(s.duration_seconds)}</div>
-          </div>
-        </div>`;
-      }).join("");
-    }
   }
 
   el.innerHTML = `
@@ -8763,9 +8744,6 @@ async function renderProfile() {
       <div class="card">
         <span class="text-xs muted">${(STATE.follows.following || []).length} seguindo · ${(STATE.follows.followers || []).length} seguidores</span>
       </div>
-
-      <div class="section-title">Histórico (últimos 20)</div>
-      ${historyHTML}
     ` : `
       <div class="section-title">Configurações</div>
       <div class="card mb-8">
