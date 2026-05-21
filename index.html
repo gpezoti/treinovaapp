@@ -5325,6 +5325,7 @@ function unlockPageScrollForSheet() {
 
 function openSheet(html) {
   const root = document.getElementById("sheet-content");
+  root.removeAttribute("data-dismissable");
   root.innerHTML = '<div class="sheet-handle"></div>' + html;
   pinSheetFooter(root);
   const sheet = document.getElementById("sheet");
@@ -5402,6 +5403,12 @@ function closeSheet() {
   }
 }
 window.closeSheet = closeSheet;
+
+document.getElementById("sheet")?.addEventListener("click", (ev) => {
+  const root = document.getElementById("sheet-content");
+  if (!root || root.dataset.dismissable !== "true") return;
+  if (ev.target === ev.currentTarget) closeSheet();
+});
 
 // Botão voltar do hardware/browser fecha modais na seguinte prioridade:
 // 1. chat-thread-overlay (fullscreen)
@@ -8597,6 +8604,7 @@ window.openReactionPicker = function(postId) {
         }).join('')}
       </div>
     </div>`);
+  document.getElementById("sheet-content")?.setAttribute("data-dismissable", "true");
 };
 
 window.toggleReaction = async function(postId, emoji) {

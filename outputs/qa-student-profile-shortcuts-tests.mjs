@@ -24,6 +24,9 @@ assert.match(html, /function iconSvg\(name, size = 18, extra = ""\)/, "shared SV
 assert.match(html, /const FEED_REACTION_OPTIONS = \[/, "feed reactions must keep their social reaction options");
 assert.match(html, /function feedReactionEmojiHTML\(key, size = 18\)/, "feed reactions should render as emojis by product choice");
 assert.doesNotMatch(html, /function feedReactionIconHTML/, "feed reactions should not use generic icons");
+assert.match(html, /root\.removeAttribute\("data-dismissable"\)/, "sheets should reset dismissable behavior by default");
+assert.match(html, /root\.dataset\.dismissable !== "true"/, "only explicitly dismissable sheets should close on outside tap");
+assert.match(html, /setAttribute\("data-dismissable", "true"\)/, "reaction picker should close when tapping outside");
 
 for (const fn of ["renderHistory", "renderRanking", "renderProgress", "renderAero", "renderOneRM"]) {
   assert.ok(html.includes(`async function ${fn}(`), `${fn} should be present`);
