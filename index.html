@@ -8347,11 +8347,11 @@ window.openHistorySheet = async function(name) {
    ============================================================================= */
 function renderFeed() {
   const el = document.getElementById("view-feed");
-  const filter   = STATE.feedFilter || "ALL";
   const now      = new Date();
   const todayStr = now.toISOString().slice(0,10);
 
-  const feed = filter === "ALL" ? STATE.feed : STATE.feed.filter(p => p.workout_code === filter);
+  STATE.feedFilter = "ALL";
+  const feed = STATE.feed || [];
 
   // 3 seções
   const pinned = feed.filter(p => {
@@ -8362,7 +8362,6 @@ function renderFeed() {
   const todayPosts = feed.filter(p => p.created_at?.slice(0,10) === todayStr && !pinned.includes(p));
   const history    = feed.filter(p => !pinned.includes(p) && !todayPosts.includes(p));
 
-  const codes = ["ALL","A","B","C","D","FLEX"];
   const followingCount = (STATE.follows && STATE.follows.following || []).length;
   const followersCount = (STATE.follows && STATE.follows.followers || []).length;
   el.innerHTML = `
@@ -8374,12 +8373,6 @@ function renderFeed() {
       </button>
     </div>
     <p class="view-subtitle" style="margin-bottom:10px">Quem você segue · ${feed.length} post${feed.length!==1?'s':''}</p>
-    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;-webkit-overflow-scrolling:touch">
-      ${codes.map(c => `
-        <button onclick="setFeedFilter('${c}')" style="flex-shrink:0;padding:7px 14px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid ${filter===c?'var(--brand)':'var(--line)'};background:${filter===c?'var(--brand-soft)':'var(--bg-card)'};color:${filter===c?'var(--brand)':'var(--text-2)'};cursor:pointer">
-          ${c === "ALL" ? "Tudo" : c}
-        </button>`).join("")}
-    </div>
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <button style="flex:1;background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:left;cursor:pointer" onclick="openSocialList('following')">
         <div style="font-size:17px;font-weight:900;color:var(--text)">${followingCount}</div>
@@ -8417,15 +8410,15 @@ function renderFeed() {
     ${feed.length === 0 ? `
       <div class="empty">
         <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16h40M12 24h40M12 32h28"/></svg>
-        <h3>${STATE.feed.length === 0 ? "Sem posts ainda" : "Sem posts nesse filtro"}</h3>
-        <p>${STATE.feed.length === 0 ? "Conclua um treino para aparecer aqui." : "Mude o filtro acima."}</p>
+        <h3>Sem posts ainda</h3>
+        <p>Conclua um treino ou siga mais pessoas para ver novidades aqui.</p>
       </div>` : ""}
   `;
 
   // Registrar views em background (3b)
   trackFeedViews(feed);
 }
-window.setFeedFilter = function(c) { STATE.feedFilter = c; renderFeed(); };
+window.setFeedFilter = function() { STATE.feedFilter = "ALL"; renderFeed(); };
 function feedPostHTML(p, compact) {
   const liked = STATE.feedLikes[p.id];
   const isMine = STATE.profile && p.student_id === STATE.profile.id;
