@@ -32,6 +32,10 @@ assert.doesNotMatch(html, /supabase\.co\/storage\/v1\/object\/public\/branding\/
 assert.match(html, /id="brand-logo"[\s\S]*?\/assets\/icon-192\.png\?v=20260505/, "mobile header should start with the local Treinova logo while branding loads");
 assert.match(html, /id="desktop-brand-logo"[\s\S]*?\/assets\/icon-192\.png\?v=20260505/, "desktop header should start with the local Treinova logo while branding loads");
 assert.match(html, /data-fallback="\$\{fallback\}"/, "dynamic branding images should fall back to initials on load error");
+assert.match(html, /profile history timeout/, "student profile should not stay stuck forever while progress history loads");
+assert.match(html, /Seu histórico aparece aqui depois do primeiro treino concluído\./, "student profile progress card should have a useful empty state");
+assert.match(html, /<button class="mini-btn mini-btn-ghost" onclick="navTo\('feed'\)">Abrir feed<\/button>/, "student profile social counts should have a direct feed action");
+assert.doesNotMatch(html, /Light\s*\n\s*<svg[\s\S]{0,500}?Light/, "profile theme selector should not render the Light button content twice");
 
 for (const fn of ["renderHistory", "renderRanking", "renderProgress", "renderAero", "renderOneRM"]) {
   assert.ok(html.includes(`async function ${fn}(`), `${fn} should be present`);

@@ -8649,17 +8649,22 @@ async function renderProfile() {
   let performanceSummaryHTML = "";
   if (!isStaff) {
     el.innerHTML = `<div class="loading"><div class="spinner"></div>Carregando perfil...</div>`;
-    const hist = await loadMyHistory(20);
+    let hist = [];
+    let progressError = "";
+    try {
+      hist = await withTimeout(loadMyHistory(20), 9000, "profile history timeout");
+    } catch (e) {
+      console.warn("profile history failed", e);
+      progressError = e?.message || "Não foi possível atualizar seu progresso agora.";
+    }
 
-    // Calcular resumo de performance
-    if (hist.length > 0) {
-      const totalSessions = hist.length;
-      const totalVol = hist.reduce((s, r) => s + Number(r.total_volume_kg || 0), 0);
-      const streak = calculateWorkoutStreak(hist);
-      // PR mais recente: maior carga registrada nos set_logs desta sessão mais recente com carga > 0
-      const lastSession = hist[0];
-      let prText = "";
-      if (lastSession) {
+    const totalSessions = hist.length;
+    const totalVol = hist.reduce((s, r) => s + Number(r.total_volume_kg || 0), 0);
+    const streak = calculateWorkoutStreak(hist);
+    const lastSession = hist[0];
+    let prText = "";
+    if (lastSession) {
+      try {
         const { data: prLogs } = await sb.from("set_logs")
           .select("load_kg, exercise_name")
           .eq("session_id", lastSession.id)
@@ -8671,35 +8676,41 @@ async function renderProfile() {
         if (prLogs && prLogs.load_kg > 0) {
           prText = `${prLogs.exercise_name} — ${prLogs.load_kg}kg`;
         }
+      } catch (e) {
+        console.warn("profile pr summary failed", e);
       }
-      const volDisplay = totalVol >= 1000 ? `${(totalVol/1000).toFixed(1)}t` : `${Math.round(totalVol)}kg`;
-      performanceSummaryHTML = `
-        <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:4px">
-          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.7px;font-weight:800;margin-bottom:10px">Seu progresso</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:${prText?"12px":"0"}">
-            <div style="text-align:center">
-              <div style="height:24px;display:grid;place-items:center;color:${streak>0?"var(--brand)":"var(--text-3)"}">${streak > 0 ? iconSvg("flame", 22) : iconSvg("calendar", 22)}</div>
-              <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:2px">${streak}</div>
-              <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:2px">sequência</div>
-            </div>
-            <div style="text-align:center;border-left:1px solid var(--line);border-right:1px solid var(--line)">
-              <div style="height:24px;display:grid;place-items:center;color:var(--text)">${iconSvg("dumbbell", 22)}</div>
-              <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:2px">${totalSessions}</div>
-              <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:2px">treinos</div>
-            </div>
-            <div style="text-align:center">
-              <div style="height:24px;display:grid;place-items:center;color:var(--text)">${iconSvg("bolt", 22)}</div>
-              <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:2px">${volDisplay}</div>
-              <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:2px">volume total</div>
-            </div>
-          </div>
-          ${prText ? `<div style="margin-top:4px;padding:8px 10px;background:var(--brand-soft);border-radius:8px;font-size:12px;color:var(--brand);font-weight:700;display:flex;align-items:center;gap:6px">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            Última sessão: ${escape(prText)}
-          </div>` : ""}
-        </div>`;
     }
-
+    const volDisplay = totalVol >= 1000 ? `${(totalVol/1000).toFixed(1)}t` : `${Math.round(totalVol)}kg`;
+    performanceSummaryHTML = `
+      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:4px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.7px;font-weight:800">Seu progresso</div>
+          <button class="mini-btn mini-btn-ghost" onclick="navTo('feed')" style="padding:6px 9px">Ver feed</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:${prText || totalSessions === 0 || progressError ? "12px" : "0"}">
+          <div style="text-align:center;min-width:0">
+            <div style="height:24px;display:grid;place-items:center;color:${streak>0?"var(--brand)":"var(--text-3)"}">${streak > 0 ? iconSvg("flame", 22) : iconSvg("calendar", 22)}</div>
+            <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:2px">${streak}</div>
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:2px">sequência</div>
+          </div>
+          <div style="text-align:center;min-width:0;border-left:1px solid var(--line);border-right:1px solid var(--line)">
+            <div style="height:24px;display:grid;place-items:center;color:var(--text)">${iconSvg("dumbbell", 22)}</div>
+            <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:2px">${totalSessions}</div>
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:2px">treinos</div>
+          </div>
+          <div style="text-align:center;min-width:0">
+            <div style="height:24px;display:grid;place-items:center;color:var(--text)">${iconSvg("bolt", 22)}</div>
+            <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:2px">${volDisplay}</div>
+            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:2px">volume</div>
+          </div>
+        </div>
+        ${progressError ? `<div style="margin-top:4px;padding:9px 10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.24);border-radius:10px;font-size:12px;color:var(--text-2);line-height:1.35">Não foi possível atualizar agora. Tente novamente em instantes.</div>` : ""}
+        ${!progressError && totalSessions === 0 ? `<div style="margin-top:4px;padding:9px 10px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;font-size:12px;color:var(--text-2);line-height:1.4">Seu histórico aparece aqui depois do primeiro treino concluído.</div>` : ""}
+        ${prText ? `<div style="margin-top:4px;padding:8px 10px;background:var(--brand-soft);border-radius:8px;font-size:12px;color:var(--brand);font-weight:700;display:flex;align-items:center;gap:6px">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          Última sessão: ${escape(prText)}
+        </div>` : ""}
+      </div>`;
   }
 
   el.innerHTML = `
@@ -8776,7 +8787,10 @@ async function renderProfile() {
     ${!isStaff ? `
       <div class="section-title">Pessoas</div>
       <div class="card">
-        <span class="text-xs muted">${(STATE.follows.following || []).length} seguindo · ${(STATE.follows.followers || []).length} seguidores</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <span class="text-xs muted">${(STATE.follows.following || []).length} seguindo · ${(STATE.follows.followers || []).length} seguidores</span>
+          <button class="mini-btn mini-btn-ghost" onclick="navTo('feed')">Abrir feed</button>
+        </div>
       </div>
     ` : `
       <div class="section-title">Configurações</div>
