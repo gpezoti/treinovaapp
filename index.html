@@ -2141,9 +2141,8 @@ const FEED_REACTION_OPTIONS = [
   { key: "\u{1F605}", icon: "bolt", label: "Pesado" },
   { key: "\u{1F44F}", icon: "star", label: "Parabéns" }
 ];
-function feedReactionIconHTML(key, size = 18) {
-  const option = FEED_REACTION_OPTIONS.find(item => item.key === key) || FEED_REACTION_OPTIONS[0];
-  return iconSvg(option.icon, size);
+function feedReactionEmojiHTML(key, size = 18) {
+  return `<span class="feed-reaction-emoji" style="font-size:${size}px;line-height:1;display:inline-grid;place-items:center;min-width:${size}px" aria-hidden="true">${escape(key)}</span>`;
 }
 function avatarEmoji(p) { return profileInitials(p) || "U"; }
 function avatarHTML(p) {
@@ -8451,7 +8450,7 @@ function feedPostHTML(p, compact) {
             if (!r || r.count === 0) return '';
             return `<button onclick="toggleReaction('${p.id}','${em}')"
               title="${label}" aria-label="${label}" style="background:${r.mine?'var(--brand-soft)':'var(--bg-2,var(--bg-card))'};border:1px solid ${r.mine?'var(--brand)':'var(--line)'};border-radius:999px;padding:4px 8px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;color:${r.mine?'var(--brand)':'var(--text-2)'}">
-              ${feedReactionIconHTML(em, 14)} <span style="font-size:11px;font-weight:700">${r.count}</span>
+              ${feedReactionEmojiHTML(em, 15)} <span style="font-size:11px;font-weight:700">${r.count}</span>
             </button>`;
           }).filter(Boolean).join('');
           return `
@@ -8591,7 +8590,7 @@ window.openReactionPicker = function(postId) {
           const count  = myReacts[em] ? myReacts[em].count : 0;
           return `<button onclick="toggleReaction('${postId}','${em}');closeSheet()"
             style="display:flex;flex-direction:column;align-items:center;gap:4px;background:${isMine?'var(--brand-soft)':'transparent'};border:1px solid ${isMine?'var(--brand)':'var(--line)'};border-radius:12px;padding:12px 10px;cursor:pointer;min-width:54px;color:${isMine?'var(--brand)':'var(--text-2)'}">
-            <span style="height:28px;display:grid;place-items:center">${feedReactionIconHTML(em, 24)}</span>
+            <span style="height:28px;display:grid;place-items:center">${feedReactionEmojiHTML(em, 24)}</span>
             <span style="font-size:10px;color:var(--text-3)">${label}</span>
             ${count > 0 ? `<span style="font-size:11px;font-weight:700;color:var(--brand)">${count}</span>` : ''}
           </button>`;

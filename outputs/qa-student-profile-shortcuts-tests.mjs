@@ -21,7 +21,9 @@ assert.match(html, /if \(dateDiffDaysISO\(today, latest\) > 1\) return 0;/, "str
 assert.match(html, /const streak = calculateWorkoutStreak\(hist\);/, "profile progress summary must use the streak calculator");
 assert.doesNotMatch(html, /[\u{1F300}-\u{1FAFF}]/u, "visible emoji characters should be removed from source UI strings in favor of SVG icons or initials");
 assert.match(html, /function iconSvg\(name, size = 18, extra = ""\)/, "shared SVG icon helper should replace emoji decoration");
-assert.match(html, /const FEED_REACTION_OPTIONS = \[/, "feed reactions should render through icon options rather than visible emoji glyphs");
+assert.match(html, /const FEED_REACTION_OPTIONS = \[/, "feed reactions must keep their social reaction options");
+assert.match(html, /function feedReactionEmojiHTML\(key, size = 18\)/, "feed reactions should render as emojis by product choice");
+assert.doesNotMatch(html, /function feedReactionIconHTML/, "feed reactions should not use generic icons");
 
 for (const fn of ["renderHistory", "renderRanking", "renderProgress", "renderAero", "renderOneRM"]) {
   assert.ok(html.includes(`async function ${fn}(`), `${fn} should be present`);
