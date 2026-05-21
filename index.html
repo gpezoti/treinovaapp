@@ -6504,7 +6504,15 @@ function renderCoachOnboardingChecklist() {
   const hasPeriod = (STATE.students || []).some(s => Number(s.sessions_done || 0) > 0 || s.last_session_at);
   const hasPixKey = Boolean((STATE.paymentAccounts || []).find(item => item.provider === "manual_pix" && item.pix_key));
   let sharedOnce = false;
-  try { sharedOnce = localStorage.getItem("treinova_coach_shared_link_v1") === "1"; } catch(e) {}
+  try {
+    const scopedShareKey = `treinova_coach_shared_link_v1_${myId}`;
+    sharedOnce = localStorage.getItem(scopedShareKey) === "1";
+    if (!sharedOnce && localStorage.getItem("treinova_coach_shared_link_v1") === "1") {
+      localStorage.setItem(scopedShareKey, "1");
+      localStorage.removeItem("treinova_coach_shared_link_v1");
+      sharedOnce = true;
+    }
+  } catch(e) {}
   const steps = [
     { id: "pix",       label: "Cadastre sua chave PIX",            done: hasPixKey,               action: "openCoachPixOnboardingSheet()" },
     { id: "brand",     label: "Personalize sua marca",            done: customizedBrand,        action: "openBrandingSheet()" },
@@ -6550,7 +6558,11 @@ function renderCoachOnboardingChecklist() {
   </div>`;
 }
 window.trackCoachSharedLink = function() {
-  try { localStorage.setItem("treinova_coach_shared_link_v1", "1"); } catch(e) {}
+  try {
+    const myId = STATE.profile?.id || "global";
+    localStorage.setItem(`treinova_coach_shared_link_v1_${myId}`, "1");
+    localStorage.removeItem("treinova_coach_shared_link_v1");
+  } catch(e) {}
 };
 
 function renderCoachHome(el) {
@@ -6569,7 +6581,7 @@ function renderCoachHome(el) {
       <div class="greeting-card">
         <div class="greeting-eyebrow">Painel do Treinador</div>
         <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
-        <div class="greeting-sub">Vamos começar! <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg></div>
+        <div class="greeting-sub">Vamos começar. Adicione seu primeiro aluno ou compartilhe o link de cadastro.</div>
       </div>
       ${renderSelfTrainingCard()}
       <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:16px;padding:24px;text-align:center;margin-bottom:12px">
@@ -6579,7 +6591,7 @@ function renderCoachHome(el) {
         <button class="btn-primary" onclick="navTo('students'); setTimeout(openNewStudentSheet, 200);" style="max-width:280px;margin:0 auto 10px">
           + Adicionar primeiro aluno
         </button>
-        <button class="btn-ghost" onclick="openShareLinkSheet()" style="max-width:280px;margin:0 auto">
+        <button class="btn-ghost" onclick="trackCoachSharedLink(); openShareLinkSheet()" style="max-width:280px;margin:0 auto">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Compartilhar link de cadastro
         </button>
       </div>
@@ -8638,7 +8650,16 @@ async function renderProfile() {
   const isCoach = p.role === "coach";
   const isAdmin = p.role === "admin";
   const isStaff = isCoach || isAdmin;
-  if (isCoach) await loadMyPaymentAccounts();
+  let coachPaymentSettingsError = "";
+  if (isCoach) {
+    el.innerHTML = `<div class="loading"><div class="spinner"></div>Carregando perfil...</div>`;
+    try {
+      await withTimeout(loadMyPaymentAccounts({ force: true }), 9000, "coach payment settings timeout");
+    } catch (e) {
+      console.warn("coach payment settings failed", e);
+      coachPaymentSettingsError = e?.message || "Não foi possível carregar sua chave PIX agora.";
+    }
+  }
 
   // load student performance summary only. The feed is the workout history surface.
   let performanceSummaryHTML = "";
@@ -8808,7 +8829,7 @@ async function renderProfile() {
       ` : ''}
       ${isCoach ? `
         <div class="section-title">Recebimentos dos alunos</div>
-        ${renderCoachPaymentSettingsPanel()}
+        ${renderCoachPaymentSettingsPanel(coachPaymentSettingsError)}
       ` : ""}
       <div class="section-title">Identidade do app (white-label)</div>
       ${renderBrandingPanel()}
@@ -8838,7 +8859,7 @@ async function renderProfile() {
 window.signOut = signOut;
 window.applyTheme = applyTheme;
 
-function renderCoachPaymentSettingsPanel() {
+function renderCoachPaymentSettingsPanel(errorMessage = "") {
   const manualPix = (STATE.paymentAccounts || []).find(item => item.provider === "manual_pix") || {};
   const hasManualPix = Boolean(manualPix.pix_key);
   return `
@@ -8846,11 +8867,17 @@ function renderCoachPaymentSettingsPanel() {
       <p class="text-xs muted" style="margin-top:0;line-height:1.45">
         Por enquanto, os alunos pagam você diretamente por PIX manual. Cadastre a chave que eles devem copiar no financeiro.
       </p>
+      ${errorMessage ? `
+        <div class="shortcut-error" style="margin-bottom:12px">
+          <div class="title">PIX não carregou agora</div>
+          <div class="sub">Você pode continuar usando o perfil. Abra novamente esta tela para tentar atualizar os dados de recebimento.</div>
+        </div>
+      ` : ""}
       <div class="shortcut-empty" style="margin-bottom:12px">
         <div class="title">PIX manual</div>
         <div class="sub">${hasManualPix ? "Forma padrão ativa para novos lançamentos." : "Cadastre sua chave para liberar novas cobranças."}</div>
       </div>
-      <div class="card" style="margin:0 0 12px;background:var(--bg-2)">
+      <div style="margin:0 0 12px;background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:12px">
         <div class="form-group">
           <label class="form-label">Nome exibido ao aluno</label>
           <input class="input" id="coach-pix-name" value="${escape(manualPix.display_name || STATE.profile.full_name || "")}" placeholder="Nome do recebedor" />
@@ -9670,6 +9697,11 @@ window.openNewStudentSheet = function() {
   // Pré-preencher último valor de plano salvo
   setTimeout(() => {
     try {
+      const passEl = document.getElementById("ns-pass");
+      if (passEl && !passEl.value) {
+        passEl.value = generateTemporaryPassword();
+        passEl.type = "text";
+      }
       const lv = localStorage.getItem("treinova_last_plan_value");
       const ld = localStorage.getItem("treinova_last_plan_day");
       if (lv) { const el = document.getElementById("ns-plan-value"); if (el) el.value = lv; }

@@ -38,6 +38,14 @@ assert.match(html, /<button class="mini-btn mini-btn-ghost" onclick="navTo\('fee
 assert.doesNotMatch(html, /Light\s*\n\s*<svg[\s\S]{0,500}?Light/, "profile theme selector should not render the Light button content twice");
 assert.doesNotMatch(html, /onclick="navTo\('onerm'\)"[^>]*grid-column:span 2/, "1RM shortcut should stay inside the regular action grid");
 assert.match(html, /<button class="action-card" onclick="navTo\('onerm'\)">[\s\S]{0,700}<div class="action-title">Calibração 1RM<\/div>[\s\S]{0,160}<div class="action-sub">Teste de força e PRs<\/div>/, "1RM shortcut should render as a standard action card next to Financeiro");
+assert.match(html, /treinova_coach_shared_link_v1_\$\{myId\}/, "coach onboarding shared-link step should be scoped per trainer");
+assert.match(html, /const myId = STATE\.profile\?\.id \|\| "global";[\s\S]{0,220}treinova_coach_shared_link_v1_\$\{myId\}/, "share tracking should write a trainer-scoped localStorage key");
+assert.match(html, /trackCoachSharedLink\(\); openShareLinkSheet\(\)/, "empty coach home share CTA should also complete the onboarding step");
+assert.doesNotMatch(html, /Vamos começar! <svg/, "coach empty home subtitle should not include an oversized inline decoration");
+assert.match(html, /coach payment settings timeout/, "coach profile should not stay stuck forever while payment settings load");
+assert.match(html, /function renderCoachPaymentSettingsPanel\(errorMessage = ""\)/, "coach payment settings panel should accept a loading error state");
+assert.doesNotMatch(html, /<div class="card" style="margin:0 0 12px;background:var\(--bg-2\)">/, "coach payment settings should not nest card components inside cards");
+assert.match(html, /const passEl = document\.getElementById\("ns-pass"\);[\s\S]{0,160}passEl\.value = generateTemporaryPassword\(\)/, "new student sheet should prefill a valid temporary password");
 
 for (const fn of ["renderHistory", "renderRanking", "renderProgress", "renderAero", "renderOneRM"]) {
   assert.ok(html.includes(`async function ${fn}(`), `${fn} should be present`);
