@@ -7,7 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.webmanifest"), "utf8"));
 
-assert.match(html, /STATE\.profile\?\.role !== "coach"[\s\S]*Apenas professores podem aprovar/);
+assert.match(html, /STATE\.profile\?\.role !== "coach"[\s\S]*Apenas treinadores podem aprovar/);
 assert.match(html, /const canManageStatus = STATE\.profile\?\.role === "coach"/);
 assert.match(html, /const canManageStudents = STATE\.profile\.role === "coach"/);
 assert.doesNotMatch(html, /Admin aprova/);
@@ -16,7 +16,7 @@ assert.match(html, /action: "create_trainer"/);
 assert.match(html, /action: "create_student"/);
 assert.doesNotMatch(html, /tmp\.auth\.signUp/);
 assert.doesNotMatch(html, /Profile não foi criado pelo trigger/);
-assert.match(html, /const approved = STATE\.trainers\.filter\(t => t\.status !== "blocked"\)/);
+assert.match(html, /const allApproved = STATE\.trainers\.filter\(t => t\.status !== "blocked"\)/);
 assert.doesNotMatch(html, /Pendentes \(\$\{pending\.length\}\).*trainerRow/s);
 
 assert.match(html, /function removeUsersFromLocalLists\(ids\)/);

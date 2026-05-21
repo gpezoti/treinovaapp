@@ -5297,6 +5297,7 @@ let _studentSearch = "";            // busca de alunos
 let _studentTab = "all";            // aba ativa: all | active | inactive | overdue
 let _coachFinanceTab = "mine";      // aba ativa no financeiro do treinador: mine | receivables
 let _trainerSelected = new Set();
+let _trainerSearch = "";
 let _periodScrollTop = 0;           // preservar scroll da sheet de periodização
 let _editingStudentId = null;       // aluno sendo editado na periodização
 let _sheetScrollY = 0;
@@ -6748,18 +6749,28 @@ function renderAdminHome(el) {
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
       <button class="btn-ghost" onclick="navTo('trainers')">Treinadores</button>
       <button class="btn-ghost" onclick="navTo('students')">Alunos</button>
-      <button class="btn-ghost" onclick="navTo('calendar')">Periodização</button>
+      <button class="btn-ghost" onclick="navTo('payments')">Financeiro</button>
+      <button class="btn-ghost" onclick="navTo('admin-workouts')">Treinos</button>
       <button class="btn-ghost" onclick="navTo('feed')">Feed</button>
+      <button class="btn-ghost" onclick="navTo('profile')">Marca</button>
     </div>
     <div class="section-title">Atividade recente</div>
     ${STATE.feed.slice(0,5).map(p => feedPostHTML(p, true)).join("") || `<div class="empty"><p>Sem atividade ainda</p></div>`}
   `;
 }
 
+function applyTrainerFilters(trainers) {
+  const q = _trainerSearch.toLowerCase().trim();
+  if (!q) return trainers;
+  return trainers.filter(t => `${t.full_name || ""} ${t.email || ""} ${t.phone || ""}`.toLowerCase().includes(q));
+}
+
 function renderTrainers() {
   const el = document.getElementById("view-trainers");
-  const approved = STATE.trainers.filter(t => t.status !== "blocked");
-  const blocked = STATE.trainers.filter(t => t.status === "blocked");
+  const allApproved = STATE.trainers.filter(t => t.status !== "blocked");
+  const allBlocked = STATE.trainers.filter(t => t.status === "blocked");
+  const approved = applyTrainerFilters(allApproved);
+  const blocked = applyTrainerFilters(allBlocked);
   const selMode = _trainerSelected.size > 0;
 
   const bulkBar = selMode ? `
@@ -6779,9 +6790,15 @@ function renderTrainers() {
       </div>
     </div>
     <p class="view-subtitle">${approved.length} ativos · ${blocked.length} bloqueados</p>
+    <div style="position:relative;margin-bottom:10px">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="input" placeholder="Buscar treinador por nome, email ou telefone..." value="${escape(_trainerSearch)}"
+        oninput="setTrainerSearch(this.value)"
+        style="padding-left:32px;margin:0;font-size:14px" />
+    </div>
     ${bulkBar}
     <div class="section-title">Ativos (${approved.length})</div>
-    ${approved.length ? approved.map(t => trainerRow(t, selMode)).join("") : `<div class="empty"><p>Nenhum treinador ativo</p></div>`}
+    ${approved.length ? approved.map(t => trainerRow(t, selMode)).join("") : `<div class="empty"><p>${_trainerSearch ? "Nenhum treinador encontrado." : "Nenhum treinador ativo"}</p>${!_trainerSearch ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewTrainerSheet()">Novo treinador</button></div>` : ""}</div>`}
     ${blocked.length ? `<div class="section-title">Bloqueados (${blocked.length})</div>${blocked.map(t => trainerRow(t, selMode)).join("")}` : ""}
   `;
 }
@@ -6817,10 +6834,11 @@ window.toggleTrainerSelect = function(id) {
 };
 window.toggleTrainerSelectAll = function() {
   if (_trainerSelected.size > 0) { _trainerSelected.clear(); }
-  else { STATE.trainers.forEach(t => _trainerSelected.add(t.id)); }
+  else { applyTrainerFilters(STATE.trainers).forEach(t => _trainerSelected.add(t.id)); }
   renderTrainers();
 };
 window.clearTrainerSelection = function() { _trainerSelected.clear(); renderTrainers(); };
+window.setTrainerSearch = function(val) { _trainerSearch = val; _trainerSelected.clear(); renderTrainers(); };
 
 window.bulkBlockTrainers = async function() {
   if (!_trainerSelected.size) return;
@@ -6902,7 +6920,14 @@ window.openNewTrainerSheet = function() {
     <p>O usuário receberá uma conta de <b>treinador</b>. Ele vai entrar com o email e senha que você definir.</p>
     <div class="form-group"><label class="form-label">Nome completo</label><input class="input" id="nt-name" placeholder="Nome" /></div>
     <div class="form-group"><label class="form-label">Email</label><input class="input" id="nt-email" type="email" placeholder="email@exemplo.com" /></div>
-    <div class="form-group"><label class="form-label">Senha temporária</label><input class="input" id="nt-pass" type="text" placeholder="8+ caracteres, maiúscula, minúscula e número" /></div>
+    <div class="form-group">
+      <label class="form-label">Senha temporária</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="input" id="nt-pass" type="text" autocomplete="new-password" placeholder="8+ caracteres, maiúscula, minúscula e número" style="margin:0" />
+        <button type="button" class="mini-btn mini-btn-ghost" onclick="generateNewTrainerPassword()" style="flex:0 0 auto">${iconSvg("bolt", 14)} Gerar</button>
+      </div>
+      <p class="text-xs muted" style="margin:6px 0 0;">Informe esta senha ao treinador. Ele poderá trocar depois no perfil.</p>
+    </div>
     <div class="form-group">
       <label class="form-label">Carteira Asaas do treinador</label>
       <input class="input" id="nt-wallet" placeholder="walletId opcional" />
@@ -6911,6 +6936,14 @@ window.openNewTrainerSheet = function() {
     <button class="btn-primary" onclick="submitNewTrainer()">Criar treinador</button>
     <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Cancelar</button>
   `);
+  setTimeout(() => generateNewTrainerPassword(false), 40);
+};
+window.generateNewTrainerPassword = function(showFeedback = true) {
+  const input = document.getElementById("nt-pass");
+  if (!input) return;
+  input.value = generateTemporaryPassword();
+  input.type = "text";
+  if (showFeedback) showToast("Senha temporária gerada", "success");
 };
 async function getFunctionErrorMessage(error, fallback = "tente novamente") {
   try {
@@ -7019,6 +7052,10 @@ async function renderPayments() {
     el.innerHTML = `<div class="empty"><h3>Sem acesso</h3></div>`; return;
   }
 
+  el.innerHTML = `
+    <h1 class="view-title">${isAdmin ? "Financeiro · Treinadores" : "Financeiro"}</h1>
+    <div class="shortcut-loading">Carregando financeiro...</div>`;
+
   // Atualiza dados
   if (isAdmin) await loadAdminPayments();
   if (isCoach) {
@@ -7030,9 +7067,11 @@ async function renderPayments() {
 
   const items = isAdmin ? STATE.adminPayments : STATE.coachPayments;
   const overdueCount = items.filter(x => x.is_overdue).length;
-  const overdueAlunos = items.filter(x => x.is_overdue);
+  const overduePeople = items.filter(x => x.is_overdue);
+  const personLabel = isAdmin ? "treinador" : "aluno";
+  const personLabelPlural = isAdmin ? "treinadores" : "alunos";
   const totalEmAberto = items.reduce((s,x) => s + Number(x.open_amount || 0), 0);
-  const overdueTotal  = overdueAlunos.reduce((s,x) => s + Number(x.open_amount || 0), 0);
+  const overdueTotal  = overduePeople.reduce((s,x) => s + Number(x.open_amount || 0), 0);
   const totalReceita  = items.reduce((s,x) => s + Number(x.paid_amount_month || x.paid_amount_total || 0), 0);
   const taxaPagamento = items.length > 0
     ? Math.round(((items.length - overdueCount) / items.length) * 100) : 100;
@@ -7049,12 +7088,12 @@ async function renderPayments() {
   const overdueSection = overdueCount > 0 ? `
     <div id="overdue-section" class="card" style="border-color:var(--red);background:linear-gradient(135deg,var(--red-soft,#fde8e8),var(--bg-card));margin-bottom:14px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:800;color:var(--red)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${overdueCount} aluno(s) em atraso</div>
+        <div style="font-size:13px;font-weight:800;color:var(--red)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${overdueCount} ${personLabelPlural} em atraso</div>
         <div style="font-size:12px;color:var(--text-3)">${fmtMoney(overdueTotal)} total</div>
       </div>
-      ${overdueAlunos.slice(0,3).map(p => {
+      ${overduePeople.slice(0,3).map(p => {
         const pid = p[idKey];
-        const nome = escape(p.full_name || p.email || 'Aluno');
+        const nome = escape(p.full_name || p.email || personLabel);
         const pixMsg = encodeURIComponent(`Olá ${p.full_name||''}! Sua mensalidade de ${fmtMoney(p.open_amount)} está em atraso. Por favor, efetue o pagamento. Obrigado.`);
         const whatsUrl = p.phone
           ? `https://wa.me/55${(p.phone||'').replace(/\D/g,'')}?text=${pixMsg}`
@@ -7318,13 +7357,10 @@ function paymentRow(p, idKey) {
     p.open_count > 0 ? `<span class="today-pill pill-pending">${p.open_count} em aberto</span>` :
     p.paid_count > 0 ? `<span class="today-pill pill-approved">Em dia</span>` :
     `<span class="today-pill pill-off">Sem registros</span>`;
-  const avatar = p.avatar_url
-    ? `<img src="${escape(p.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"/>`
-    : escape(p.avatar_emoji || '');
   const lastPaid = p.last_paid_at ? fmtDateBR(p.last_paid_at.slice(0,10)) : "—";
   const nextDue = p.next_due ? fmtDateBR(p.next_due) : "—";
   return `<div class="list-row" onclick="openPaymentSheet('${id}','${escape(p.full_name||p.email||'').replace(/'/g,"\\'")}')" style="cursor:pointer; padding:14px;">
-    <div class="lr-avatar" style="overflow:hidden;">${avatar}</div>
+    <div class="lr-avatar" style="overflow:hidden;">${avatarHTML(p)}</div>
     <div class="lr-info">
       <div class="lr-name">${escape(p.full_name || p.email || 'Pessoa')}</div>
       <div class="lr-sub" style="margin-top:4px;">
@@ -7573,9 +7609,9 @@ window.openEditTrainerSheet = async function(id) {
       </div>
       <div class="form-group">
         <label class="form-label">Status</label>
-        <div class="role-select">
+        <div class="role-select" id="et-status-options">
           <div class="role-option ${prof.status === 'approved' ? 'active' : ''}" onclick="selectTrainerStatus('approved')">
-            <div class="ro-title">✓ Ativo</div>
+            <div class="ro-title">Ativo</div>
             <div class="ro-desc">Pode usar o app</div>
           </div>
           <div class="role-option ${prof.status === 'blocked' ? 'active' : ''}" onclick="selectTrainerStatus('blocked')">
@@ -7586,7 +7622,7 @@ window.openEditTrainerSheet = async function(id) {
       </div>
       <div class="form-group">
         <label class="form-label">Papel</label>
-        <div class="role-select">
+        <div class="role-select" id="et-role-options">
           <div class="role-option ${prof.role === 'coach' ? 'active' : ''}" onclick="selectTrainerRole('coach')">
             <div class="ro-title">Treinador</div>
             <div class="ro-desc">Gerencia alunos</div>
@@ -7633,13 +7669,13 @@ window.openEditTrainerSheet = async function(id) {
 
 window.selectTrainerStatus = function(s) {
   document.getElementById("et-tmp-status").value = s;
-  document.querySelectorAll('#sheet-content .form-group')[3].querySelectorAll('.role-option').forEach((el, i) => {
+  document.querySelectorAll('#et-status-options .role-option').forEach((el, i) => {
     el.classList.toggle('active', (i === 0 && s === 'approved') || (i === 1 && s === 'blocked'));
   });
 };
 window.selectTrainerRole = function(r) {
   document.getElementById("et-tmp-role").value = r;
-  document.querySelectorAll('#sheet-content .form-group')[4].querySelectorAll('.role-option').forEach((el, i) => {
+  document.querySelectorAll('#et-role-options .role-option').forEach((el, i) => {
     el.classList.toggle('active', (i === 0 && r === 'coach') || (i === 1 && r === 'student'));
   });
 };
