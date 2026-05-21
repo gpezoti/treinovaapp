@@ -990,7 +990,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 <div id="app" style="display:none">
   <header class="app-header">
     <div class="brand">
-      <div class="brand-logo" id="brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="" onerror="this.style.display='none'"></div>
+      <div class="brand-logo" id="brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="/assets/icon-192.png?v=20260505" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="Treinova" onerror="this.parentElement.textContent='TR';this.remove();"></div>
       <div class="brand-name">
         <span id="brand-name-text">TREINOVA</span>
         <small id="header-sub"></small>
@@ -1012,7 +1012,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 
   <aside class="desktop-sidebar" id="desktop-sidebar">
     <div class="brand">
-      <div class="brand-logo" id="desktop-brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="" onerror="this.style.display='none'"></div>
+      <div class="brand-logo" id="desktop-brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="/assets/icon-192.png?v=20260505" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="Treinova" onerror="this.parentElement.textContent='TR';this.remove();"></div>
       <div class="brand-name">
         <span id="desktop-brand-name-text">TREINOVA</span>
         <small id="desktop-header-sub"></small>
@@ -2341,8 +2341,11 @@ function applyBranding(b) {
 
 function brandLogoHTML() {
   const b = STATE.branding;
-  if (b.logo_url) return `<img src="${escape(b.logo_url)}" alt="${escape(b.app_name)}" />`;
-  return escape((b.logo_text || b.app_name.slice(0,2)).toUpperCase());
+  const fallback = escape((b.logo_text || b.app_name.slice(0,2) || "TR").toUpperCase());
+  if (b.logo_url) {
+    return `<img src="${escape(b.logo_url)}" alt="${escape(b.app_name)}" data-fallback="${fallback}" onerror="this.parentElement.textContent=this.dataset.fallback||'TR';this.remove();" />`;
+  }
+  return fallback;
 }
 
 function updateFavicon() {
@@ -13822,7 +13825,7 @@ function showOnboarding() {
       @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
     </style>
     <div class="onb-step active" data-step="1">
-      <div class="logo-circle"><img src="${branding.logo_url || 'https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg'}" alt="logo"></div>
+      <div class="logo-circle"><img src="${escape(branding.logo_url || '/assets/icon-192.png?v=20260505')}" alt="logo" onerror="this.src='/assets/icon-192.png?v=20260505'"></div>
       <h1>Bem-vindo${profile.gender === 'F' ? 'a' : ''}, ${(profile.full_name||'').split(' ')[0] || 'aluno'}</h1>
       <p>Você está no app de treino do <b>${escapeHtml(coachName)}</b>. Em 1 minuto você vai aprender o essencial.</p>
       <div class="onb-cta">
