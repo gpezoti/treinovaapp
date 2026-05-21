@@ -36,6 +36,8 @@ assert.match(html, /profile history timeout/, "student profile should not stay s
 assert.match(html, /Seu histórico aparece aqui depois do primeiro treino concluído\./, "student profile progress card should have a useful empty state");
 assert.match(html, /<button class="mini-btn mini-btn-ghost" onclick="navTo\('feed'\)">Abrir feed<\/button>/, "student profile social counts should have a direct feed action");
 assert.doesNotMatch(html, /Light\s*\n\s*<svg[\s\S]{0,500}?Light/, "profile theme selector should not render the Light button content twice");
+assert.doesNotMatch(html, /onclick="navTo\('onerm'\)"[^>]*grid-column:span 2/, "1RM shortcut should stay inside the regular action grid");
+assert.match(html, /<button class="action-card" onclick="navTo\('onerm'\)">[\s\S]{0,700}<div class="action-title">Calibração 1RM<\/div>[\s\S]{0,160}<div class="action-sub">Teste de força e PRs<\/div>/, "1RM shortcut should render as a standard action card next to Financeiro");
 
 for (const fn of ["renderHistory", "renderRanking", "renderProgress", "renderAero", "renderOneRM"]) {
   assert.ok(html.includes(`async function ${fn}(`), `${fn} should be present`);
