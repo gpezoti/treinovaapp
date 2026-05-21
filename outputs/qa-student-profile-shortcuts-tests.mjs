@@ -16,6 +16,12 @@ assert.doesNotMatch(html, /p\.url\.split\('\/'\)\.slice\(-2\)/, "delete should n
 assert.doesNotMatch(html, /Histórico \(últimos 20\)/, "student profile should not duplicate workout history because feed is the history surface");
 assert.doesNotMatch(html, /let historyHTML = "";/, "student profile should not build a dedicated workout history list");
 assert.doesNotMatch(html, /Sem treinos concluídos ainda\. Bora começar!/, "student profile should not render the old empty history block");
+assert.match(html, /function calculateWorkoutStreak\(hist, today = todayISO\(\)\)/, "student profile must use a dedicated workout streak calculator");
+assert.match(html, /if \(dateDiffDaysISO\(today, latest\) > 1\) return 0;/, "streak should only expire after more than one missed day");
+assert.match(html, /const streak = calculateWorkoutStreak\(hist\);/, "profile progress summary must use the streak calculator");
+assert.doesNotMatch(html, /[\u{1F300}-\u{1FAFF}]/u, "visible emoji characters should be removed from source UI strings in favor of SVG icons or initials");
+assert.match(html, /function iconSvg\(name, size = 18, extra = ""\)/, "shared SVG icon helper should replace emoji decoration");
+assert.match(html, /const FEED_REACTION_OPTIONS = \[/, "feed reactions should render through icon options rather than visible emoji glyphs");
 
 for (const fn of ["renderHistory", "renderRanking", "renderProgress", "renderAero", "renderOneRM"]) {
   assert.ok(html.includes(`async function ${fn}(`), `${fn} should be present`);
