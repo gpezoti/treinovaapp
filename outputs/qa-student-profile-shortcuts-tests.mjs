@@ -41,6 +41,10 @@ assert.match(html, /<button class="action-card" onclick="navTo\('onerm'\)">[\s\S
 assert.match(html, /treinova_coach_shared_link_v1_\$\{myId\}/, "coach onboarding shared-link step should be scoped per trainer");
 assert.match(html, /const myId = STATE\.profile\?\.id \|\| "global";[\s\S]{0,220}treinova_coach_shared_link_v1_\$\{myId\}/, "share tracking should write a trainer-scoped localStorage key");
 assert.match(html, /trackCoachSharedLink\(\); openShareLinkSheet\(\)/, "empty coach home share CTA should also complete the onboarding step");
+assert.match(html, /label: "Instale o app no celular"/, "coach setup checklist should include mobile app install guidance");
+assert.match(html, /action: "openCoachInstallGuide\(\)"/, "coach install checklist step should open the PWA install flow");
+assert.match(html, /window\.openCoachInstallGuide = async function\(\)/, "coach should be able to reopen the install guide after onboarding");
+assert.match(html, /treinova_coach_install_guide_v1_\$\{myId\}/, "coach install checklist completion should be scoped per trainer");
 assert.doesNotMatch(html, /Vamos começar! <svg/, "coach empty home subtitle should not include an oversized inline decoration");
 assert.match(html, /coach payment settings timeout/, "coach profile should not stay stuck forever while payment settings load");
 assert.match(html, /function renderCoachPaymentSettingsPanel\(errorMessage = ""\)/, "coach payment settings panel should accept a loading error state");

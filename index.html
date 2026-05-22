@@ -6504,6 +6504,8 @@ function renderCoachOnboardingChecklist() {
   const numStudents = (STATE.students || []).length;
   const hasPeriod = (STATE.students || []).some(s => Number(s.sessions_done || 0) > 0 || s.last_session_at);
   const hasPixKey = Boolean((STATE.paymentAccounts || []).find(item => item.provider === "manual_pix" && item.pix_key));
+  let appInstallGuided = isStandalonePWA();
+  try { appInstallGuided = appInstallGuided || localStorage.getItem(`treinova_coach_install_guide_v1_${myId}`) === "1"; } catch(e) {}
   let sharedOnce = false;
   try {
     const scopedShareKey = `treinova_coach_shared_link_v1_${myId}`;
@@ -6516,6 +6518,7 @@ function renderCoachOnboardingChecklist() {
   } catch(e) {}
   const steps = [
     { id: "pix",       label: "Cadastre sua chave PIX",            done: hasPixKey,               action: "openCoachPixOnboardingSheet()" },
+    { id: "install",   label: "Instale o app no celular",          done: appInstallGuided,        action: "openCoachInstallGuide()" },
     { id: "brand",     label: "Personalize sua marca",            done: customizedBrand,        action: "openBrandingSheet()" },
     { id: "presets",   label: "Configure tipos de periodização",  done: ownPresets > 0,         action: "openPresetEditor()" },
     { id: "workouts",  label: "Crie seu primeiro tipo de treino", done: ownWorkouts > 0,        action: "navTo('admin-workouts'); setTimeout(openCreateWorkoutTypeSheet, 200)" },
@@ -6564,6 +6567,20 @@ window.trackCoachSharedLink = function() {
     localStorage.setItem(`treinova_coach_shared_link_v1_${myId}`, "1");
     localStorage.removeItem("treinova_coach_shared_link_v1");
   } catch(e) {}
+};
+
+window.openCoachInstallGuide = async function() {
+  const myId = STATE.profile?.id || "global";
+  try { localStorage.setItem(`treinova_coach_install_guide_v1_${myId}`, "1"); } catch(e) {}
+  const result = await requestPWAInstall({ source: "coach-checklist" });
+  if (result.status === "installed" || result.status === "accepted") {
+    showToast("App instalado na tela inicial.", "success");
+  } else if (result.status === "manual-ios") {
+    showToast("Siga o guia para adicionar o app à tela inicial.", "info");
+  } else {
+    showToast("Use a opção do navegador para instalar quando estiver disponível.", "info");
+  }
+  if (STATE.view === "home") renderHome();
 };
 
 function renderCoachHome(el) {
@@ -13996,6 +14013,8 @@ function showOnboarding() {
 function showCoachOnboarding() {
   if (document.getElementById("coach-onb-overlay")) return;
   const profile = STATE.profile;
+  const installInitialState = isStandalonePWA() ? "✓ Instalado" : (isIOSDevice() ? "Ver guia" : "Tocar");
+  const installInitialColor = isStandalonePWA() ? "var(--green)" : "var(--text-3)";
   const overlay = document.createElement("div");
   overlay.id = "coach-onb-overlay";
   overlay.innerHTML = `
@@ -14039,6 +14058,19 @@ function showCoachOnboarding() {
       </div>
     </div>
     <div class="onb-step" data-step="3">
+      <h1>Instale no celular</h1>
+      <p>Coloque o Treinova na tela inicial para abrir em tela cheia e acessar o painel mais rápido na rotina da academia.</p>
+      <div class="onb-card" style="cursor:pointer" id="coach-onb-install-app">
+        <div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2" ry="2"/><path d="M11 18h2"/><path d="M12 6v8"/><path d="M9 9l3-3 3 3"/></svg></div>
+        <div style="flex:1"><div class="ti">Instalar como app</div><div class="sub">Ícone na tela inicial, navegação em tela cheia e acesso mais rápido.</div></div>
+        <div id="coach-onb-install-state" style="font-size:12px;color:${installInitialColor}">${installInitialState}</div>
+      </div>
+      <div class="onb-cta">
+        <button class="onb-skip" data-act="back">Voltar</button>
+        <button class="onb-prim" data-act="next">Continuar</button>
+      </div>
+    </div>
+    <div class="onb-step" data-step="4">
       <h1>Pronto para começar?</h1>
       <p>Adicione seu primeiro aluno agora — leva menos de 1 minuto.</p>
       <div class="onb-card" style="cursor:pointer" id="coach-onb-add-student">
@@ -14060,12 +14092,13 @@ function showCoachOnboarding() {
       <div class="onb-dot active"></div>
       <div class="onb-dot"></div>
       <div class="onb-dot"></div>
+      <div class="onb-dot"></div>
     </div>`;
   document.body.appendChild(overlay);
 
   let stepIdx = 1;
   function go(idx) {
-    stepIdx = Math.max(1, Math.min(3, idx));
+    stepIdx = Math.max(1, Math.min(4, idx));
     overlay.querySelectorAll(".onb-step").forEach(s => s.classList.remove("active"));
     overlay.querySelector(`.onb-step[data-step="${stepIdx}"]`).classList.add("active");
     overlay.querySelectorAll(".onb-dot").forEach((d,i) => d.classList.toggle("active", i === stepIdx - 1));
@@ -14087,12 +14120,34 @@ function showCoachOnboarding() {
       else if (a === "skip" || a === "finish") { await finish(); }
       return;
     }
-    if (e.target.closest("#coach-onb-add-student")) {
+    if (e.target.closest("#coach-onb-install-app")) {
+      const st = document.getElementById("coach-onb-install-state");
+      if (st) {
+        st.textContent = "Abrindo...";
+        st.style.color = "var(--text-2)";
+      }
+      try { localStorage.setItem(`treinova_coach_install_guide_v1_${STATE.profile?.id || "global"}`, "1"); } catch(err) {}
+      const result = await requestPWAInstall({ source: "coach-onboarding" });
+      if (!st) return;
+      if (result.status === "installed" || result.status === "accepted") {
+        st.textContent = "✓ Instalado";
+        st.style.color = "var(--green)";
+      } else if (result.status === "manual-ios") {
+        st.textContent = "Siga o guia";
+        st.style.color = "var(--brand)";
+        showToast("Siga os passos para adicionar o app à tela inicial.", "info");
+      } else {
+        st.textContent = "Ver no navegador";
+        st.style.color = "var(--text-3)";
+        showToast("Use a opção do navegador para instalar quando estiver disponível.", "info");
+      }
+    } else if (e.target.closest("#coach-onb-add-student")) {
       await finish();
       navTo("students");
       setTimeout(openNewStudentSheet, 300);
     } else if (e.target.closest("#coach-onb-share-link")) {
       await finish();
+      trackCoachSharedLink();
       openShareLinkSheet();
     }
   });

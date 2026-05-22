@@ -20,5 +20,11 @@ assert.match(html, /const installInitialState = isStandalonePWA\(\) \? "✓ Inst
 assert.match(html, /const result = await requestPWAInstall\(\{ source: "student-onboarding" \}\);/);
 assert.match(html, /st\.textContent = "Siga o guia";/);
 assert.match(html, /Siga os passos para adicionar o app à tela inicial\./);
+assert.match(html, /function showCoachOnboarding\(\)/);
+assert.match(html, /id="coach-onb-install-app"/);
+assert.match(html, /id="coach-onb-install-state"/);
+assert.match(html, /const result = await requestPWAInstall\(\{ source: "coach-onboarding" \}\);/);
+assert.match(html, /Math\.min\(4, idx\)/);
+assert.match(html, /<div class="onb-step" data-step="4">/);
 
 console.log("qa-student-onboarding-install-tests ok");
