@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#07080b" />
+<meta name="description" content="Treinova é o app white-label para personal trainers gerenciarem alunos, treinos, periodização, evolução e financeiro com experiência premium no celular." />
+<meta name="robots" content="index,follow" />
+<meta property="og:title" content="Treinova — App white-label para personal trainers" />
+<meta property="og:description" content="Seu app. Sua marca. Seus alunos treinando com mais clareza, acompanhamento e percepção premium." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://treinovaapp.com/app" />
+<meta property="og:image" content="https://treinovaapp.vercel.app/assets/icon-512.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="canonical" href="https://treinovaapp.com/app" />
+<link rel="icon" href="/assets/favicon.ico" />
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<title>Treinova — App white-label para personal trainers</title>
+<style>
+* { box-sizing: border-box; }
+:root {
+  --bg: #07080b;
+  --bg-2: #0d1016;
+  --panel: #111620;
+  --panel-2: #151b26;
+  --line: #29303d;
+  --line-2: #3b4555;
+  --text: #f8fafc;
+  --muted: #b9c3d4;
+  --soft: #8691a3;
+  --brand: #00b4ff;
+  --brand-dark: #0084c9;
+  --green: #25dd85;
+  --amber: #ffcc4d;
+  --coral: #ff6b5f;
+  --ink: #00121e;
+  --shadow: 0 26px 70px rgba(0,0,0,.45);
+}
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+body::selection { background: rgba(0,180,255,.3); }
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+button, a { -webkit-tap-highlight-color: transparent; }
+.wrap { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: rgba(7,8,11,.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.header-inner { min-height: 72px; display: flex; align-items: center; gap: 18px; }
+.brand { display: inline-flex; align-items: center; gap: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .8px; }
+.brand img { width: 38px; height: 38px; border-radius: 8px; box-shadow: 0 12px 24px rgba(0,180,255,.24); }
+.brand span { font-size: 15px; }
+.nav { margin-left: auto; display: flex; align-items: center; gap: 22px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.nav a:hover { color: var(--text); }
+.login-link {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+.primary-cta, .secondary-cta {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+.primary-cta {
+  padding: 0 20px;
+  background: var(--brand);
+  color: var(--ink);
+  text-transform: uppercase;
+  box-shadow: 0 16px 36px rgba(0,180,255,.25);
+}
+.secondary-cta { padding: 0 18px; border: 1px solid var(--line-2); color: var(--text); background: rgba(17,22,32,.8); }
+.primary-cta:hover, .secondary-cta:hover, .login-link:hover { transform: translateY(-1px); }
+.primary-cta svg, .secondary-cta svg { width: 18px; height: 18px; }
+
+.hero {
+  position: relative;
+  min-height: calc(86svh - 72px);
+  display: flex;
+  align-items: center;
+  padding: 78px 0 66px;
+  isolation: isolate;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.hero-media {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+}
+.hero-media::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(90deg, rgba(7,8,11,.98) 0%, rgba(7,8,11,.90) 34%, rgba(7,8,11,.52) 66%, rgba(7,8,11,.90) 100%),
+    linear-gradient(180deg, rgba(7,8,11,.20) 0%, rgba(7,8,11,.98) 100%),
+    url("/assets/exercises/exact/agachamento_livre_com_barra.webp");
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.04);
+}
+.hero-content { max-width: 680px; position: relative; z-index: 2; }
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid rgba(37,221,133,.36);
+  border-radius: 999px;
+  color: #9cf5c7;
+  background: rgba(37,221,133,.10);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .9px;
+}
+.kicker svg { width: 15px; height: 15px; }
+h1 {
+  margin: 18px 0 18px;
+  max-width: 760px;
+  font-size: 62px;
+  line-height: 1.02;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+h1 span { color: var(--brand); }
+.hero-sub {
+  max-width: 620px;
+  margin: 0 0 30px;
+  color: #d5ddeb;
+  font-size: 18px;
+  line-height: 1.58;
+}
+.hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
+.proof-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.proof-row span {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 999px;
+  background: rgba(7,8,11,.70);
+  color: #dfe6f2;
+  font-size: 12px;
+  font-weight: 800;
+}
+.proof-row svg { width: 15px; height: 15px; color: var(--green); }
+.hero-product {
+  position: absolute;
+  right: max(24px, calc((100vw - 1180px) / 2));
+  bottom: 34px;
+  width: min(500px, 42vw);
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr .78fr;
+  align-items: end;
+  gap: 16px;
+  pointer-events: none;
+}
+.phone {
+  min-width: 0;
+  aspect-ratio: 9 / 18.5;
+  border-radius: 28px;
+  padding: 10px;
+  background: linear-gradient(145deg, #2a3140, #07080b);
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: var(--shadow);
+}
+.phone.small { transform: translateY(28px); opacity: .92; }
+.screen {
+  height: 100%;
+  overflow: hidden;
+  border-radius: 21px;
+  border: 1px solid #31394a;
+  background: #0a0e1a;
+  padding: 18px 12px 12px;
+}
+.screen-top { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid #1f2942; }
+.screen-top img { width: 24px; height: 24px; border-radius: 6px; }
+.screen-top strong { font-size: 10px; letter-spacing: .7px; }
+.screen-title { margin-top: 14px; font-size: 16px; font-weight: 900; }
+.screen-muted { margin-top: 4px; color: #8d98ad; font-size: 10px; line-height: 1.35; }
+.mock-card { margin-top: 10px; border: 1px solid #253047; border-radius: 8px; background: #111827; padding: 10px; }
+.mock-card strong { display: block; font-size: 11px; }
+.mock-card small { display: block; color: #8d98ad; font-size: 9px; margin-top: 2px; }
+.mock-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.mock-stat { border: 1px solid #253047; border-radius: 8px; background: #0d1320; padding: 8px 5px; text-align: center; }
+.mock-stat b { display: block; color: var(--brand); font-size: 16px; }
+.mock-stat span { display: block; color: #7f8aa0; font-size: 7px; text-transform: uppercase; margin-top: 2px; }
+.mock-img { width: 100%; aspect-ratio: 16 / 11; object-fit: cover; border-radius: 8px; border: 1px solid #253047; margin-top: 10px; }
+
+.strip { background: #0d0f14; border-bottom: 1px solid rgba(255,255,255,.08); }
+.strip-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: rgba(255,255,255,.08); }
+.strip-item { background: #0d0f14; padding: 20px; }
+.strip-item b { display: block; font-size: 24px; color: var(--text); }
+.strip-item span { display: block; color: var(--soft); font-size: 12px; font-weight: 800; text-transform: uppercase; margin-top: 4px; }
+.section { padding: 76px 0; background: var(--bg); }
+.section.alt { background: #0d0f14; border-top: 1px solid rgba(255,255,255,.08); border-bottom: 1px solid rgba(255,255,255,.08); }
+.section-head { max-width: 760px; margin-bottom: 32px; }
+.section-head.center { margin-left: auto; margin-right: auto; text-align: center; }
+.eyebrow { color: var(--green); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
+.section-head h2 { margin: 9px 0 10px; font-size: 38px; line-height: 1.12; font-weight: 900; letter-spacing: 0; }
+.section-head h2 span { color: var(--brand); }
+.section-head p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.58; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 20px;
+}
+.card h3 { margin: 13px 0 8px; font-size: 18px; line-height: 1.18; }
+.card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--brand);
+}
+.icon.green { background: var(--green); }
+.icon.amber { background: var(--amber); }
+.icon.coral { background: var(--coral); color: #fff; }
+.icon svg { width: 23px; height: 23px; }
+.role-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+.role-panel { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 24px; }
+.role-panel h3 { margin: 0 0 12px; font-size: 24px; }
+.check-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; color: #dde6f4; font-size: 14px; line-height: 1.45; }
+.check-list li { display: grid; grid-template-columns: 20px 1fr; gap: 9px; align-items: start; }
+.check-list svg { width: 18px; height: 18px; margin-top: 1px; color: var(--green); }
+.showcase { display: grid; grid-template-columns: .86fr 1fr; gap: 38px; align-items: center; }
+.visual-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.visual-shot { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
+.visual-shot img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.visual-shot figcaption { padding: 10px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.price {
+  max-width: 540px;
+  margin: 0 auto;
+  border: 1px solid rgba(0,180,255,.42);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #111620, #0b0d12);
+  padding: 28px;
+  box-shadow: 0 26px 70px rgba(0,180,255,.12);
+}
+.price-label {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,204,77,.34);
+  background: rgba(255,204,77,.12);
+  color: #ffdb78;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.price h3 { margin: 18px 0 8px; font-size: 28px; }
+.price p { color: var(--muted); margin: 0; line-height: 1.5; }
+.price-value { display: flex; align-items: baseline; gap: 5px; margin: 18px 0; }
+.price-value b { font-size: 48px; line-height: 1; }
+.price-value span { color: var(--soft); font-weight: 800; }
+.faq { max-width: 840px; margin: 0 auto; display: grid; gap: 10px; }
+.faq details { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); overflow: hidden; }
+.faq summary { cursor: pointer; padding: 18px 20px; font-weight: 900; }
+.faq div { padding: 0 20px 18px; color: var(--muted); line-height: 1.58; font-size: 14px; }
+.final-cta {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background-image:
+    linear-gradient(90deg, rgba(7,8,11,.96), rgba(7,8,11,.72)),
+    url("/assets/exercises/exact/hip_thrust_com_barra.webp");
+  background-size: cover;
+  background-position: center;
+  padding: 44px;
+}
+.final-cta h2 { max-width: 680px; margin: 0 0 12px; font-size: 36px; line-height: 1.12; letter-spacing: 0; }
+.final-cta p { max-width: 580px; margin: 0 0 24px; color: var(--muted); line-height: 1.58; }
+.footer { padding: 36px 0; border-top: 1px solid rgba(255,255,255,.08); background: #07080b; color: var(--soft); font-size: 13px; }
+.footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.footer-links { display: flex; gap: 16px; flex-wrap: wrap; }
+.footer a { color: #d8e2f0; font-weight: 800; }
+.wa-float {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 50;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: #21c063;
+  box-shadow: 0 16px 38px rgba(33,192,99,.34);
+}
+.wa-float svg { width: 28px; height: 28px; }
+@media (max-width: 1040px) {
+  .hero-product { opacity: .36; width: min(470px, 54vw); }
+  .hero-content { max-width: 700px; }
+}
+@media (max-width: 820px) {
+  .wrap { width: min(100% - 28px, 1180px); }
+  .header-inner { min-height: 64px; }
+  .nav a:not(.primary-cta) { display: none; }
+  .login-link { display: none; }
+  .hero { min-height: auto; padding: 54px 0 46px; }
+  .hero-media::before {
+    background-image:
+      linear-gradient(180deg, rgba(7,8,11,.70), rgba(7,8,11,.98)),
+      url("/assets/exercises/exact/agachamento_livre_com_barra.webp");
+  }
+  h1 { font-size: 38px; line-height: 1.06; }
+  .hero-sub { font-size: 16px; }
+  .hero-actions a { width: 100%; }
+  .hero-product { position: relative; right: auto; bottom: auto; width: 100%; opacity: 1; margin-top: 30px; grid-template-columns: 1fr 1fr; }
+  .phone { border-radius: 20px; padding: 7px; }
+  .phone.small { transform: translateY(16px); }
+  .strip-grid, .grid-3, .grid-4, .role-layout, .showcase { grid-template-columns: 1fr; }
+  .section { padding: 54px 0; }
+  .section-head h2, .final-cta h2 { font-size: 30px; }
+  .card, .role-panel, .price, .final-cta { padding: 18px; }
+  .wa-float { right: 14px; bottom: 14px; width: 52px; height: 52px; }
+}
+@media (max-width: 430px) {
+  .brand span { display: none; }
+  .primary-cta { padding: 0 12px; font-size: 12px; }
+  h1 { font-size: 34px; }
+  .hero-product { grid-template-columns: 1fr; }
+  .phone.small { display: none; }
+  .visual-board { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a href="#top" class="brand" aria-label="Treinova">
+      <img src="/assets/icon-192.png" alt="" />
+      <span>Treinova</span>
+    </a>
+    <nav class="nav" aria-label="Navegação principal">
+      <a href="#recursos">Recursos</a>
+      <a href="#perfis">Perfis</a>
+      <a href="#preco">Preço</a>
+      <a href="https://treinovaapp.vercel.app/" class="login-link">Entrar no app</a>
+      <a class="primary-cta" href="https://wa.me/5535988477254?text=Oi!%20Quero%20uma%20demonstra%C3%A7%C3%A3o%20do%20Treinova" target="_blank" rel="noopener">
+        Demonstração
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="hero-media" aria-hidden="true"></div>
+    <div class="wrap">
+      <div class="hero-content">
+        <span class="kicker">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 10-13h-7l1-7Z"/></svg>
+          White-label para personal trainers
+        </span>
+        <h1>App white-label para personal trainers</h1>
+        <p class="hero-sub">Tenha um app com sua marca para entregar treinos, acompanhar evolução, organizar alunos e controlar pagamentos sem depender de planilhas, PDFs e conversas perdidas.</p>
+        <div class="hero-actions">
+          <a class="primary-cta" href="https://wa.me/5535988477254?text=Oi!%20Quero%20uma%20demonstra%C3%A7%C3%A3o%20do%20Treinova" target="_blank" rel="noopener">
+            Quero uma demonstração
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </a>
+          <a class="secondary-cta" href="#recursos">
+            Ver recursos
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </a>
+        </div>
+        <div class="proof-row" aria-label="Diferenciais">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg> Sua marca no centro</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg> Mobile first</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg> Treino + financeiro</span>
+        </div>
+      </div>
+    </div>
+    <div class="hero-product" aria-hidden="true">
+      <div class="phone">
+        <div class="screen">
+          <div class="screen-top">
+            <img src="/assets/icon-192.png" alt="" />
+            <strong>TREINOVA</strong>
+          </div>
+          <div class="screen-title">Hoje</div>
+          <div class="screen-muted">Aluno com treino do dia, descanso e histórico de cargas.</div>
+          <img class="mock-img" src="/assets/exercises/exact/rosca_concentrada.webp" alt="" />
+          <div class="mock-card">
+            <strong>Rosca concentrada</strong>
+            <small>4 séries · 12-15 reps · pausa 1:00</small>
+          </div>
+          <div class="mock-grid">
+            <div class="mock-stat"><b>12</b><span>reps</span></div>
+            <div class="mock-stat"><b>18kg</b><span>carga</span></div>
+            <div class="mock-stat"><b>1:00</b><span>pausa</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="phone small">
+        <div class="screen">
+          <div class="screen-top">
+            <img src="/assets/icon-192.png" alt="" />
+            <strong>PROFESSOR</strong>
+          </div>
+          <div class="screen-title">Alunos</div>
+          <div class="screen-muted">Visão rápida para agir antes do aluno sumir.</div>
+          <div class="mock-card"><strong>32 ativos</strong><small>7 treinaram hoje</small></div>
+          <div class="mock-card"><strong>5 inativos</strong><small>Mensagem em massa</small></div>
+          <div class="mock-card"><strong>3 pendências</strong><small>Financeiro organizado</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="strip" aria-label="Resumo do produto">
+    <div class="wrap strip-grid">
+      <div class="strip-item"><b>3 perfis</b><span>Admin, professor e aluno</span></div>
+      <div class="strip-item"><b>1 app</b><span>Treino, evolução e pagamentos</span></div>
+      <div class="strip-item"><b>100%</b><span>Mobile first</span></div>
+      <div class="strip-item"><b>White-label</b><span>Sua marca e suas cores</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head center">
+        <span class="eyebrow">O problema</span>
+        <h2>Planilha, PDF e WhatsApp reduzem sua percepção de valor.</h2>
+        <p>O aluno contrata acompanhamento, mas recebe uma operação fragmentada. O Treinova organiza a experiência para parecer profissional desde o primeiro acesso.</p>
+      </div>
+      <div class="grid-3">
+        <article class="card">
+          <div class="icon coral">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+          </div>
+          <h3>Conversas viram bagunça</h3>
+          <p>Treino, dúvida, pagamento e vídeo ficam misturados. Isso atrasa atendimento e passa menos profissionalismo.</p>
+        </article>
+        <article class="card">
+          <div class="icon amber">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 15h18"/></svg>
+          </div>
+          <h3>Planilha não engaja</h3>
+          <p>O aluno não vê progresso com clareza e o professor perde tempo atualizando informação manualmente.</p>
+        </article>
+        <article class="card">
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+          </div>
+          <h3>PDF não acompanha evolução</h3>
+          <p>Sem histórico de cargas, feedback de sessão e lembretes, a experiência fica parada no tempo.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt" id="recursos">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Recursos</span>
+        <h2>Uma operação premium no celular do aluno.</h2>
+        <p>O professor ganha controle. O aluno ganha clareza. O admin acompanha a operação sem improviso.</p>
+      </div>
+      <div class="grid-4">
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/></svg></div>
+          <h3>Treinos completos</h3>
+          <p>Séries, repetições, pausa, cadência, observações, imagens e vídeos por exercício.</p>
+        </article>
+        <article class="card">
+          <div class="icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg></div>
+          <h3>Evolução visível</h3>
+          <p>Histórico de carga e sessão para o aluno perceber progresso e continuar engajado.</p>
+        </article>
+        <article class="card">
+          <div class="icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4"/><path d="M16 2v4"/><path d="M3 10h18"/></svg></div>
+          <h3>Periodização</h3>
+          <p>Planejamento por semanas e intensidades para organizar a entrega do treino.</p>
+        </article>
+        <article class="card">
+          <div class="icon coral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <h3>Financeiro</h3>
+          <p>Controle de mensalidade, status de pagamento, PIX e bloqueio de inadimplência.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="perfis">
+    <div class="wrap role-layout">
+      <div class="role-panel">
+        <span class="eyebrow">Professor</span>
+        <h3>Menos operação manual, mais acompanhamento.</h3>
+        <ul class="check-list">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>Cadastro e aprovação de alunos com visão de status.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>Montagem de treino com biblioteca de exercícios e mídia.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>Alertas de inatividade, pendências e fim de periodização.</span></li>
+        </ul>
+      </div>
+      <div class="role-panel">
+        <span class="eyebrow">Aluno</span>
+        <h3>Treino claro, bonito e fácil de seguir.</h3>
+        <ul class="check-list">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>Treino do dia, descanso, execução e histórico em poucos toques.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>Fotos, vídeos e observações para reduzir dúvida na academia.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>Percepção premium com a marca do professor em destaque.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt">
+    <div class="wrap showcase">
+      <div class="section-head">
+        <span class="eyebrow">Experiência visual</span>
+        <h2>O exercício deixa de ser texto e vira orientação.</h2>
+        <p>Imagens e estrutura visual ajudam o aluno a entender o treino sem ficar voltando para o WhatsApp. Mais clareza, menos ruído, mais valor percebido.</p>
+        <a class="secondary-cta" href="https://treinovaapp.vercel.app/" target="_blank" rel="noopener">Entrar no app</a>
+      </div>
+      <div class="visual-board">
+        <figure class="visual-shot">
+          <img src="/assets/exercises/exact/agachamento_livre_com_barra.webp" alt="Exercício de agachamento no app Treinova" />
+          <figcaption>Treinos com instrução visual</figcaption>
+        </figure>
+        <figure class="visual-shot">
+          <img src="/assets/exercises/exact/puxada_frontal_pegada_aberta.webp" alt="Exercício de puxada no app Treinova" />
+          <figcaption>Biblioteca por grupo muscular</figcaption>
+        </figure>
+        <figure class="visual-shot">
+          <img src="/assets/exercises/exact/hip_thrust_com_barra.webp" alt="Exercício de hip thrust no app Treinova" />
+          <figcaption>Execução mais clara</figcaption>
+        </figure>
+        <figure class="visual-shot">
+          <img src="/assets/exercises/exact/desenvolvimento_com_halteres.webp" alt="Exercício de desenvolvimento no app Treinova" />
+          <figcaption>App com aparência premium</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="preco">
+    <div class="wrap">
+      <div class="section-head center">
+        <span class="eyebrow">Plano simples</span>
+        <h2>Comece com um app que valoriza seu serviço.</h2>
+        <p>Um plano para tirar sua operação do improviso e entregar uma experiência mais profissional.</p>
+      </div>
+      <div class="price">
+        <span class="price-label">Treinova Pro</span>
+        <h3>White-label para personal trainers</h3>
+        <p>Marca, alunos, treinos, periodização, financeiro, notificações e suporte humano.</p>
+        <div class="price-value"><span>R$</span><b>49,90</b><span>/mês</span></div>
+        <ul class="check-list">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>Alunos ilimitados no plano.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>Sua marca, cores e identidade no app.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>7 dias para testar e cancelar quando quiser.</span></li>
+        </ul>
+        <div style="height:18px"></div>
+        <a class="primary-cta" href="https://wa.me/5535988477254?text=Oi!%20Quero%20assinar%20o%20Treinova%20Pro" target="_blank" rel="noopener">Quero começar</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt">
+    <div class="wrap">
+      <div class="section-head center">
+        <span class="eyebrow">Dúvidas comuns</span>
+        <h2>Perguntas frequentes</h2>
+      </div>
+      <div class="faq">
+        <details open>
+          <summary>O Treinova substitui planilhas e PDFs?</summary>
+          <div>Sim. O professor cria treinos no app e o aluno acompanha pelo celular com exercícios, séries, pausa, histórico e orientações.</div>
+        </details>
+        <details>
+          <summary>O aluno precisa instalar pela loja?</summary>
+          <div>Não. O Treinova funciona como PWA: abre no navegador e pode ser adicionado à tela inicial, com experiência parecida com app nativo.</div>
+        </details>
+        <details>
+          <summary>Consigo usar minha própria marca?</summary>
+          <div>Sim. A proposta é white-label: nome, logo, cores e identidade do professor aparecem na experiência do aluno.</div>
+        </details>
+        <details>
+          <summary>Tem financeiro integrado?</summary>
+          <div>Sim. O professor consegue organizar mensalidades, status de pagamento e inadimplência junto da operação de treino.</div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap final-cta">
+      <h2>Seu treino merece parecer tão profissional quanto o seu atendimento.</h2>
+      <p>Mostre para seus alunos um app com sua marca, organização real e experiência mobile premium.</p>
+      <a class="primary-cta" href="https://wa.me/5535988477254?text=Oi!%20Quero%20melhorar%20minha%20opera%C3%A7%C3%A3o%20com%20o%20Treinova" target="_blank" rel="noopener">
+        Falar com o Treinova
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <a href="#top" class="brand">
+      <img src="/assets/icon-192.png" alt="" />
+      <span>Treinova</span>
+    </a>
+    <div class="footer-links">
+      <a href="mailto:suporte@treinovaapp.com">suporte@treinovaapp.com</a>
+      <a href="https://www.instagram.com/treinovapp/" target="_blank" rel="noopener">@treinovapp</a>
+      <a href="https://treinovaapp.vercel.app/" target="_blank" rel="noopener">Entrar no app</a>
+    </div>
+    <span>© 2026 Treinova</span>
+  </div>
+</footer>
+
+<a class="wa-float" href="https://wa.me/5535988477254?text=Oi!%20Vim%20da%20landing%20do%20Treinova" target="_blank" rel="noopener" aria-label="Falar no WhatsApp">
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.8-.9-2-.9-.3-.1-.5-.2-.7.1-.2.3-.8 1-.9 1.2-.2.2-.4.2-.7.1-.3-.2-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5.1-.2.1-.4 0-.5-.1-.2-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.1.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2-1.4.3-.7.3-1.3.2-1.4-.1-.1-.3-.2-.6-.4ZM12 22a10 10 0 0 1-5.1-1.4L2 22l1.4-4.8A10 10 0 1 1 12 22Zm0-18.3a8.3 8.3 0 0 0-7.1 12.6l.3.5-.8 2.8 2.9-.8.5.3A8.3 8.3 0 1 0 12 3.7Z"/></svg>
+</a>
+</body>
+</html>
