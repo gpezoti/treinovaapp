@@ -9697,6 +9697,17 @@ window.sendBulkMessage = async function(ids) {
   renderStudents();
 };
 
+// Toggle visibilidade da senha no form de novo aluno (sem SVG no onclick)
+window._nsTogglePass = function(btn) {
+  const inp = document.getElementById("ns-pass");
+  if (!inp) return;
+  const showing = inp.type !== "password";
+  inp.type = showing ? "password" : "text";
+  // Feedback visual: ícone fica menos opaco quando visível
+  btn.style.color = showing ? "var(--text-3)" : "var(--brand)";
+  btn.title = showing ? "Mostrar senha" : "Ocultar senha";
+};
+
 window.openNewStudentSheet = function() {
   if (STATE.profile?.role !== "coach") {
     showToast("Apenas treinadores podem criar alunos.", "error");
@@ -9713,7 +9724,7 @@ window.openNewStudentSheet = function() {
       <div style="display:flex;gap:8px;align-items:center">
         <div style="flex:1;position:relative">
           <input class="input" id="ns-pass" type="password" placeholder="8+ caracteres, maiúscula, minúscula e número" style="padding-right:44px" />
-          <button type="button" onclick="(function(){const i=document.getElementById('ns-pass');i.type=i.type==='password'?'text':'password';this.innerHTML=i.type==='password'?'<svg viewBox=\\'0 0 24 24\\' width=\\'18\\' height=\\'18\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\'><path d=\\'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z\\'/><circle cx=\\'12\\' cy=\\'12\\' r=\\'3\\'/></svg>':'<svg viewBox=\\'0 0 24 24\\' width=\\'18\\' height=\\'18\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\'><path d=\\'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94\\'/><path d=\\'M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19\\'/><line x1=\\'1\\' y1=\\'1\\' x2=\\'23\\' y2=\\'23\\'/></svg>'}).call(this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--text-3);cursor:pointer;padding:4px;display:flex;align-items:center">
+          <button type="button" id="ns-pass-toggle" onclick="_nsTogglePass(this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--text-3);cursor:pointer;padding:4px;display:flex;align-items:center" title="Mostrar/ocultar senha">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
