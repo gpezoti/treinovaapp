@@ -125,7 +125,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   background-image:
     linear-gradient(90deg, rgba(7,8,11,.98) 0%, rgba(7,8,11,.90) 34%, rgba(7,8,11,.52) 66%, rgba(7,8,11,.90) 100%),
     linear-gradient(180deg, rgba(7,8,11,.20) 0%, rgba(7,8,11,.98) 100%),
-    url("/assets/exercises/exact/agachamento_livre_com_barra.webp");
+    url("/assets/exercises/exact/puxada_frontal_pegada_aberta.webp");
   background-size: cover;
   background-position: center;
   transform: scale(1.04);
@@ -193,7 +193,7 @@ h1 span { color: var(--brand); }
 }
 .phone {
   min-width: 0;
-  aspect-ratio: 9 / 18.5;
+  aspect-ratio: 9 / 17;
   border-radius: 28px;
   padding: 10px;
   background: linear-gradient(145deg, #2a3140, #07080b);
@@ -209,6 +209,8 @@ h1 span { color: var(--brand); }
   background: #0a0e1a;
   padding: 18px 12px 12px;
 }
+.screen.real { padding: 0; background: #07101c; }
+.app-shot { width: 100%; height: 100%; object-fit: contain; object-position: top center; background: #07101c; }
 .screen-top { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid #1f2942; }
 .screen-top img { width: 24px; height: 24px; border-radius: 6px; }
 .screen-top strong { font-size: 10px; letter-spacing: .7px; }
@@ -230,6 +232,7 @@ h1 span { color: var(--brand); }
 .strip-item span { display: block; color: var(--soft); font-size: 12px; font-weight: 800; text-transform: uppercase; margin-top: 4px; }
 .section { padding: 76px 0; background: var(--bg); }
 .section.alt { background: #0d0f14; border-top: 1px solid rgba(255,255,255,.08); border-bottom: 1px solid rgba(255,255,255,.08); }
+#recursos, #perfis, #feed, #preco { scroll-margin-top: 86px; }
 .section-head { max-width: 760px; margin-bottom: 32px; }
 .section-head.center { margin-left: auto; margin-right: auto; text-align: center; }
 .eyebrow { color: var(--green); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
@@ -267,6 +270,13 @@ h1 span { color: var(--brand); }
 .check-list li { display: grid; grid-template-columns: 20px 1fr; gap: 9px; align-items: start; }
 .check-list svg { width: 18px; height: 18px; margin-top: 1px; color: var(--green); }
 .showcase { display: grid; grid-template-columns: .86fr 1fr; gap: 38px; align-items: center; }
+.feed-showcase { display: grid; grid-template-columns: .92fr 1fr; gap: 38px; align-items: center; }
+.feed-phones { min-width: 0; display: grid; grid-template-columns: .82fr 1fr; gap: 16px; align-items: center; }
+.feed-phones .phone:first-child { transform: translateY(24px); opacity: .88; }
+.feed-points { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
+.feed-point { border: 1px solid var(--line); border-radius: 8px; background: rgba(17,22,32,.72); padding: 14px; }
+.feed-point b { display: block; color: var(--text); font-size: 14px; margin-bottom: 5px; }
+.feed-point span { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .visual-board {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -309,17 +319,32 @@ h1 span { color: var(--brand); }
 .final-cta {
   position: relative;
   overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 26px;
+  align-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
   background-image:
-    linear-gradient(90deg, rgba(7,8,11,.96), rgba(7,8,11,.72)),
-    url("/assets/exercises/exact/hip_thrust_com_barra.webp");
+    linear-gradient(90deg, rgba(7,8,11,.96), rgba(7,8,11,.66)),
+    url("/assets/exercises/exact/puxada_frontal_pegada_aberta.webp");
   background-size: cover;
   background-position: center;
   padding: 44px;
 }
+.final-copy { position: relative; z-index: 1; }
 .final-cta h2 { max-width: 680px; margin: 0 0 12px; font-size: 36px; line-height: 1.12; letter-spacing: 0; }
 .final-cta p { max-width: 580px; margin: 0 0 24px; color: var(--muted); line-height: 1.58; }
+.final-art {
+  position: relative;
+  z-index: 1;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 10px;
+  background: rgba(7,8,11,.52);
+  padding: 10px;
+  box-shadow: var(--shadow);
+}
+.final-art img { width: 100%; aspect-ratio: 9 / 12.6; object-fit: cover; object-position: top center; border-radius: 8px; border: 1px solid #2b3446; }
 .footer { padding: 36px 0; border-top: 1px solid rgba(255,255,255,.08); background: #07080b; color: var(--soft); font-size: 13px; }
 .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .footer-links { display: flex; gap: 16px; flex-wrap: wrap; }
@@ -348,19 +373,22 @@ h1 span { color: var(--brand); }
   .header-inner { min-height: 64px; }
   .nav a:not(.primary-cta) { display: none; }
   .login-link { display: none; }
-  .hero { min-height: auto; padding: 54px 0 46px; }
+  .hero { display: block; min-height: auto; padding: 54px 0 46px; }
   .hero-media::before {
     background-image:
       linear-gradient(180deg, rgba(7,8,11,.70), rgba(7,8,11,.98)),
-      url("/assets/exercises/exact/agachamento_livre_com_barra.webp");
+      url("/assets/exercises/exact/puxada_frontal_pegada_aberta.webp");
   }
   h1 { font-size: 38px; line-height: 1.06; }
   .hero-sub { font-size: 16px; }
   .hero-actions a { width: 100%; }
-  .hero-product { position: relative; right: auto; bottom: auto; width: 100%; opacity: 1; margin-top: 30px; grid-template-columns: 1fr 1fr; }
+  .hero-product { position: relative; right: auto; bottom: auto; width: min(100% - 28px, 560px); opacity: 1; margin: 30px auto 0; grid-template-columns: 1fr 1fr; }
   .phone { border-radius: 20px; padding: 7px; }
   .phone.small { transform: translateY(16px); }
-  .strip-grid, .grid-3, .grid-4, .role-layout, .showcase { grid-template-columns: 1fr; }
+  .strip-grid, .grid-3, .grid-4, .role-layout, .showcase, .feed-showcase, .final-cta { grid-template-columns: 1fr; }
+  .feed-showcase .section-head { order: -1; }
+  .feed-phones { grid-template-columns: 1fr 1fr; }
+  .feed-points { grid-template-columns: 1fr; }
   .section { padding: 54px 0; }
   .section-head h2, .final-cta h2 { font-size: 30px; }
   .card, .role-panel, .price, .final-cta { padding: 18px; }
@@ -370,7 +398,9 @@ h1 span { color: var(--brand); }
   .brand span { display: none; }
   .primary-cta { padding: 0 12px; font-size: 12px; }
   h1 { font-size: 34px; }
-  .hero-product { grid-template-columns: 1fr; }
+  .hero-product { width: min(100% - 28px, 340px); grid-template-columns: 1fr; }
+  .feed-phones { grid-template-columns: 1fr; }
+  .feed-phones .phone:first-child { display: none; }
   .phone.small { display: none; }
   .visual-board { grid-template-columns: 1fr; }
 }
@@ -386,6 +416,7 @@ h1 span { color: var(--brand); }
     <nav class="nav" aria-label="Navegação principal">
       <a href="#recursos">Recursos</a>
       <a href="#perfis">Perfis</a>
+      <a href="#feed">Feed</a>
       <a href="#preco">Preço</a>
       <a href="https://treinovaapp.vercel.app/" class="login-link">Entrar no app</a>
       <a class="primary-cta" href="https://wa.me/5535988477254?text=Oi!%20Quero%20uma%20demonstra%C3%A7%C3%A3o%20do%20Treinova" target="_blank" rel="noopener">
@@ -426,36 +457,13 @@ h1 span { color: var(--brand); }
     </div>
     <div class="hero-product" aria-hidden="true">
       <div class="phone">
-        <div class="screen">
-          <div class="screen-top">
-            <img src="/assets/icon-192.png" alt="" />
-            <strong>TREINOVA</strong>
-          </div>
-          <div class="screen-title">Hoje</div>
-          <div class="screen-muted">Aluno com treino do dia, descanso e histórico de cargas.</div>
-          <img class="mock-img" src="/assets/exercises/exact/rosca_concentrada.webp" alt="" />
-          <div class="mock-card">
-            <strong>Rosca concentrada</strong>
-            <small>4 séries · 12-15 reps · pausa 1:00</small>
-          </div>
-          <div class="mock-grid">
-            <div class="mock-stat"><b>12</b><span>reps</span></div>
-            <div class="mock-stat"><b>18kg</b><span>carga</span></div>
-            <div class="mock-stat"><b>1:00</b><span>pausa</span></div>
-          </div>
+        <div class="screen real">
+          <img class="app-shot" src="/assets/landing/app-home-tall.webp" alt="" />
         </div>
       </div>
       <div class="phone small">
-        <div class="screen">
-          <div class="screen-top">
-            <img src="/assets/icon-192.png" alt="" />
-            <strong>PROFESSOR</strong>
-          </div>
-          <div class="screen-title">Alunos</div>
-          <div class="screen-muted">Visão rápida para agir antes do aluno sumir.</div>
-          <div class="mock-card"><strong>32 ativos</strong><small>7 treinaram hoje</small></div>
-          <div class="mock-card"><strong>5 inativos</strong><small>Mensagem em massa</small></div>
-          <div class="mock-card"><strong>3 pendências</strong><small>Financeiro organizado</small></div>
+        <div class="screen real">
+          <img class="app-shot" src="/assets/landing/app-feed-tall.webp" alt="" />
         </div>
       </div>
     </div>
@@ -512,7 +520,7 @@ h1 span { color: var(--brand); }
       </div>
       <div class="grid-4">
         <article class="card">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5 4 9l4 4-4 4 2.5 2.5L17.5 8z"/><path d="M14.5 14.5 17 17l3-3-3-3"/></svg></div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/><path d="M17.5 6.5h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-2"/><line x1="6.5" y1="9" x2="6.5" y2="15"/><line x1="17.5" y1="9" x2="17.5" y2="15"/><line x1="6.5" y1="12" x2="17.5" y2="12"/></svg></div>
           <h3>Treinos completos</h3>
           <p>Séries, repetições, pausa, cadência, observações, imagens e vídeos por exercício.</p>
         </article>
@@ -558,6 +566,33 @@ h1 span { color: var(--brand); }
     </div>
   </section>
 
+  <section class="section alt" id="feed">
+    <div class="wrap feed-showcase">
+      <div class="feed-phones">
+        <div class="phone small" aria-hidden="true">
+          <div class="screen real">
+            <img class="app-shot" src="/assets/landing/app-home-tall.webp" alt="" />
+          </div>
+        </div>
+        <div class="phone">
+          <div class="screen real">
+            <img class="app-shot" src="/assets/landing/app-feed-tall.webp" alt="Tela real do feed do Treinova com publicações e interações entre alunos e professor" />
+          </div>
+        </div>
+      </div>
+      <div class="section-head">
+        <span class="eyebrow">Feed social</span>
+        <h2>Interação que mantém alunos e personais por perto.</h2>
+        <p>Além do treino, o Treinova cria um espaço para posts, comentários e respostas rápidas. O aluno se sente acompanhado e o professor mantém presença sem depender só do WhatsApp.</p>
+        <div class="feed-points">
+          <div class="feed-point"><b>Posts do professor</b><span>Recados, evolução, desafios e orientações em um canal próprio.</span></div>
+          <div class="feed-point"><b>Participação dos alunos</b><span>Curtidas e comentários aumentam vínculo e senso de comunidade.</span></div>
+          <div class="feed-point"><b>Mais retenção</b><span>Contato frequente ajuda o aluno a continuar ativo no acompanhamento.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="section alt">
     <div class="wrap showcase">
       <div class="section-head">
@@ -568,19 +603,19 @@ h1 span { color: var(--brand); }
       </div>
       <div class="visual-board">
         <figure class="visual-shot">
-          <img src="/assets/exercises/exact/agachamento_livre_com_barra.webp" alt="Exercício de agachamento no app Treinova" />
-          <figcaption>Treinos com instrução visual</figcaption>
+          <img src="/assets/exercises/exact/stiff_com_barra.webp" alt="Exercício de stiff com barra no app Treinova" />
+          <figcaption>Treinos com imagem de execução</figcaption>
         </figure>
         <figure class="visual-shot">
           <img src="/assets/exercises/exact/puxada_frontal_pegada_aberta.webp" alt="Exercício de puxada no app Treinova" />
           <figcaption>Biblioteca por grupo muscular</figcaption>
         </figure>
         <figure class="visual-shot">
-          <img src="/assets/exercises/exact/hip_thrust_com_barra.webp" alt="Exercício de hip thrust no app Treinova" />
+          <img src="/assets/exercises/exact/crossover_na_polia_alta.webp" alt="Exercício de crossover na polia alta no app Treinova" />
           <figcaption>Execução mais clara</figcaption>
         </figure>
         <figure class="visual-shot">
-          <img src="/assets/exercises/exact/desenvolvimento_com_halteres.webp" alt="Exercício de desenvolvimento no app Treinova" />
+          <img src="/assets/exercises/exact/remada_baixa.webp" alt="Exercício de remada baixa no app Treinova" />
           <figcaption>App com aparência premium</figcaption>
         </figure>
       </div>
@@ -597,15 +632,15 @@ h1 span { color: var(--brand); }
       <div class="price">
         <span class="price-label">Treinova Pro</span>
         <h3>White-label para personal trainers</h3>
-        <p>Marca, alunos, treinos, periodização, financeiro, notificações e suporte humano.</p>
-        <div class="price-value"><span>R$</span><b>49,90</b><span>/mês</span></div>
+        <p>Marca, alunos, treinos, periodização, feed, financeiro, notificações e suporte humano.</p>
+        <div class="price-value"><span>R$</span><b>59,90</b><span>/mês</span></div>
         <ul class="check-list">
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>Alunos ilimitados no plano.</span></li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>Sua marca, cores e identidade no app.</span></li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg><span>7 dias para testar e cancelar quando quiser.</span></li>
         </ul>
         <div style="height:18px"></div>
-        <a class="primary-cta" href="https://wa.me/5535988477254?text=Oi!%20Quero%20assinar%20o%20Treinova%20Pro" target="_blank" rel="noopener">Quero começar</a>
+        <a class="primary-cta" href="https://wa.me/5535988477254?text=Oi!%20Quero%20assinar%20o%20Treinova%20Pro%20por%20R%24%2059%2C90" target="_blank" rel="noopener">Quero começar</a>
       </div>
     </div>
   </section>
@@ -639,12 +674,17 @@ h1 span { color: var(--brand); }
 
   <section class="section">
     <div class="wrap final-cta">
-      <h2>Seu treino merece parecer tão profissional quanto o seu atendimento.</h2>
-      <p>Mostre para seus alunos um app com sua marca, organização real e experiência mobile premium.</p>
-      <a class="primary-cta" href="https://wa.me/5535988477254?text=Oi!%20Quero%20melhorar%20minha%20opera%C3%A7%C3%A3o%20com%20o%20Treinova" target="_blank" rel="noopener">
-        Falar com o Treinova
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
-      </a>
+      <div class="final-copy">
+        <h2>Seu treino merece parecer tão profissional quanto o seu atendimento.</h2>
+        <p>Mostre para seus alunos um app com sua marca, telas reais de treino, feed para relacionamento e experiência mobile premium.</p>
+        <a class="primary-cta" href="https://wa.me/5535988477254?text=Oi!%20Quero%20melhorar%20minha%20opera%C3%A7%C3%A3o%20com%20o%20Treinova" target="_blank" rel="noopener">
+          Falar com o Treinova
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </div>
+      <div class="final-art" aria-hidden="true">
+        <img src="/assets/landing/app-workout-tall.webp" alt="" />
+      </div>
     </div>
   </section>
 </main>
