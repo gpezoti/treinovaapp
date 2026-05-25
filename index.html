@@ -2549,7 +2549,9 @@ async function uploadImage(bucket, pathPrefix, file, maxDim) {
   const blob = await compressImage(file, maxDim || 512, 0.85);
   const fileName = pathPrefix + "/" + Date.now() + ".jpg";
   const { error } = await sb.storage.from(bucket).upload(fileName, blob, {
-    upsert: true, contentType: "image/jpeg", cacheControl: "3600"
+    upsert: bucket === "branding" ? false : true,
+    contentType: "image/jpeg",
+    cacheControl: "3600"
   });
   if (error) {
     const msg = error.message || "";

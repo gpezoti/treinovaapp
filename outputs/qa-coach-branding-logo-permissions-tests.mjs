@@ -4,10 +4,12 @@ import assert from "node:assert/strict";
 const html = fs.readFileSync("index.html", "utf8");
 const sql = fs.readFileSync("supabase/migrations/20260525103000_coach_branding_logo_permissions.sql", "utf8");
 const rpcSql = fs.readFileSync("supabase/migrations/20260525144500_save_my_coach_branding_rpc.sql", "utf8");
+const storageCompatSql = fs.readFileSync("supabase/migrations/20260525150500_branding_storage_upload_api_compat.sql", "utf8");
 
 assert.match(html, /function brandingLogoPathPrefix\(\)/, "branding logo uploads must use a dedicated path helper");
 assert.match(html, /STATE\.profile\?\.role === "coach"[\s\S]{0,120}return `\$\{userId\}\/logos`/, "coach logo uploads must be scoped to the trainer folder");
 assert.match(html, /uploadImage\("branding", brandingLogoPathPrefix\(\), file, 512\)/, "logo upload must use the scoped branding path");
+assert.match(html, /upsert: bucket === "branding" \? false : true/, "branding logo uploads should avoid Storage upsert/RLS update path");
 assert.match(html, /Sem permiss[aã]o para enviar logo/, "branding permission errors should be actionable");
 assert.match(html, /sb\.rpc\("save_my_coach_branding", \{ p_payload: patch \}\)/, "coach branding save should use the safe RPC first");
 assert.match(html, /upsert\(\{ coach_id: STATE\.profile\.id,[\s\S]{0,160}\}, \{ onConflict: "coach_id" \}\)/, "coach branding save must target coach_id on conflict");
@@ -31,5 +33,10 @@ assert.match(rpcSql, /not public\.is_coach\(v_uid\)/, "safe coach branding RPC m
 assert.match(rpcSql, /'insert into public\.coach_branding \(%s\) values \(%s\)/, "safe coach branding RPC must upsert coach_branding");
 assert.match(rpcSql, /using v_uid, coalesce\(p_payload/, "safe coach branding RPC must ignore caller-supplied coach_id");
 assert.match(rpcSql, /grant execute on function public\.save_my_coach_branding\(jsonb\) to authenticated/, "safe coach branding RPC must be callable by authenticated users");
+
+assert.match(storageCompatSql, /create policy "branding read public"/, "branding bucket objects should be readable for Storage upsert compatibility");
+assert.match(storageCompatSql, /create policy "branding update legacy logos for approved coach"/, "legacy cached branding uploads need update compatibility");
+assert.match(storageCompatSql, /public\.is_coach\(auth\.uid\(\)\)/, "legacy branding update compatibility must require approved coach");
+assert.match(storageCompatSql, /storage\.foldername\(name\)\)\[1\] = 'logos'/, "legacy branding update compatibility must be limited to logos folder");
 
 console.log("qa-coach-branding-logo-permissions-tests: ok");
