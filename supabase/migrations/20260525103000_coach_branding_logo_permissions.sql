@@ -24,6 +24,19 @@ create policy "branding upload own coach logo or admin"
     )
   );
 
+-- Compatibility for already-open PWAs that still upload to branding/logos.
+-- New code writes to {coach_id}/logos; this insert-only fallback prevents a
+-- stale client from blocking the trainer while the service worker updates.
+drop policy if exists "branding upload legacy logos for approved coach" on storage.objects;
+create policy "branding upload legacy logos for approved coach"
+  on storage.objects
+  for insert
+  with check (
+    bucket_id = 'branding'
+    and public.is_coach(auth.uid())
+    and (storage.foldername(name))[1] = 'logos'
+  );
+
 drop policy if exists "branding update own coach logo or admin" on storage.objects;
 create policy "branding update own coach logo or admin"
   on storage.objects
