@@ -194,7 +194,7 @@ h1 span { color: var(--brand); }
 .phone {
   position: relative;
   min-width: 0;
-  aspect-ratio: 390 / 844;
+  aspect-ratio: 9 / 17;
   border-radius: 46px;
   padding: 11px;
   background:
@@ -234,22 +234,32 @@ h1 span { color: var(--brand); }
   padding: 18px 12px 12px;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.50);
 }
-.screen.real { padding: 0; background: #07101c; }
+.screen.real { padding: 0; background: #07101c; isolation: isolate; }
 .screen.real::before {
   content: "";
   position: absolute;
   top: 9px;
   left: 50%;
-  z-index: 2;
-  width: 34%;
-  max-width: 86px;
+  z-index: 3;
+  width: 30%;
+  max-width: 74px;
   height: 23px;
   transform: translateX(-50%);
   border-radius: 999px;
   background: #04060b;
   box-shadow: inset 0 -1px 0 rgba(255,255,255,.08), 0 0 0 1px rgba(255,255,255,.06);
 }
-.app-shot { display: block; width: 100%; height: 100%; object-fit: fill; object-position: top center; background: #07101c; }
+.app-shot {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  background: transparent;
+}
+.feed-shot .app-shot { object-position: left top; }
 .screen-top { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid #1f2942; }
 .screen-top img { width: 24px; height: 24px; border-radius: 6px; }
 .screen-top strong { font-size: 10px; letter-spacing: .7px; }
@@ -503,7 +513,7 @@ h1 span { color: var(--brand); }
         </div>
       </div>
       <div class="phone small">
-        <div class="screen real">
+        <div class="screen real feed-shot">
           <img class="app-shot" src="/assets/landing/app-feed-tall.webp" alt="" />
         </div>
       </div>
@@ -616,7 +626,7 @@ h1 span { color: var(--brand); }
           </div>
         </div>
         <div class="phone">
-          <div class="screen real">
+          <div class="screen real feed-shot">
             <img class="app-shot" src="/assets/landing/app-feed-tall.webp" alt="Tela real do feed do Treinova com publicações e interações entre alunos e professor" />
           </div>
         </div>
