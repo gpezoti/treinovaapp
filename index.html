@@ -2543,10 +2543,23 @@ async function uploadImage(bucket, pathPrefix, file, maxDim) {
   const { error } = await sb.storage.from(bucket).upload(fileName, blob, {
     upsert: true, contentType: "image/jpeg", cacheControl: "3600"
   });
-  if (error) throw error;
+  if (error) {
+    const msg = error.message || "";
+    if (bucket === "branding" && /permission|row-level|rls|403|unauthorized|not allowed/i.test(msg)) {
+      throw new Error("Sem permissão para enviar logo. Aplique a migration de permissões do branding no Supabase.");
+    }
+    throw error;
+  }
   const { data } = sb.storage.from(bucket).getPublicUrl(fileName);
   // Cache-bust
   return data.publicUrl + "?t=" + Date.now();
+}
+
+function brandingLogoPathPrefix() {
+  const userId = STATE.profile?.id;
+  if (STATE.profile?.role === "coach" && userId) return `${userId}/logos`;
+  if (STATE.profile?.role === "admin") return "app/logos";
+  return "logos";
 }
 
 function pickImageFile(onPicked) {
@@ -9290,7 +9303,7 @@ window.onLogoUpload = function() {
   pickImageFile(async (file) => {
     showToast("Enviando logo...");
     try {
-      const url = await uploadImage("branding", "logos", file, 512);
+      const url = await uploadImage("branding", brandingLogoPathPrefix(), file, 512);
       const saved = await saveBranding({ logo_url: url });
       if (saved) showToast("Logo atualizado", "success");
       if (STATE.view === 'profile') renderProfile();
