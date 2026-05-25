@@ -2479,14 +2479,22 @@ async function saveBranding(patch) {
   if (!STATE.profile) return null;
   const role = STATE.profile.role;
   if (role === "coach") {
-    let { data, error } = await sb.from("coach_branding")
-      .upsert({ coach_id: STATE.profile.id, ...patch, updated_at: new Date().toISOString() }, { onConflict: "coach_id" })
-      .select().single();
+    let { data, error } = await sb.rpc("save_my_coach_branding", { p_payload: patch });
+    if (error && /Could not find the function|schema cache|PGRST202|save_my_coach_branding/i.test(error.message || "")) {
+      const fallback = await sb.from("coach_branding")
+        .upsert({ coach_id: STATE.profile.id, ...patch, updated_at: new Date().toISOString() }, { onConflict: "coach_id" })
+        .select().single();
+      data = fallback.data;
+      error = fallback.error;
+    }
     if (error && /instagram_handle|column .* does not exist|schema cache/i.test(error.message || "") && Object.prototype.hasOwnProperty.call(patch, "instagram_handle")) {
       const { instagram_handle, ...safePatch } = patch;
-      const retry = await sb.from("coach_branding")
-        .upsert({ coach_id: STATE.profile.id, ...safePatch, updated_at: new Date().toISOString() }, { onConflict: "coach_id" })
-        .select().single();
+      let retry = await sb.rpc("save_my_coach_branding", { p_payload: safePatch });
+      if (retry.error && /Could not find the function|schema cache|PGRST202|save_my_coach_branding/i.test(retry.error.message || "")) {
+        retry = await sb.from("coach_branding")
+          .upsert({ coach_id: STATE.profile.id, ...safePatch, updated_at: new Date().toISOString() }, { onConflict: "coach_id" })
+          .select().single();
+      }
       data = retry.data;
       error = retry.error;
       if (!error) showToast("Identidade salva. Aplique a migration do Instagram para salvar o @.", "error");
