@@ -355,14 +355,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   font-weight: 700; margin-bottom: 4px; }
 
 .sets-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-.set-row { display: grid; grid-template-columns: 32px 1fr 90px 44px; gap: 8px; align-items: center;
+.set-row { display: grid; grid-template-columns: 32px minmax(74px,.9fr) minmax(88px,1fr) 44px; gap: 8px; align-items: center;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease; }
 .set-row.done { background: var(--green-soft); border-color: rgba(46,204,113,0.45); }
 .set-num { font-size: 13px; font-weight: 800; color: var(--text-2); text-align: center; }
 .set-row.done .set-num { color: var(--green); }
-.set-target { font-size: 12px; color: var(--text-3); }
+.set-target { display:flex; align-items:center; gap:5px; background:var(--bg-3);
+  border:1px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12px; color:var(--text-3); min-width:0; }
 .set-target b { color: var(--text-2); font-weight: 600; }
+.set-target label { flex:0 0 auto; font-size:9px; font-weight:800; color:var(--text-3); text-transform:uppercase; letter-spacing:.45px; }
+.set-target input { flex:1; min-width:0; width:100%; background:transparent; border:0; outline:0;
+  color:var(--text); font-size:13px; font-weight:800; text-align:right; }
+.set-target input::placeholder { color:var(--text-3); font-weight:600; }
 .set-load { display: flex; align-items: center; gap: 4px; background: var(--bg-3);
   border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 .set-load input { flex: 1; width: 100%; background: transparent; border: 0; outline: none;
@@ -374,6 +379,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .set-check:hover { color: var(--brand); border-color: var(--brand-2); }
 .set-check:active { transform: scale(0.92); }
 .set-row.done .set-check { background: var(--green); border-color: var(--green); color: #002; }
+.set-controls { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:-2px 0 12px; }
+.set-controls .mini-btn { justify-content:center; min-height:40px; }
 
 /* Timer */
 .timer-overlay { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; pointer-events: none;
@@ -744,7 +751,9 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
   .ex-thumb { width: 58px; height: 58px; flex-basis: 58px; }
   .ex-progress { min-width: 34px; }
   .chev { width: 18px; }
-  .set-row { grid-template-columns: 30px 1fr 88px 42px; gap: 7px; padding: 8px; }
+  .set-row { grid-template-columns: 30px minmax(72px,.9fr) minmax(86px,1fr) 42px; gap: 7px; padding: 8px; }
+  .set-target, .set-load { padding-inline:7px; }
+  .set-controls { grid-template-columns:1fr; }
 }
 
 @media (min-width: 900px) {
@@ -1953,10 +1962,61 @@ function getCurrentTrainingScheme(intensity = STATE.selectedIntensity) {
   return getTrainingScheme(STATE.selectedPresetCode, intensity);
 }
 
-function getExerciseTargetSets(ex, scheme = getCurrentTrainingScheme()) {
+function normalizeExerciseOverrideValue(value) {
+  const raw = String(value == null ? "" : value).trim();
+  if (!raw || /seguir\s+per[ií]odo/i.test(raw) || raw === "—") return "";
+  return raw.slice(0, 40);
+}
+
+function getSessionExerciseOverrides() {
+  const raw = STATE.currentSession && STATE.currentSession.exercise_overrides;
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+}
+
+function getSessionExerciseOverride(position) {
+  const overrides = getSessionExerciseOverrides();
+  return overrides[String(position)] || {};
+}
+
+function getExerciseSetLogs(position, logs = null) {
+  const source = logs || STATE.setLogs || [];
+  return source
+    .filter(s => Number(s.exercise_position) === Number(position))
+    .sort((a, b) => Number(a.set_number || 0) - Number(b.set_number || 0));
+}
+
+function getExerciseBaseTargetSets(ex, scheme = getCurrentTrainingScheme()) {
   if (!ex) return 0;
   if (scheme && scheme.code === "off") return 0;
-  return Math.max(1, Number(scheme && scheme.sets) || Number(ex.sets_count) || 1);
+  const trainerOverride = Number(ex.sets_override);
+  const periodSets = Number(scheme && scheme.sets);
+  const legacySets = Number(ex.sets_count);
+  return Math.max(1, trainerOverride || periodSets || legacySets || 1);
+}
+
+function getExerciseTargetSets(ex, scheme = getCurrentTrainingScheme(), logs = null) {
+  if (!ex) return 0;
+  if (scheme && scheme.code === "off") return 0;
+  const sessionOverride = getSessionExerciseOverride(ex.position);
+  const overrideSets = Number(sessionOverride.sets);
+  const base = overrideSets || getExerciseBaseTargetSets(ex, scheme);
+  const maxLoggedSet = Math.max(0, ...getExerciseSetLogs(ex.position, logs).map(l => Number(l.set_number) || 0));
+  return Math.max(1, base, maxLoggedSet);
+}
+
+function getExerciseBaseTargetReps(ex, scheme = getCurrentTrainingScheme()) {
+  return normalizeExerciseOverrideValue(ex && ex.reps_override)
+    || normalizeExerciseOverrideValue(scheme && scheme.reps)
+    || normalizeExerciseOverrideValue(ex && ex.reps)
+    || "—";
+}
+
+function getExerciseTargetReps(ex, scheme = getCurrentTrainingScheme(), logs = null, setNumber = null) {
+  const sessionOverride = getSessionExerciseOverride(ex && ex.position);
+  const setLog = setNumber == null ? null : getExerciseSetLogs(ex && ex.position, logs).find(l => Number(l.set_number) === Number(setNumber));
+  return normalizeExerciseOverrideValue(setLog && (setLog.reps_done != null ? String(setLog.reps_done) : setLog.target_reps))
+    || normalizeExerciseOverrideValue(sessionOverride.reps)
+    || getExerciseBaseTargetReps(ex, scheme);
 }
 
 const WEEKDAY_LABELS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
@@ -3583,6 +3643,7 @@ async function ensureSetLog(exercise, position, setNum) {
   const existing = STATE.setLogs.find(s => s.exercise_position === position && s.set_number === setNum);
   if (existing) return existing;
   const lastLoad = STATE.lastLoads[exercise.name];
+  const scheme = getCurrentTrainingScheme();
   const { data, error } = await sb.from("set_logs").insert({
     session_id: STATE.currentSession.id,
     student_id: STATE.profile.id,
@@ -3590,7 +3651,7 @@ async function ensureSetLog(exercise, position, setNum) {
     exercise_position: position,
     exercise_cat: exercise.cat,
     set_number: setNum,
-    target_reps: getCurrentTrainingScheme().reps,
+    target_reps: getExerciseTargetReps(exercise, scheme, STATE.setLogs, setNum),
     load_kg: lastLoad || null,
     done: false
   }).select().single();
@@ -3604,6 +3665,41 @@ async function updateSetLog(logId, patch) {
   if (error) console.error(error);
   const local = STATE.setLogs.find(s => s.id === logId);
   if (local) Object.assign(local, patch);
+}
+
+async function updateSessionExerciseOverride(position, patch) {
+  if (!STATE.currentSession || STATE.currentSession.status === "completed") {
+    showToast("Inicie o treino para ajustar séries e repetições.", "error");
+    return false;
+  }
+  const overrides = { ...getSessionExerciseOverrides() };
+  const key = String(position);
+  const current = { ...(overrides[key] || {}) };
+  const next = { ...current, ...patch };
+  Object.keys(next).forEach(k => {
+    if (next[k] === null || next[k] === "" || typeof next[k] === "undefined") delete next[k];
+  });
+  if (Object.keys(next).length) overrides[key] = next;
+  else delete overrides[key];
+
+  const { data, error } = await sb.from("sessions")
+    .update({ exercise_overrides: overrides })
+    .eq("id", STATE.currentSession.id)
+    .eq("student_id", STATE.profile.id)
+    .select("exercise_overrides")
+    .single();
+  if (error) {
+    console.error("[session exercise override]", error);
+    showToast("Erro ao salvar ajuste do treino.", "error");
+    return false;
+  }
+  STATE.currentSession.exercise_overrides = data?.exercise_overrides || overrides;
+  STATE.todaySessions = (STATE.todaySessions || []).map(s =>
+    String(s.id) === String(STATE.currentSession.id)
+      ? { ...s, exercise_overrides: STATE.currentSession.exercise_overrides }
+      : s
+  );
+  return true;
 }
 
 // ===== SUPERSET (bi-set / tri-set) helpers =====
@@ -3668,7 +3764,8 @@ async function toggleSetDone(exercise, position, setIdx) {
       return;
     }
     const scheme = getCurrentTrainingScheme();
-    const target = getExerciseTargetSets(exercise, scheme);
+    const exerciseLogs = getExerciseSetLogs(position);
+    const target = getExerciseTargetSets(exercise, scheme, exerciseLogs);
     const pauseSec = scheme.pauseSec || 0;
     const isLast = setIdx + 1 >= target;
     const label = isLast ? "Próximo exercício" : `Série ${setIdx + 2} de ${target}`;
@@ -3823,7 +3920,7 @@ window.confirmSerieDone = async function(skipTimer) {
 };
 
 async function toggleMobilityDone(exercise, position) {
-  const target = getExerciseTargetSets(exercise);
+  const target = getExerciseTargetSets(exercise, getCurrentTrainingScheme(), getExerciseSetLogs(position));
   const allDone = STATE.setLogs.filter(s => s.exercise_position === position).every(s => s.done) &&
                   STATE.setLogs.filter(s => s.exercise_position === position).length >= target;
   // garante logs
@@ -3844,6 +3941,90 @@ async function updateLoad(exercise, position, setIdx, val) {
   await updateSetLog(log.id, { load_kg: num });
   if (num) STATE.lastLoads[exercise.name] = num;
 }
+
+async function updateReps(exercise, position, setIdx, val) {
+  if (!STATE.currentSession || STATE.currentSession.status === "completed") return;
+  const log = await ensureSetLog(exercise, position, setIdx + 1);
+  if (!log) return;
+  const clean = normalizeExerciseOverrideValue(val);
+  const numericReps = /^[0-9]+$/.test(clean) ? Number(clean) : null;
+  await updateSetLog(log.id, {
+    target_reps: clean || null,
+    reps_done: numericReps
+  });
+}
+
+function resolveExecutionExercise(position) {
+  const W = resolveWorkoutRef(STATE.selectedWorkout, STATE.selectedWorkoutId) || STATE.workouts[STATE.selectedWorkout];
+  const ex = W && (W.exercises || []).find(e => Number(e.position) === Number(position));
+  return { W, ex };
+}
+
+window.addManualSet = async function(position) {
+  const { ex } = resolveExecutionExercise(position);
+  if (!ex) return;
+  if (!STATE.currentSession || STATE.currentSession.status === "completed") {
+    showToast("Inicie o treino para adicionar séries.", "error");
+    return;
+  }
+  const scheme = getCurrentTrainingScheme();
+  const logs = getExerciseSetLogs(position);
+  const target = getExerciseTargetSets(ex, scheme, logs);
+  if (target >= 30) {
+    showToast("Limite de 30 séries por exercício.", "error");
+    return;
+  }
+  const ok = await updateSessionExerciseOverride(position, { sets: target + 1 });
+  if (!ok) return;
+  await ensureSetLog(ex, position, target + 1);
+  showToast("Série adicionada", "success");
+  renderWorkout();
+};
+
+window.removeManualSet = async function(position) {
+  const { ex } = resolveExecutionExercise(position);
+  if (!ex) return;
+  if (!STATE.currentSession || STATE.currentSession.status === "completed") {
+    showToast("Inicie o treino para remover séries.", "error");
+    return;
+  }
+  const scheme = getCurrentTrainingScheme();
+  const logs = getExerciseSetLogs(position);
+  const target = getExerciseTargetSets(ex, scheme, logs);
+  if (target <= 1) {
+    showToast("O exercício precisa manter pelo menos 1 série.", "error");
+    return;
+  }
+  const lastLog = logs.find(l => Number(l.set_number) === Number(target));
+  if (lastLog?.done) {
+    const ok = await showConfirm({
+      title: "Remover série concluída?",
+      msg: "A última série já foi marcada. Remover também apaga a carga registrada nela.",
+      confirm: "Remover",
+      cancel: "Cancelar",
+      danger: true
+    });
+    if (!ok) return;
+  }
+  if (lastLog?.id) {
+    const { error } = await sb.from("set_logs")
+      .delete()
+      .eq("id", lastLog.id)
+      .eq("student_id", STATE.profile.id);
+    if (error) {
+      console.error("[remove set log]", error);
+      showToast("Erro ao remover série.", "error");
+      return;
+    }
+    STATE.setLogs = (STATE.setLogs || []).filter(l => String(l.id) !== String(lastLog.id));
+  }
+  const nextTarget = target - 1;
+  const baseTarget = getExerciseBaseTargetSets(ex, scheme);
+  const ok = await updateSessionExerciseOverride(position, { sets: nextTarget === baseTarget ? null : nextTarget });
+  if (!ok) return;
+  showToast("Série removida", "success");
+  renderWorkout();
+};
 
 async function completeSession() {
   if (!STATE.currentSession) return;
@@ -6390,8 +6571,8 @@ function renderActiveWorkoutHomeCard() {
   const presetCode = info.preset_code || resolvePresetForWorkoutDate(date, session.workout_code, session.workout_id);
   const intensity = session.intensity || info.intensity || STATE.selectedIntensity || "yellow";
   const scheme = getTrainingScheme(presetCode, intensity);
-  const totalTarget = W.exercises.reduce((s, e) => s + getExerciseTargetSets(e, scheme), 0);
   const logs = STATE.currentSession?.id === session.id ? (STATE.setLogs || []) : [];
+  const totalTarget = W.exercises.reduce((s, e) => s + getExerciseTargetSets(e, scheme, logs), 0);
   const doneCount = logs.filter(s => s.done).length;
   const pct = totalTarget > 0 ? Math.min(100, Math.round((doneCount / totalTarget) * 100)) : 0;
   const focusPos = logs.find(s => !s.done)?.exercise_position || W.exercises[0]?.position || null;
@@ -8013,7 +8194,7 @@ async function renderWorkout() {
   const scheme = getCurrentTrainingScheme(intensity);
 
   // Stats
-  const totalTarget = W.exercises.reduce((s,e) => s + getExerciseTargetSets(e, scheme), 0);
+  const totalTarget = W.exercises.reduce((s,e) => s + getExerciseTargetSets(e, scheme, getExerciseSetLogs(e.position)), 0);
   const doneCount = STATE.setLogs.filter(s => s.done).length;
   const allDone = totalTarget > 0 && doneCount >= totalTarget;
   const canRecoverCompletedToday = completed && canManageCompletedWorkoutSession();
@@ -8240,13 +8421,13 @@ function renderExerciseList(W, intensity, completed) {
   if (!list) return;
   const scheme = getCurrentTrainingScheme(intensity);
   list.innerHTML = W.exercises.map(ex => {
-    const isMobility = ex.cat === "mobility";
-    const target = getExerciseTargetSets(ex, scheme);
     const exLogs = STATE.setLogs.filter(s => s.exercise_position === ex.position).sort((a,b) => a.set_number - b.set_number);
+    const isMobility = ex.cat === "mobility";
+    const target = getExerciseTargetSets(ex, scheme, exLogs);
     const doneN = exLogs.filter(s => s.done).length;
     const allDone = doneN >= target && target > 0;
     const expanded = STATE.expandedEx === ex.position;
-    const repsTxt = scheme.reps;
+    const repsTxt = getExerciseTargetReps(ex, scheme, exLogs);
     const pauseTxt = scheme.pause;
 
     const thumbInner = getExThumb(ex);
@@ -8315,8 +8496,9 @@ function renderMobBtn(ex, allDone, completed) {
   </button>`;
 }
 function renderSetsTable(ex, logs, scheme, completed) {
-  const target = getExerciseTargetSets(ex, scheme);
+  const target = getExerciseTargetSets(ex, scheme, logs);
   const lastLoad = STATE.lastLoads[ex.name];
+  const editable = !completed && STATE.currentSession && STATE.currentSession.status !== "completed";
   let rows = "";
   for (let i = 0; i < target; i++) {
     const log = logs.find(l => l.set_number === i+1);
@@ -8324,17 +8506,24 @@ function renderSetsTable(ex, logs, scheme, completed) {
     const logLoad = log && log.load_kg != null ? log.load_kg : null;
     const loadVal = logLoad !== null ? logLoad : (lastLoad || "");
     const isPreFilled = logLoad === null && !!lastLoad && !isDone;
+    const repsVal = getExerciseTargetReps(ex, scheme, logs, i + 1);
+    const placeholderReps = getExerciseBaseTargetReps(ex, scheme);
     rows += `<div class="set-row ${isDone ? "done" : ""}">
       <div class="set-num">${i+1}</div>
-      <div class="set-target">${scheme.reps} reps</div>
+      <div class="set-target">
+        <label>Reps</label>
+        <input type="text" inputmode="numeric" value="${escape(repsVal === "—" ? "" : repsVal)}" placeholder="${escape(placeholderReps === "—" ? "" : placeholderReps)}"
+               ${editable ? "" : "disabled"}
+               onchange="onRepsChange(${ex.position}, ${i}, this.value)" />
+      </div>
       <div class="set-load">
         <input type="number" inputmode="decimal" placeholder="0" value="${escape(loadVal)}"
-               ${completed ? "disabled" : ""}
+               ${editable ? "" : "disabled"}
                style="${isPreFilled ? "color:var(--text-2);" : ""}"
                onchange="onLoadChange(${ex.position}, ${i}, this.value)" />
         <span class="unit">kg</span>
       </div>
-      <button class="set-check" type="button" data-pos="${ex.position}" data-idx="${i}" ${completed ? "disabled" : ""}>
+      <button class="set-check" type="button" data-pos="${ex.position}" data-idx="${i}" ${editable ? "" : "disabled"}>
         ${isDone
           ? `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
           : `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>`
@@ -8343,8 +8532,14 @@ function renderSetsTable(ex, logs, scheme, completed) {
     </div>`;
   }
   const html = `<div class="sets-list">${rows}</div>
+    ${editable ? `<div class="set-controls">
+      <button class="mini-btn mini-btn-primary" type="button" onclick="addManualSet(${ex.position})">+ Adicionar série</button>
+      <button class="mini-btn mini-btn-ghost" type="button" onclick="removeManualSet(${ex.position})">Remover última</button>
+    </div>` : ""}
     <div class="text-xs muted" style="margin-top:-4px; margin-bottom:10px;">
-      ${lastLoad ? `Carga anterior: <b style="color:var(--text-2)">${lastLoad} kg</b> — ajuste se necessário.` : "Toque no ✓ para concluir a série e iniciar o descanso."}
+      ${editable
+        ? (lastLoad ? `Carga anterior: <b style="color:var(--text-2)">${lastLoad} kg</b> — ajuste carga, reps ou séries se necessário.` : "Ajuste reps/séries se precisar. Toque no ✓ para concluir e iniciar o descanso.")
+        : "Inicie o treino para editar carga, reps e séries."}
     </div>`;
   return html;
 }
@@ -8368,18 +8563,23 @@ window.toggleExercise = function(pos) {
   }
 };
 window.onToggleSet = function(pos, setIdx) {
-  const W = STATE.workouts[STATE.selectedWorkout];
-  const ex = W.exercises.find(e => e.position === pos);
+  const { ex } = resolveExecutionExercise(pos);
+  if (!ex) return;
   toggleSetDone(ex, pos, setIdx);
 };
 window.onLoadChange = function(pos, setIdx, val) {
-  const W = STATE.workouts[STATE.selectedWorkout];
-  const ex = W.exercises.find(e => e.position === pos);
+  const { ex } = resolveExecutionExercise(pos);
+  if (!ex) return;
   updateLoad(ex, pos, setIdx, val);
 };
+window.onRepsChange = function(pos, setIdx, val) {
+  const { ex } = resolveExecutionExercise(pos);
+  if (!ex) return;
+  updateReps(ex, pos, setIdx, val);
+};
 window.markMobility = function(pos) {
-  const W = STATE.workouts[STATE.selectedWorkout];
-  const ex = W.exercises.find(e => e.position === pos);
+  const { ex } = resolveExecutionExercise(pos);
+  if (!ex) return;
   toggleMobilityDone(ex, pos);
 };
 
@@ -12323,6 +12523,10 @@ window.openWorkoutEditor = async function(code, workoutId) {
       const linkedNext = next && ex.superset_group && next.superset_group === ex.superset_group;
       const linkedPrev = i > 0 && ex.superset_group && list[i-1].superset_group === ex.superset_group;
       const groupSize = ex.superset_group ? list.filter(e => e.superset_group === ex.superset_group).length : 0;
+      const manualCfg = [
+        Number(ex.sets_override) ? `${Number(ex.sets_override)} séries` : "",
+        normalizeExerciseOverrideValue(ex.reps_override) ? `${escape(normalizeExerciseOverrideValue(ex.reps_override))} reps` : ""
+      ].filter(Boolean).join(" · ");
       const supersetBadge = ex.superset_group
         ? `<span class="today-pill" style="background:rgba(0,180,255,.10);color:var(--brand);border:1px solid rgba(0,180,255,.30);font-size:9px;padding:2px 6px;margin-right:6px">${groupSize === 2 ? "BI-SET" : groupSize === 3 ? "TRI-SET" : `SUPER ${groupSize}x`}</span>`
         : "";
@@ -12332,7 +12536,7 @@ window.openWorkoutEditor = async function(code, workoutId) {
           <div class="ex-thumb" style="width:36px; height:36px; flex:0 0 36px; overflow:hidden;">${getExThumb(ex)}</div>
           <div style="flex:1; min-width:0;">
             <div class="fw-700 text-sm">${supersetBadge}${i+1}. ${escape(ex.name)}</div>
-            <div class="text-xs muted">${escape(ex.muscle_group || ex.cat || "")}${ex.cadence ? " · cad. " + escape(ex.cadence) : ""}</div>
+            <div class="text-xs muted">${escape(ex.muscle_group || ex.cat || "")}${ex.cadence ? " · cad. " + escape(ex.cadence) : ""} · ${manualCfg ? `ajuste: ${manualCfg}` : "segue o tipo de treino"}</div>
           </div>
           <button class="mini-btn mini-btn-ghost" ${i === 0 ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''} onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',-1)">↑</button>
           <button class="mini-btn mini-btn-ghost" ${i === list.length - 1 ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''} onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',1)">↓</button>
@@ -12697,6 +12901,8 @@ function buildWorkoutExerciseFromLibrary(lib, ctx, position) {
     is_library: false,
     sets_count: 1,
     reps: "Seguir período",
+    sets_override: null,
+    reps_override: null,
     pause: "Seguir período",
     cadence: lib.cadence || "",
     method: lib.method || "Séries múltiplas",
@@ -12896,6 +13102,20 @@ window.editExercise = async function(exId) {
     <div class="form-group"><label class="form-label">Nome</label><input class="input" id="ex-name" value="${escape(ex.name)}" /></div>
     <div class="form-group"><label class="form-label">Categoria</label><input class="input" id="ex-cat" value="${escape(ex.cat || '')}" placeholder="mobility, back, chest, shoulder, biceps, triceps, quad, hamstring, glute, calf, core, rotator, hipflex, adductor" /></div>
     <div class="form-group"><label class="form-label">Cadência</label><input class="input" id="ex-cadence" value="${escape(ex.cadence || '')}" /></div>
+    <div class="section-title">Ajustes deste treino</div>
+    <div class="card">
+      <div class="row-flex" style="gap:10px;align-items:flex-start">
+        <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0">
+          <label class="form-label">Séries</label>
+          <input class="input" id="ex-sets-override" type="number" min="1" max="30" inputmode="numeric" value="${Number(ex.sets_override) || ""}" placeholder="Seguir período" />
+        </div>
+        <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0">
+          <label class="form-label">Repetições</label>
+          <input class="input" id="ex-reps-override" value="${escape(normalizeExerciseOverrideValue(ex.reps_override))}" placeholder="Seguir período" />
+        </div>
+      </div>
+      <p class="text-xs muted" style="margin-top:10px">Use somente quando este exercício precisar fugir do padrão do tipo de treino. Em branco, segue a periodização.</p>
+    </div>
     <div class="form-group"><label class="form-label">Método</label><input class="input" id="ex-method" value="${escape(ex.method || '')}" /></div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="input textarea" id="ex-obs">${escape(ex.observations || '')}</textarea></div>
     <button class="btn-primary" onclick="saveExercise('${exId}')">Salvar</button>
@@ -12949,12 +13169,19 @@ window.clearExerciseMedia = async function(exId, kind) {
 };
 
 window.saveExercise = async function(id) {
-	  const patch = {
-	    name: document.getElementById("ex-name").value.trim(),
-	    cat: document.getElementById("ex-cat").value.trim(),
-	    sets_count: 1,
-	    reps: "Seguir período",
-	    pause: "Seguir período",
+  const setsOverrideRaw = document.getElementById("ex-sets-override")?.value.trim();
+  const setsOverride = setsOverrideRaw
+    ? Math.max(1, Math.min(30, parseInt(setsOverrideRaw, 10) || 1))
+    : null;
+  const repsOverride = normalizeExerciseOverrideValue(document.getElementById("ex-reps-override")?.value);
+  const patch = {
+    name: document.getElementById("ex-name").value.trim(),
+    cat: document.getElementById("ex-cat").value.trim(),
+    sets_count: 1,
+    reps: "Seguir período",
+    sets_override: setsOverride,
+    reps_override: repsOverride || null,
+    pause: "Seguir período",
     cadence: document.getElementById("ex-cadence").value.trim(),
     method: document.getElementById("ex-method").value.trim(),
     observations: document.getElementById("ex-obs").value.trim()

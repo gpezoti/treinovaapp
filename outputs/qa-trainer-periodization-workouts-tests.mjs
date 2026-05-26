@@ -18,9 +18,9 @@ assert.match(html, /function getTrainingScheme/, "Workout execution must resolve
 assert.match(html, /function getExerciseTargetSets/, "Exercise set count must be derived centrally");
 assert.match(html, /STATE\.profile\.role === "student" \? STATE\.profile\.coach_id/, "Students must load coach-specific periodization presets");
 assert.match(html, /resolvePresetForWorkoutDate/, "Workout open flow must recover the linked period type");
-assert.match(html, /target_reps:\s*getCurrentTrainingScheme\(\)\.reps/, "Set logs must store target reps from the periodization type");
-assert.match(html, /const target = getExerciseTargetSets\(ex, scheme\)/, "Exercise cards must use periodization sets");
-assert.match(html, /const target = getExerciseTargetSets\(ex, scheme\);[\s\S]*for \(let i = 0; i < target; i\+\+\)/, "Set table must render the periodization set count");
+assert.match(html, /target_reps:\s*getExerciseTargetReps/, "Set logs must store target reps from the periodization type or manual override");
+assert.match(html, /const target = getExerciseTargetSets\(ex, scheme, exLogs\)/, "Exercise cards must use periodization sets");
+assert.match(html, /const target = getExerciseTargetSets\(ex, scheme, logs\);[\s\S]*for \(let i = 0; i < target; i\+\+\)/, "Set table must render the periodization set count");
 assert.doesNotMatch(html, /isMobility\s*\?\s*renderMobBtn/, "Mobility exercises must render the period-driven set table");
 assert.doesNotMatch(
   html.slice(html.indexOf("async function toggleSetDone"), html.indexOf("function onSerieCompleted")),
