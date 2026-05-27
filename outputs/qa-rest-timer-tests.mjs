@@ -61,7 +61,7 @@ const checks = [
       html.includes("rememberRestPushStatus") &&
       html.includes('action: "schedule"') &&
       html.includes('action: "cancel"') &&
-      html.includes("?view=workout&restTimer=1"),
+      html.includes("buildRestTimerWorkoutUrl"),
   },
   {
     name: "timer preserva push remoto ao finalizar localmente",
@@ -126,6 +126,8 @@ const checks = [
     pass: html.includes("prepareWorkoutDeepLinkFromRestTimer") &&
       html.includes("hydrateTimerFromPersisted(saved)") &&
       html.includes('if (view === "workout") prepareWorkoutDeepLinkFromRestTimer()') &&
+      html.includes('qs.get("sessionId")') &&
+      html.includes('loadWorkoutSessionById(restResume.sessionId)') &&
       sw.includes('new URL(rawUrl, self.location.origin).href') &&
       sw.includes('/?view=workout&restTimer=1'),
   },
@@ -154,7 +156,7 @@ const checks = [
   },
   {
     name: "service worker aceita notificacao local",
-    pass: sw.includes('VERSION = "v9"') &&
+    pass: /const VERSION = "v\d+"/.test(sw) &&
       sw.includes('type === "SHOW_NOTIFICATION"') &&
       sw.includes('type === "SCHEDULE_REST_TIMER"') &&
       sw.includes('type === "CANCEL_REST_TIMER"') &&

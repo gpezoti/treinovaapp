@@ -2028,6 +2028,7 @@ const MONTH_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho
    STATE / SUPABASE CLIENT
    ============================================================================= */
 let sb = null;
+const ACTIVE_WORKOUT_SESSION_KEY = "treinova_active_workout_session_v1";
 const DEFAULT_BRANDING = {
   app_name: "Coach",
   app_tagline: "Treine de verdade",
@@ -3186,11 +3187,144 @@ async function loadLastLoads() {
   STATE.lastLoads = m;
 }
 
+function sessionRecencyTime(session) {
+  if (!session) return 0;
+  const raw = session.started_at || session.completed_at || session.created_at || session.updated_at || session.date;
+  const ts = raw ? new Date(raw).getTime() : 0;
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function sessionCompletedTime(session) {
+  if (!session) return 0;
+  const raw = session.completed_at || session.updated_at || session.created_at || session.started_at;
+  const ts = raw ? new Date(raw).getTime() : 0;
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function sortWorkoutSessionsByRecency(rows = []) {
+  return [...(rows || [])].sort((a, b) => sessionRecencyTime(b) - sessionRecencyTime(a));
+}
+
+function readRememberedActiveWorkoutSession() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_WORKOUT_SESSION_KEY);
+    if (!raw) return null;
+    const state = JSON.parse(raw);
+    if (!state?.id) return null;
+    return state;
+  } catch(e) {
+    return null;
+  }
+}
+
+function rememberActiveWorkoutSession(session) {
+  try {
+    if (!session || session.status !== "in_progress") return;
+    localStorage.setItem(ACTIVE_WORKOUT_SESSION_KEY, JSON.stringify({
+      id: session.id,
+      date: session.date,
+      workout_code: session.workout_code,
+      workout_id: session.workout_id || null,
+      intensity: session.intensity || STATE.selectedIntensity || "yellow",
+      remembered_at: new Date().toISOString()
+    }));
+  } catch(e) {}
+}
+
+function forgetActiveWorkoutSession(sessionId = null) {
+  try {
+    const remembered = readRememberedActiveWorkoutSession();
+    if (!sessionId || !remembered || String(remembered.id) === String(sessionId)) {
+      localStorage.removeItem(ACTIVE_WORKOUT_SESSION_KEY);
+    }
+  } catch(e) {}
+}
+
+function mergeKnownWorkoutSession(session) {
+  if (!session) return;
+  STATE.todaySessions = sortWorkoutSessionsByRecency([
+    session,
+    ...(STATE.todaySessions || []).filter(s => String(s.id) !== String(session.id))
+  ]);
+}
+
+function setSelectedWorkoutFromSession(session) {
+  if (!session) return;
+  STATE.selectedDate = session.date || STATE.selectedDate || todayISO();
+  STATE.selectedWorkout = session.workout_code || STATE.selectedWorkout;
+  STATE.selectedWorkoutId = session.workout_id || null;
+  STATE.selectedIntensity = session.intensity || STATE.selectedIntensity || "yellow";
+  STATE.selectedPresetCode = resolvePresetForWorkoutDate(
+    STATE.selectedDate,
+    STATE.selectedWorkout,
+    STATE.selectedWorkoutId
+  );
+}
+
+function setCurrentWorkoutSession(session, { remember = false } = {}) {
+  if (!session) return null;
+  STATE.currentSession = session;
+  setSelectedWorkoutFromSession(session);
+  mergeKnownWorkoutSession(session);
+  if (remember && session.status === "in_progress") rememberActiveWorkoutSession(session);
+  if (session.status === "completed") forgetActiveWorkoutSession(session.id);
+  return session;
+}
+
+function getActiveWorkoutSessionForHome() {
+  const rows = sortWorkoutSessionsByRecency(STATE.todaySessions || []);
+  const activeRows = rows.filter(s => s.status === "in_progress");
+  const latestCompleted = sortWorkoutSessionsByRecency(rows.filter(s => s.status === "completed"))[0] || null;
+  const remembered = readRememberedActiveWorkoutSession();
+  let candidate = null;
+  if (remembered?.id) {
+    const rememberedRow = activeRows.find(s => String(s.id) === String(remembered.id));
+    if (rememberedRow) candidate = rememberedRow;
+  }
+  if (!candidate && STATE.currentSession?.status === "in_progress") candidate = STATE.currentSession;
+  if (!candidate) candidate = activeRows[0] || null;
+  if (candidate && latestCompleted && sessionCompletedTime(latestCompleted) > sessionRecencyTime(candidate)) {
+    return null;
+  }
+  return candidate;
+}
+
+async function abandonInProgressSessionsForDate(date, keepSessionId = null) {
+  try {
+    if (!sb || !STATE.profile?.id) return;
+    let query = sb.from("sessions")
+      .update({ status: "abandoned" })
+      .eq("student_id", STATE.profile.id)
+      .eq("status", "in_progress");
+    if (date) query = query.eq("date", date);
+    if (keepSessionId) query = query.neq("id", keepSessionId);
+    const { data, error } = await query.select("id");
+    if (error) throw error;
+    const abandoned = new Set((data || []).map(r => String(r.id)));
+    if (abandoned.size) {
+      STATE.todaySessions = (STATE.todaySessions || []).map(s =>
+        abandoned.has(String(s.id)) ? { ...s, status: "abandoned" } : s
+      );
+      if (STATE.currentSession && abandoned.has(String(STATE.currentSession.id))) {
+        STATE.currentSession = null;
+        STATE.setLogs = [];
+      }
+    }
+  } catch(e) {
+    console.warn("[workout] Falha ao limpar sessões concorrentes", e);
+  }
+}
+
+async function abandonOtherInProgressSessions(session) {
+  if (!session || session.status !== "in_progress") return;
+  await abandonInProgressSessionsForDate(null, session.id);
+}
+
 function pickBestWorkoutSession(rows = [], workoutId = null) {
   const candidates = workoutId
     ? rows.filter(s => !s.workout_id || String(s.workout_id) === String(workoutId))
     : rows;
-  const list = candidates.length ? candidates : rows;
+  const list = sortWorkoutSessionsByRecency(candidates.length ? candidates : rows);
   return list.find(s => s.status === "in_progress")
     || list.find(s => s.status === "completed")
     || list[0]
@@ -3210,23 +3344,60 @@ async function loadKnownWorkoutSessions(date = todayISO()) {
     STATE.todaySessions = [];
     return [];
   }
-  const { data, error } = await sb.from("sessions")
-    .select("*")
-    .eq("student_id", STATE.profile.id)
-    .eq("date", date)
-    .in("status", ["in_progress", "completed"]);
-  if (error) {
-    console.warn("[workout] Falha ao carregar sessões do dia", error);
+  const [dayRes, activeRes, completedRes] = await Promise.all([
+    sb.from("sessions")
+      .select("*")
+      .eq("student_id", STATE.profile.id)
+      .eq("date", date)
+      .in("status", ["in_progress", "completed"])
+      .order("started_at", { ascending: false })
+      .order("created_at", { ascending: false }),
+    sb.from("sessions")
+      .select("*")
+      .eq("student_id", STATE.profile.id)
+      .eq("status", "in_progress")
+      .order("started_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(8),
+    sb.from("sessions")
+      .select("*")
+      .eq("student_id", STATE.profile.id)
+      .eq("status", "completed")
+      .order("completed_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(8)
+  ]);
+  if (dayRes.error || activeRes.error || completedRes.error) {
+    console.warn("[workout] Falha ao carregar sessões conhecidas", dayRes.error || activeRes.error || completedRes.error);
     STATE.todaySessions = [];
     return [];
   }
-  STATE.todaySessions = data || [];
-  const active = (STATE.todaySessions || []).find(s => s.status === "in_progress");
+  const byId = {};
+  [...(dayRes.data || []), ...(activeRes.data || []), ...(completedRes.data || [])].forEach(s => { if (s?.id) byId[s.id] = s; });
+  STATE.todaySessions = sortWorkoutSessionsByRecency(Object.values(byId));
+  const active = getActiveWorkoutSessionForHome();
   if (active && (!STATE.currentSession || STATE.currentSession.status === "completed")) {
-    STATE.currentSession = active;
+    setCurrentWorkoutSession(active, { remember: true });
     await loadSetLogs();
   }
   return STATE.todaySessions;
+}
+
+async function loadWorkoutSessionById(sessionId) {
+  if (!STATE.profile || !sessionId) return null;
+  const { data, error } = await sb.from("sessions")
+    .select("*")
+    .eq("id", sessionId)
+    .eq("student_id", STATE.profile.id)
+    .maybeSingle();
+  if (error) {
+    console.warn("[workout] Falha ao carregar sessão ativa", error);
+    return null;
+  }
+  if (!data) return null;
+  setCurrentWorkoutSession(data, { remember: data.status === "in_progress" });
+  await loadSetLogs();
+  return data;
 }
 
 async function loadExistingSession(date, workoutCode, workoutId = null) {
@@ -3243,20 +3414,14 @@ async function loadExistingSession(date, workoutCode, workoutId = null) {
   }
   const existing = pickBestWorkoutSession(data || [], workoutId);
   if (!existing) return null;
-  STATE.currentSession = existing;
-  if (String(date) === String(todayISO())) {
-    STATE.todaySessions = [
-      ...(STATE.todaySessions || []).filter(s => String(s.id) !== String(existing.id)),
-      existing
-    ];
-  }
+  setCurrentWorkoutSession(existing, { remember: existing.status === "in_progress" });
   await loadSetLogs();
   return existing;
 }
 
-async function loadOrCreateSession(date, workoutCode, intensity) {
+async function loadOrCreateSession(date, workoutCode, intensity, workoutId = null) {
   // procura sessão do dia
-  const w = STATE.workouts[workoutCode];
+  const w = resolveWorkoutRef(workoutCode, workoutId) || STATE.workouts[workoutCode];
   const { data: existingRows, error: existingError } = await sb.from("sessions")
     .select("*").eq("student_id", STATE.profile.id)
     .eq("date", date).eq("workout_code", workoutCode).limit(5);
@@ -3264,9 +3429,9 @@ async function loadOrCreateSession(date, workoutCode, intensity) {
     console.error("[workout] Falha ao buscar sessão", existingError);
     throw existingError;
   }
-  const existing = pickBestWorkoutSession(existingRows || [], w?.id || null);
+  const existing = pickBestWorkoutSession(existingRows || [], workoutId || w?.id || null);
   if (existing) {
-    STATE.currentSession = existing;
+    setCurrentWorkoutSession(existing, { remember: existing.status === "in_progress" });
   } else {
     const { data, error } = await sb.from("sessions").insert({
       student_id: STATE.profile.id, date, workout_code: workoutCode,
@@ -3276,14 +3441,9 @@ async function loadOrCreateSession(date, workoutCode, intensity) {
       console.error("[workout] Falha ao iniciar sessão", error);
       throw error;
     }
-    STATE.currentSession = data;
+    setCurrentWorkoutSession(data, { remember: true });
   }
-  if (String(date) === String(todayISO()) && STATE.currentSession) {
-    STATE.todaySessions = [
-      ...(STATE.todaySessions || []).filter(s => String(s.id) !== String(STATE.currentSession.id)),
-      STATE.currentSession
-    ];
-  }
+  await abandonOtherInProgressSessions(STATE.currentSession);
   await loadSetLogs();
   return STATE.currentSession;
 }
@@ -3318,10 +3478,15 @@ async function trackFeedViews(posts) {
   if (!newIds.length) return;
   if (!STATE.viewedPosts) STATE.viewedPosts = new Set();
   newIds.forEach(id => STATE.viewedPosts.add(id));
-  await sb.from("feed_post_views").upsert(
-    newIds.map(post_id => ({ post_id, user_id: STATE.profile.id })),
-    { onConflict: "post_id,user_id", ignoreDuplicates: true }
-  ).catch(() => {});
+  try {
+    const { error } = await sb.from("feed_post_views").upsert(
+      newIds.map(post_id => ({ post_id, user_id: STATE.profile.id })),
+      { onConflict: "post_id,user_id", ignoreDuplicates: true }
+    );
+    if (error) console.warn("[feed views]", error);
+  } catch (e) {
+    console.warn("[feed views]", e);
+  }
 }
 
 async function loadFeed() {
@@ -3898,7 +4063,7 @@ window.confirmSerieDone = async function(skipTimer) {
     }
   }
 
-  const WForTimer = STATE.workouts[STATE.selectedWorkout];
+  const WForTimer = resolveWorkoutRef(STATE.selectedWorkout, STATE.selectedWorkoutId) || STATE.workouts[STATE.selectedWorkout];
   const timerExercises = (WForTimer && WForTimer.exercises) || [];
   const timerCurIdx = timerExercises.findIndex(e => e.position === exPos);
   const timerNextEx = timerExercises[timerCurIdx + 1];
@@ -4039,15 +4204,25 @@ async function completeSession() {
   // calcula volume e duração
   const totalVolume = STATE.setLogs.filter(s => s.done && s.load_kg).reduce((acc, s) => acc + (s.load_kg || 0), 0);
   const duration = calculateWorkoutDurationSeconds();
+  const completedAt = new Date().toISOString();
   const { error } = await sb.from("sessions").update({
     status: "completed",
-    completed_at: new Date().toISOString(),
+    completed_at: completedAt,
     total_volume_kg: totalVolume,
     duration_seconds: duration
   }).eq("id", STATE.currentSession.id);
   if (error) { console.error(error); showToast("Erro ao concluir","error"); return; }
   showToast("Treino concluído! ✓", "success");
-  STATE.currentSession.status = "completed";
+  STATE.currentSession = {
+    ...STATE.currentSession,
+    status: "completed",
+    completed_at: completedAt,
+    total_volume_kg: totalVolume,
+    duration_seconds: duration
+  };
+  forgetActiveWorkoutSession(STATE.currentSession.id);
+  mergeKnownWorkoutSession(STATE.currentSession);
+  await abandonInProgressSessionsForDate(null, STATE.currentSession.id);
   await loadLastLoads();
   // [B-03] PostHog — evento mais importante: treino concluído
   try {
@@ -4162,6 +4337,7 @@ async function mutateCompletedWorkoutSessionDirect(action) {
 
 async function afterCompletedWorkoutMutation(action) {
   if (action === "delete") {
+    forgetActiveWorkoutSession(STATE.currentSession?.id || null);
     STATE.currentSession = null;
     STATE.setLogs = [];
     await loadPeriodization();
@@ -4169,7 +4345,7 @@ async function afterCompletedWorkoutMutation(action) {
     navTo("home");
     return true;
   }
-  await loadOrCreateSession(STATE.selectedDate || todayISO(), STATE.selectedWorkout, STATE.selectedIntensity);
+  await loadOrCreateSession(STATE.selectedDate || todayISO(), STATE.selectedWorkout, STATE.selectedIntensity, STATE.selectedWorkoutId);
   if (action === "restart") STATE.setLogs = [];
   showToast(action === "restart" ? "Treino reiniciado" : "Treino reaberto para continuar", "success");
   renderWorkout();
@@ -4848,6 +5024,10 @@ function readPersistedTimer() {
         duration,
         exerciseName: String(state.exerciseName || state.label || "Próxima série"),
         label: String(state.label || state.exerciseName || "Próxima série"),
+        selectedDate: state.selectedDate || null,
+        selectedWorkout: state.selectedWorkout || null,
+        selectedWorkoutId: state.selectedWorkoutId || state.workoutId || null,
+        selectedIntensity: state.selectedIntensity || null,
         sessionId: state.sessionId ? String(state.sessionId) : null,
         focusExercisePosition: Number.isFinite(Number(state.focusExercisePosition)) ? Number(state.focusExercisePosition) : null,
         status: state.status === "paused" ? "paused" : "running",
@@ -4890,6 +5070,7 @@ function persistTimerState(extra = {}) {
       pausedRemaining: STATE.timer.paused ? STATE.timer.secondsLeft : null,
       selectedDate: STATE.selectedDate || todayISO(),
       selectedWorkout: STATE.selectedWorkout || null,
+      selectedWorkoutId: STATE.selectedWorkoutId || STATE.currentSession?.workout_id || null,
       selectedIntensity: STATE.selectedIntensity || null,
       sessionId: STATE.currentSession?.id || null,
       focusExercisePosition: Number.isFinite(Number(STATE.timer.focusExercisePosition))
@@ -4935,6 +5116,7 @@ function hydrateTimerFromPersisted(state, onDone) {
   STATE.timer.onDone = onDone || STATE.timer.onDone || null;
   if (state.selectedDate) STATE.selectedDate = state.selectedDate;
   if (state.selectedWorkout) STATE.selectedWorkout = state.selectedWorkout;
+  if (state.selectedWorkoutId) STATE.selectedWorkoutId = state.selectedWorkoutId;
   if (state.selectedIntensity) STATE.selectedIntensity = state.selectedIntensity;
   return true;
 }
@@ -4974,7 +5156,26 @@ async function getCurrentPushSubscriptionPayload() {
   }
 }
 
-async function notifyRestFinished(exerciseName) {
+function buildRestTimerWorkoutUrl(context = {}) {
+  const params = new URLSearchParams();
+  params.set("view", "workout");
+  params.set("restTimer", "1");
+  const sessionId = context.sessionId || STATE.currentSession?.id || readRememberedActiveWorkoutSession()?.id;
+  const date = context.selectedDate || context.date || STATE.currentSession?.date || STATE.selectedDate || todayISO();
+  const workoutCode = context.selectedWorkout || context.workoutCode || context.workout_code || STATE.currentSession?.workout_code || STATE.selectedWorkout;
+  const workoutId = context.selectedWorkoutId || context.workoutId || context.workout_id || STATE.currentSession?.workout_id || STATE.selectedWorkoutId;
+  const intensity = context.selectedIntensity || context.intensity || STATE.currentSession?.intensity || STATE.selectedIntensity;
+  const focus = Number.isFinite(Number(context.focusExercisePosition)) ? Number(context.focusExercisePosition) : null;
+  if (sessionId) params.set("sessionId", String(sessionId));
+  if (date) params.set("date", String(date));
+  if (workoutCode) params.set("workout", String(workoutCode));
+  if (workoutId) params.set("workoutId", String(workoutId));
+  if (intensity) params.set("intensity", String(intensity));
+  if (focus !== null) params.set("focus", String(focus));
+  return `${location.pathname || "/"}?${params.toString()}`;
+}
+
+async function notifyRestFinished(exerciseName, context = {}) {
   if (!("Notification" in window) || Notification.permission !== "granted") return false;
   const title = "Descanso finalizado";
   const body = `Próximo exercício: ${exerciseName || "Próxima série"}`;
@@ -4986,7 +5187,7 @@ async function notifyRestFinished(exerciseName) {
     vibrate: [160, 80, 160],
     icon: "/assets/icon-192.png",
     badge: "/assets/favicon-32x32.png",
-    data: { url: `${location.pathname || "/"}?view=workout&restTimer=1` }
+    data: { url: buildRestTimerWorkoutUrl(context) }
   };
   try {
     if ("serviceWorker" in navigator) {
@@ -5024,7 +5225,7 @@ function scheduleBackgroundRestNotification() {
     id: saved.id,
     fireAt: Date.now() + remaining * 1000,
     exerciseName: saved.exerciseName || saved.label || "Próxima série",
-    url: `${location.pathname || "/"}?view=workout&restTimer=1`
+    url: buildRestTimerWorkoutUrl(saved)
   });
 }
 function cancelBackgroundRestNotification() {
@@ -5097,7 +5298,7 @@ async function scheduleServerRestPush(seconds, exerciseName) {
         timer_id: STATE.timer.id,
         fire_at: fireAt,
         exercise_name: exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
-        url: `${location.pathname || "/"}?view=workout&restTimer=1`,
+        url: buildRestTimerWorkoutUrl(),
         subscription
       }
     });
@@ -5178,7 +5379,7 @@ function reconcileTimerAfterLifecycle(reason = "resume") {
       cancelBackgroundRestNotification();
       markPersistedTimerNotified(saved);
       rememberLastFinishedRestTimerContext(saved);
-      notifyRestFinished(saved.exerciseName || saved.label).catch(()=>{});
+      notifyRestFinished(saved.exerciseName || saved.label, saved).catch(()=>{});
       clearPersistedTimer();
       document.getElementById("timer-bar")?.classList.add("active","done");
       document.getElementById("timer-ring")?.classList.add("done");
@@ -6223,21 +6424,37 @@ window.navTo = navTo;
 
 function prepareWorkoutDeepLinkFromRestTimer() {
   try {
+    const qs = new URLSearchParams(location.search || "");
+    const queryContext = {
+      sessionId: qs.get("sessionId") || null,
+      selectedDate: qs.get("date") || null,
+      selectedWorkout: qs.get("workout") || null,
+      selectedWorkoutId: qs.get("workoutId") || null,
+      selectedIntensity: qs.get("intensity") || null,
+      focusExercisePosition: qs.get("focus") || null
+    };
+    const hasQueryContext = Object.values(queryContext).some(Boolean);
     const saved = typeof readPersistedTimer === "function"
       ? (readPersistedTimer() || readLastFinishedRestTimerContext())
       : null;
-    if (saved) {
-      hydrateTimerFromPersisted(saved);
-      if (saved.selectedDate) STATE.selectedDate = saved.selectedDate;
-      if (saved.selectedWorkout) STATE.selectedWorkout = saved.selectedWorkout;
-      if (saved.selectedIntensity) STATE.selectedIntensity = saved.selectedIntensity;
+    const remembered = readRememberedActiveWorkoutSession();
+    const context = hasQueryContext
+      ? queryContext
+      : (saved || remembered || null);
+    if (context) {
+      if (saved && !hasQueryContext) hydrateTimerFromPersisted(saved);
+      if (context.selectedDate || context.date) STATE.selectedDate = context.selectedDate || context.date;
+      if (context.selectedWorkout || context.workout_code) STATE.selectedWorkout = context.selectedWorkout || context.workout_code;
+      if (context.selectedWorkoutId || context.workout_id) STATE.selectedWorkoutId = context.selectedWorkoutId || context.workout_id;
+      if (context.selectedIntensity || context.intensity) STATE.selectedIntensity = context.selectedIntensity || context.intensity;
       STATE._resumeWorkoutFromRestTimer = {
-        sessionId: saved.sessionId || null,
-        date: saved.selectedDate || STATE.selectedDate || todayISO(),
-        workoutCode: saved.selectedWorkout || STATE.selectedWorkout || null,
-        intensity: saved.selectedIntensity || STATE.selectedIntensity || "yellow",
-        focusExercisePosition: Number.isFinite(Number(saved.focusExercisePosition))
-          ? Number(saved.focusExercisePosition)
+        sessionId: context.sessionId || context.id || null,
+        date: context.selectedDate || context.date || STATE.selectedDate || todayISO(),
+        workoutCode: context.selectedWorkout || context.workout_code || STATE.selectedWorkout || null,
+        workoutId: context.selectedWorkoutId || context.workout_id || STATE.selectedWorkoutId || null,
+        intensity: context.selectedIntensity || context.intensity || STATE.selectedIntensity || "yellow",
+        focusExercisePosition: Number.isFinite(Number(context.focusExercisePosition))
+          ? Number(context.focusExercisePosition)
           : null,
       };
       return true;
@@ -6561,8 +6778,7 @@ function renderHome() {
 function firstName(name) { return (name || "").split(" ")[0] || "atleta"; }
 
 function renderActiveWorkoutHomeCard() {
-  const session = (STATE.todaySessions || []).find(s => s.status === "in_progress")
-    || (STATE.currentSession && STATE.currentSession.status === "in_progress" && STATE.currentSession.date === todayISO() ? STATE.currentSession : null);
+  const session = getActiveWorkoutSessionForHome();
   if (!session) return "";
   const W = resolveWorkoutRef(session.workout_code, session.workout_id);
   if (!W || !W.exercises || !W.exercises.length) return "";
@@ -8111,9 +8327,29 @@ async function renderWorkout() {
       </div>`;
     return;
   }
-  const date = STATE.selectedDate || todayISO();
+  let date = STATE.selectedDate || todayISO();
   let code = STATE.selectedWorkout;
   let intensity = STATE.selectedIntensity;
+  const restResume = STATE._resumeWorkoutFromRestTimer;
+
+  if (restResume?.sessionId && (!STATE.currentSession || String(STATE.currentSession.id) !== String(restResume.sessionId))) {
+    el.innerHTML = `<div class="loading"><div class="spinner"></div>Retomando treino ativo...</div>`;
+    const loaded = await loadWorkoutSessionById(restResume.sessionId);
+    if (loaded) {
+      date = loaded.date || date;
+      code = loaded.workout_code || code;
+      intensity = loaded.intensity || intensity;
+    }
+  }
+  if (!code && restResume?.workoutCode) {
+    date = restResume.date || date;
+    code = restResume.workoutCode;
+    STATE.selectedDate = date;
+    STATE.selectedWorkout = code;
+    STATE.selectedWorkoutId = restResume.workoutId || STATE.selectedWorkoutId || null;
+    STATE.selectedIntensity = restResume.intensity || intensity || "yellow";
+    intensity = STATE.selectedIntensity;
+  }
 
   if (!code) {
     const info = findDayInfo(date);
@@ -8159,8 +8395,8 @@ async function renderWorkout() {
     return;
   }
 
-  const restResume = STATE._resumeWorkoutFromRestTimer;
   const shouldResumeRestWorkout = restResume
+    && (!restResume.sessionId || String(STATE.currentSession?.id || "") === String(restResume.sessionId))
     && (!restResume.workoutCode || restResume.workoutCode === code)
     && (!restResume.date || restResume.date === date);
 
@@ -8181,7 +8417,7 @@ async function renderWorkout() {
   }
   if (shouldResumeRestWorkout && !STATE.currentSession) {
     el.innerHTML = `<div class="loading"><div class="spinner"></div>Retomando treino...</div>`;
-    await loadOrCreateSession(date, code, restResume.intensity || intensity);
+    await loadOrCreateSession(date, code, restResume.intensity || intensity, restResume.workoutId || STATE.selectedWorkoutId);
   }
   if (shouldResumeRestWorkout && Number.isFinite(Number(restResume.focusExercisePosition))) {
     STATE.expandedEx = Number(restResume.focusExercisePosition);
@@ -8253,7 +8489,7 @@ async function renderWorkout() {
 
     ${!completed && !sessionActive ? `
       <div style="padding:0 0 16px">
-        <button class="btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px" onclick="startWorkoutSession('${date}','${code}','${intensity}')">
+        <button class="btn-primary" style="width:100%;justify-content:center;gap:10px;font-size:16px;padding:16px" onclick="startWorkoutSession('${date}','${code}','${intensity}','${STATE.selectedWorkoutId || ""}')">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
           Iniciar treino
         </button>
@@ -8345,11 +8581,11 @@ async function renderWorkout() {
 }
 
 // Chamado pelo botão "Iniciar treino" dentro da página de treino
-async function startWorkoutSession(date, code, intensity) {
+async function startWorkoutSession(date, code, intensity, workoutId = null) {
   const el = document.getElementById("view-workout");
   if (el) el.innerHTML = `<div class="loading"><div class="spinner"></div>Iniciando treino...</div>`;
   try {
-    const session = await loadOrCreateSession(date, code, intensity);
+    const session = await loadOrCreateSession(date, code, intensity, workoutId || STATE.selectedWorkoutId);
     if (!session) throw new Error("Sessão não criada.");
     await renderWorkout();
   } catch (e) {
@@ -13080,7 +13316,7 @@ window.editExercise = async function(exId) {
           <div id="ex-img-prev" class="exercise-media-preview" style="width:72px; height:72px; border-radius:12px; background:linear-gradient(135deg,var(--bg-3),var(--bg-2)); border:1px solid var(--line); overflow:hidden; flex:0 0 72px; display:grid; place-items:center;">
             ${getExThumb(ex)}
           </div>
-          <button class="btn-ghost" style="flex:1; width:auto;" onclick="onExerciseImageUpload('${exId}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Subir imagem</button>
+          <button class="btn-ghost" style="flex:1; width:auto;" onclick="onExerciseImageUpload('${exId}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Alterar imagem</button>
           ${hasCustomExerciseImage(ex) ? `<button class="mini-btn mini-btn-danger" onclick="clearExerciseMedia('${exId}','image')">×</button>` : ''}
         </div>
         <p class="text-xs muted">${hasCustomExerciseImage(ex) ? "Imagem personalizada deste exercício." : "Usando imagem padrão contextual. Suba uma foto para substituir."} Comprimida para 1024px JPEG antes do upload.</p>
@@ -13091,7 +13327,7 @@ window.editExercise = async function(exId) {
           <div id="ex-vid-prev" style="width:64px; height:64px; border-radius:10px; background:linear-gradient(135deg,var(--bg-3),var(--bg-2)); border:1px solid var(--line); overflow:hidden; flex:0 0 64px; display:grid; place-items:center;">
             ${ex.video_url ? `<video src="${escape(ex.video_url)}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>` : `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/></svg>`}
           </div>
-          <button class="btn-ghost" style="flex:1; width:auto;" onclick="onExerciseVideoUpload('${exId}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="2" y1="17" x2="7" y2="17"/></svg> Subir vídeo</button>
+          <button class="btn-ghost" style="flex:1; width:auto;" onclick="onExerciseVideoUpload('${exId}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="2" y1="17" x2="7" y2="17"/></svg> Alterar vídeo</button>
           ${ex.video_url ? `<button class="mini-btn mini-btn-danger" onclick="clearExerciseMedia('${exId}','video')">×</button>` : ''}
         </div>
         <p class="text-xs muted">Máx. 30 segundos · 25MB. Use vídeo já curto/recortado para subir rápido.</p>
@@ -13501,13 +13737,18 @@ async function postSignIn() {
   // Pré-seleciona treino do dia se for aluno
   if (profile.role === "student" || profile.role === "coach") {
     const today = todayISO();
-    const info = findDayInfo(today);
-    if (info && info.workout_code !== "OFF") {
+    const activeSession = getActiveWorkoutSessionForHome();
+    if (activeSession) {
+      setCurrentWorkoutSession(activeSession, { remember: true });
+    } else {
+      const info = findDayInfo(today);
+      if (info && info.workout_code !== "OFF") {
       STATE.selectedDate = today;
       STATE.selectedWorkout = info.workout_code;
       STATE.selectedWorkoutId = info.workout_id || null;
       STATE.selectedIntensity = info.intensity;
       STATE.selectedPresetCode = info.preset_code || resolvePresetForWorkoutDate(today, info.workout_code, info.workout_id);
+      }
     }
   }
 

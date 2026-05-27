@@ -9,6 +9,12 @@ const migration = fs.readFileSync("supabase/migrations/20260508223000_social_fee
 assert.equal(sql, migration, "migration must mirror sql script");
 
 assert.match(html, /async function ensureCoachStudentFollows\(\)/);
+assert.match(html, /async function trackFeedViews\(posts\)/);
+const trackFeedViewsBlock = html.slice(
+  html.indexOf("async function trackFeedViews(posts)"),
+  html.indexOf("async function loadFeed()"),
+);
+assert.doesNotMatch(trackFeedViewsBlock, /\.upsert\([\s\S]*?\)\.catch\(/, "Supabase query builders are awaitable, not Promise chains with .catch().");
 assert.match(html, /safeLoad\("coach auto-follow", ensureCoachStudentFollows\)/);
 assert.match(html, /window\.openSocialList = async function\(type\)/);
 assert.match(html, /window\.openPeopleSearch = function\(\)/);
