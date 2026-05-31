@@ -3919,7 +3919,7 @@ async function loadTrainers() {
   if (STATE.profile.role !== "admin") return;
   // Vai direto na profiles para ter todos os campos editáveis (avatar_url, phone, etc.)
   const { data: trainers } = await sb.from("profiles")
-    .select("id, email, full_name, role, status, avatar_emoji, avatar_url, phone, created_at")
+    .select("id, email, full_name, role, status, avatar_emoji, avatar_url, phone, cpf_cnpj, created_at, subscription_status, subscription_plan, subscription_price, trial_started_at, trial_ends_at, subscription_current_period_ends_at")
     .eq("role", "coach")
     .order("created_at", { ascending: false });
   // Conta alunos por coach
@@ -6141,6 +6141,41 @@ function getPlatformSubscriptionAccess(profile = STATE.profile) {
   };
 }
 
+function dateInputFromTimestamp(value) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+
+function addDaysToDateInput(date, days) {
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) ? new Date(`${date}T12:00:00`) : new Date();
+  base.setDate(base.getDate() + days);
+  return base.toISOString().slice(0, 10);
+}
+
+function formatDateInputBR(value) {
+  const date = dateInputFromTimestamp(value);
+  if (!date) return "sem data";
+  const [y, m, d] = date.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function trainerSubscriptionPill(profile) {
+  const access = getPlatformSubscriptionAccess({ ...profile, role: "coach" });
+  if ((profile.subscription_status || "legacy") === "trialing" && access.daysLeft != null && !access.locked) {
+    return `<span class="today-pill" style="color:var(--yellow);border-color:var(--yellow-soft);background:var(--yellow-soft)">Trial · ${access.daysLeft}d</span>`;
+  }
+  if (access.locked) {
+    return `<span class="today-pill pill-blocked">Trial vencido</span>`;
+  }
+  if (profile.subscription_status === "active") {
+    return `<span class="today-pill pill-approved">Assinante</span>`;
+  }
+  return `<span class="today-pill" style="color:var(--text-2);border-color:var(--line);background:var(--bg-2)">Liberado</span>`;
+}
+
 function platformTrialBannerHTML() {
   const access = getPlatformSubscriptionAccess();
   if (!STATE.profile || STATE.profile.role !== "coach") return "";
@@ -7486,6 +7521,7 @@ function renderTrainers() {
 function trainerRow(t, selMode) {
   const studs = (t.students_approved != null) ? `${t.students_approved} aluno(s)` : "";
   const checked = _trainerSelected.has(t.id);
+  const subscriptionPill = trainerSubscriptionPill(t);
   if (selMode) {
     return `<div class="list-row ${checked ? 'is-on' : ''}" style="cursor:pointer;${checked ? 'border-color:var(--brand);' : ''}" onclick="toggleTrainerSelect('${t.id}')">
       <div class="lr-avatar" style="display:flex;align-items:center;justify-content:center">
@@ -7504,6 +7540,7 @@ function trainerRow(t, selMode) {
       <div class="lr-sub">${escape(t.email || "")} ${studs ? "· " + studs : ""} · <span style="color:var(--brand)">tocar para editar</span></div>
     </div>
     <div class="lr-actions student-card-actions" onclick="event.stopPropagation()">
+      ${subscriptionPill}
       <span class="today-pill pill-${t.status === 'blocked' ? 'blocked' : 'approved'}">${t.status === 'blocked' ? 'Bloqueado' : 'Ativo'}</span>
     </div>
   </div>`;
@@ -7601,6 +7638,8 @@ window.openNewTrainerSheet = function() {
     <p>O usuário receberá uma conta de <b>treinador</b>. Ele vai entrar com o email e senha que você definir.</p>
     <div class="form-group"><label class="form-label">Nome completo</label><input class="input" id="nt-name" placeholder="Nome" /></div>
     <div class="form-group"><label class="form-label">Email</label><input class="input" id="nt-email" type="email" placeholder="email@exemplo.com" /></div>
+    <div class="form-group"><label class="form-label">CPF</label><input class="input" id="nt-cpf" inputmode="numeric" placeholder="Somente números" /></div>
+    <div class="form-group"><label class="form-label">Telefone</label><input class="input" id="nt-phone" type="tel" placeholder="(11) 99999-0000" /></div>
     <div class="form-group">
       <label class="form-label">Senha temporária</label>
       <div style="display:flex;gap:8px;align-items:center">
@@ -7608,6 +7647,19 @@ window.openNewTrainerSheet = function() {
         <button type="button" class="mini-btn mini-btn-ghost" onclick="generateNewTrainerPassword()" style="flex:0 0 auto">${iconSvg("bolt", 14)} Gerar</button>
       </div>
       <p class="text-xs muted" style="margin:6px 0 0;">Informe esta senha ao treinador. Ele poderá trocar depois no perfil.</p>
+    </div>
+    <div class="card" style="margin:12px 0;">
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="check-row" style="align-items:flex-start">
+          <input type="checkbox" id="nt-trial" checked onchange="toggleNewTrainerTrialFields()" />
+          <span><b>Iniciar período de teste</b><br><small class="muted">O treinador entra no fluxo de trial de 14 dias e será bloqueado se não assinar após o vencimento.</small></span>
+        </label>
+      </div>
+      <div class="form-group" id="nt-trial-fields" style="margin-bottom:0">
+        <label class="form-label">Data de início do teste</label>
+        <input class="input" id="nt-trial-start" type="date" value="${todayISO()}" onchange="updateNewTrainerTrialEndPreview()" />
+        <p class="text-xs muted" id="nt-trial-preview" style="margin:6px 0 0;">Termina em ${formatDateInputBR(addDaysToDateInput(todayISO(), 14))}.</p>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Carteira Asaas do treinador</label>
@@ -7618,6 +7670,17 @@ window.openNewTrainerSheet = function() {
     <button class="btn-ghost" onclick="closeSheet()" style="margin-top:8px">Cancelar</button>
   `);
   setTimeout(() => generateNewTrainerPassword(false), 40);
+};
+
+window.toggleNewTrainerTrialFields = function() {
+  const enabled = !!document.getElementById("nt-trial")?.checked;
+  const fields = document.getElementById("nt-trial-fields");
+  if (fields) fields.style.display = enabled ? "block" : "none";
+};
+window.updateNewTrainerTrialEndPreview = function() {
+  const start = document.getElementById("nt-trial-start")?.value || todayISO();
+  const preview = document.getElementById("nt-trial-preview");
+  if (preview) preview.textContent = `Termina em ${formatDateInputBR(addDaysToDateInput(start, 14))}.`;
 };
 window.generateNewTrainerPassword = function(showFeedback = true) {
   const input = document.getElementById("nt-pass");
@@ -7652,6 +7715,10 @@ async function runAdminTrainerAction(action, body) {
   if (!error && !data?.error) return data;
 
   const msg = await getFunctionErrorMessage(error || new Error(data?.error || ""));
+  const requiresUpdatedEdge = ["subscription_mode", "trial_start_date", "cpf_cnpj", "activate_trial"].some(k => Object.prototype.hasOwnProperty.call(body || {}, k));
+  if (requiresUpdatedEdge && isAdminUserFunctionOutdated(msg)) {
+    throw new Error(adminUserDeployMessage(msg));
+  }
   if (!isAdminUserFunctionOutdated(msg)) throw new Error(msg);
 
   const rpc = action === "remove_trainer"
@@ -7690,9 +7757,14 @@ window.submitNewTrainer = async function() {
   const setBusy = (b) => { if (btn) { btn.disabled = b; btn.textContent = b ? 'Criando...' : 'Criar treinador'; } };
   const name = document.getElementById("nt-name").value.trim();
   const email = document.getElementById("nt-email").value.trim();
+  const cpf = document.getElementById("nt-cpf").value.replace(/\D/g, "");
+  const phone = document.getElementById("nt-phone").value.trim();
   const pass = document.getElementById("nt-pass").value;
   const wallet = document.getElementById("nt-wallet").value.trim();
+  const activateTrial = !!document.getElementById("nt-trial")?.checked;
+  const trialStart = document.getElementById("nt-trial-start")?.value || todayISO();
   if (!name || !email || !pass) { showToast("Preencha nome, email e senha", "error"); return; }
+  if (cpf && ![11,14].includes(cpf.length)) { showToast("CPF/CNPJ inválido", "error"); return; }
   if (!passwordMeetsPolicy(pass)) { showToast("Senha precisa ter 8+ caracteres, maiúscula, minúscula e número", "error"); return; }
   setBusy(true);
   try {
@@ -7701,8 +7773,12 @@ window.submitNewTrainer = async function() {
         action: "create_trainer",
         full_name: name,
         email,
+        cpf_cnpj: cpf || null,
+        phone,
         password: pass,
         asaas_wallet_id: wallet || null,
+        activate_trial: activateTrial,
+        trial_start_date: activateTrial ? trialStart : null,
       }
     });
     if (error) throw error;
@@ -8270,6 +8346,9 @@ window.openEditTrainerSheet = async function(id) {
   // Conta alunos vinculados
   const { count: studentsCount } = await sb.from("profiles").select("id", { count: "exact", head: true })
     .eq("coach_id", id).eq("role", "student");
+  const subscriptionMode = prof.subscription_status === "trialing" ? "trialing" : "legacy";
+  const trialStartValue = dateInputFromTimestamp(prof.trial_started_at) || todayISO();
+  const trialEndLabel = formatDateInputBR(prof.trial_ends_at || addDaysToDateInput(trialStartValue, 14));
 
   openSheet(`
     <h3>Editar treinador</h3>
@@ -8287,6 +8366,10 @@ window.openEditTrainerSheet = async function(id) {
       <div class="form-group">
         <label class="form-label">Telefone</label>
         <input class="input" id="et-phone" type="tel" value="${escape(prof.phone || '')}" placeholder="(11) 99999-0000" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">CPF/CNPJ</label>
+        <input class="input" id="et-cpf" inputmode="numeric" value="${escape(prof.cpf_cnpj || '')}" placeholder="Somente números" />
       </div>
       <div class="form-group">
         <label class="form-label">Status</label>
@@ -8322,6 +8405,28 @@ window.openEditTrainerSheet = async function(id) {
       </div>
     </div>
 
+    <div class="section-title">Assinatura da plataforma</div>
+    <div class="card">
+      <div class="role-select" id="et-subscription-options">
+        <div class="role-option ${subscriptionMode === 'legacy' ? 'active' : ''}" onclick="selectTrainerSubscriptionMode('legacy')">
+          <div class="ro-title">Liberado manualmente</div>
+          <div class="ro-desc">Não bloqueia por trial</div>
+        </div>
+        <div class="role-option ${subscriptionMode === 'trialing' ? 'active' : ''}" onclick="selectTrainerSubscriptionMode('trialing')">
+          <div class="ro-title">Período de teste</div>
+          <div class="ro-desc">14 dias até assinar</div>
+        </div>
+      </div>
+      <div id="et-trial-fields" style="display:${subscriptionMode === 'trialing' ? 'block' : 'none'};margin-top:12px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Data de início do teste</label>
+          <input class="input" id="et-trial-start" type="date" value="${escape(trialStartValue)}" onchange="updateEditTrainerTrialEndPreview()" />
+          <p class="text-xs muted" id="et-trial-preview" style="margin:6px 0 0;">Término atual: ${escape(trialEndLabel)}. Ao salvar, será recalculado para 14 dias após o início.</p>
+        </div>
+      </div>
+      <p class="text-xs muted" style="margin:10px 0 0;">Use isto para treinadores cadastrados manualmente após contato pelo WhatsApp.</p>
+    </div>
+
     <div class="section-title">Senha</div>
     <div class="card">
       <p class="text-xs muted" style="margin:0 0 10px;">Use somente quando o treinador não conseguir entrar. A senha atual não é exibida por segurança.</p>
@@ -8345,6 +8450,7 @@ window.openEditTrainerSheet = async function(id) {
 
     <input type="hidden" id="et-tmp-status" value="${escape(prof.status)}" />
     <input type="hidden" id="et-tmp-role" value="${escape(prof.role)}" />
+    <input type="hidden" id="et-tmp-subscription" value="${escape(subscriptionMode)}" />
   `);
 };
 
@@ -8361,14 +8467,33 @@ window.selectTrainerRole = function(r) {
   });
 };
 
+window.selectTrainerSubscriptionMode = function(mode) {
+  document.getElementById("et-tmp-subscription").value = mode;
+  document.querySelectorAll('#et-subscription-options .role-option').forEach((el, i) => {
+    el.classList.toggle('active', (i === 0 && mode === 'legacy') || (i === 1 && mode === 'trialing'));
+  });
+  const fields = document.getElementById("et-trial-fields");
+  if (fields) fields.style.display = mode === "trialing" ? "block" : "none";
+};
+
+window.updateEditTrainerTrialEndPreview = function() {
+  const start = document.getElementById("et-trial-start")?.value || todayISO();
+  const preview = document.getElementById("et-trial-preview");
+  if (preview) preview.textContent = `Ao salvar, o teste termina em ${formatDateInputBR(addDaysToDateInput(start, 14))}.`;
+};
+
 window.submitEditTrainer = async function(id) {
   const name = document.getElementById("et-name").value.trim();
   const email = document.getElementById("et-email").value.trim();
   const phone = document.getElementById("et-phone").value.trim();
+  const cpf = document.getElementById("et-cpf").value.replace(/\D/g, "");
   const status = document.getElementById("et-tmp-status").value;
   const role = document.getElementById("et-tmp-role").value;
+  const subscriptionMode = document.getElementById("et-tmp-subscription").value;
+  const trialStart = document.getElementById("et-trial-start")?.value || todayISO();
       const password = document.getElementById("et-password").value.trim();
   if (!name || !email) { showToast("Preencha nome e email", "error"); return; }
+  if (cpf && ![11,14].includes(cpf.length)) { showToast("CPF/CNPJ inválido", "error"); return; }
   if (password && !passwordMeetsPolicy(password)) { showToast("Senha precisa ter 8+ caracteres, maiúscula, minúscula e número", "error"); return; }
   try {
       await runAdminTrainerAction("update_trainer", {
@@ -8376,11 +8501,14 @@ window.submitEditTrainer = async function(id) {
       full_name: name,
       email,
       phone,
+      cpf_cnpj: cpf || null,
       avatar_emoji: null,
       status,
       role,
         password: password || undefined,
         asaas_wallet_id: document.getElementById("et-wallet").value.trim() || null,
+        subscription_mode: role === "coach" ? subscriptionMode : "legacy",
+        trial_start_date: subscriptionMode === "trialing" ? trialStart : null,
       });
     showToast("Treinador atualizado", "success");
     closeSheet();

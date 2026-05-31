@@ -9,6 +9,8 @@ const migration = read("supabase/migrations/20260531143000_platform_trial_subscr
 const signupFn = read("supabase/functions/platform-signup/index.ts");
 const checkoutFn = read("supabase/functions/platform-create-checkout/index.ts");
 const webhookFn = read("supabase/functions/asaas-webhook/index.ts");
+const adminFn = read("supabase/functions/admin-user/index.ts");
+const appLanding = read("app/index.html");
 const landing = read("outputs/landing.html");
 const site = read("outputs/treinova-site/index.html");
 
@@ -33,6 +35,11 @@ includesAll(index, [
   'sb.functions.invoke("platform-create-checkout"',
   'platformTrialBannerHTML',
   'R$ 59,90',
+  'selectTrainerSubscriptionMode',
+  'id="et-trial-start"',
+  'id="nt-trial-start"',
+  'subscription_mode',
+  'trial_start_date',
 ], "index.html");
 
 assert.ok(index.includes('hasCoachSignupIntent()'), "index.html: signup query param handler missing");
@@ -84,6 +91,18 @@ includesAll(webhookFn, [
   "subscription_status",
   "platform:",
 ], "asaas-webhook");
+
+includesAll(adminFn, [
+  "trialDatesFromStartDate",
+  "syncCoachSubscription",
+  "activate_trial",
+  "subscription_mode",
+  "trial_start_date",
+  "coach_subscriptions",
+  "subscription_status: \"trialing\"",
+], "admin-user");
+
+assert.equal(appLanding, site, "app/index.html must stay synced with current landing");
 
 for (const [name, html] of [["outputs/landing.html", landing], ["outputs/treinova-site/index.html", site]]) {
   assert.ok(html.includes("https://treinovaapp.com/?signup=coach"), `${name}: public signup CTA missing`);

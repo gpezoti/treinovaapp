@@ -49,6 +49,100 @@ function passwordMeetsPolicy(value: unknown) {
     && /\d/.test(password);
 }
 
+function onlyDigits(value: unknown) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function todayInSaoPauloISO() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function trialDatesFromStartDate(value: unknown) {
+  const startDate = cleanText(value) || todayInSaoPauloISO();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    throw new Error("Data de início do trial inválida.");
+  }
+  const start = new Date(`${startDate}T00:00:00.000-03:00`);
+  if (Number.isNaN(start.getTime())) {
+    throw new Error("Data de início do trial inválida.");
+  }
+  const end = new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000);
+  return { start, end, startDate };
+}
+
+async function syncCoachSubscription(params: {
+  coachId: string;
+  mode: "legacy" | "trialing";
+  trialStartDate?: unknown;
+}) {
+  if (params.mode === "trialing") {
+    const dates = trialDatesFromStartDate(params.trialStartDate);
+    const profilePatch = {
+      subscription_status: "trialing",
+      subscription_plan: "coach_monthly",
+      subscription_price: 59.90,
+      trial_started_at: dates.start.toISOString(),
+      trial_ends_at: dates.end.toISOString(),
+      subscription_locked_at: null,
+      subscription_updated_at: new Date().toISOString(),
+    };
+    const { error: profileErr } = await sbAdmin
+      .from("profiles")
+      .update(profilePatch)
+      .eq("id", params.coachId);
+    if (profileErr) throw new Error(profileErr.message);
+
+    const { error: subErr } = await sbAdmin
+      .from("coach_subscriptions")
+      .upsert({
+        coach_id: params.coachId,
+        status: "trialing",
+        plan_code: "coach_monthly",
+        amount: 59.90,
+        trial_started_at: dates.start.toISOString(),
+        trial_ends_at: dates.end.toISOString(),
+        current_period_ends_at: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "coach_id" });
+    if (subErr) throw new Error(subErr.message);
+    return { mode: "trialing", trial_started_at: dates.start.toISOString(), trial_ends_at: dates.end.toISOString() };
+  }
+
+  const legacyPatch = {
+    subscription_status: "legacy",
+    subscription_plan: "legacy",
+    trial_started_at: null,
+    trial_ends_at: null,
+    subscription_locked_at: null,
+    subscription_updated_at: new Date().toISOString(),
+  };
+  const { error: profileErr } = await sbAdmin
+    .from("profiles")
+    .update(legacyPatch)
+    .eq("id", params.coachId);
+  if (profileErr) throw new Error(profileErr.message);
+
+  const { error: subErr } = await sbAdmin
+    .from("coach_subscriptions")
+    .upsert({
+      coach_id: params.coachId,
+      status: "legacy",
+      plan_code: "legacy",
+      amount: 59.90,
+      trial_started_at: null,
+      trial_ends_at: null,
+      current_period_ends_at: null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "coach_id" });
+  if (subErr) throw new Error(subErr.message);
+  return { mode: "legacy" };
+}
+
 function assertAdmin(caller: { role: string }) {
   if (caller.role !== "admin") {
     return json({ error: "Apenas admin pode executar esta ação." }, 403);
@@ -220,9 +314,15 @@ serve(async (req) => {
       const email = String(body.email || "").trim().toLowerCase();
       const password = String(body.password || "");
       const fullName = String(body.full_name || "").trim();
+      const phone = cleanText(body.phone);
+      const cpfCnpj = onlyDigits(body.cpf_cnpj);
       const asaasWalletId = cleanText(body.asaas_wallet_id);
+      const activateTrial = body.activate_trial === true || body.subscription_mode === "trialing";
       if (!fullName || !email.includes("@") || !passwordMeetsPolicy(password)) {
         return json({ error: "Nome, email válido e senha com 8+ caracteres, maiúscula, minúscula e número são obrigatórios." }, 400);
+      }
+      if (cpfCnpj && ![11, 14].includes(cpfCnpj.length)) {
+        return json({ error: "CPF/CNPJ inválido." }, 400);
       }
 
       const created = await createAuthUserOrReuseProfile({ email, password, fullName, role: "coach" });
@@ -233,6 +333,8 @@ serve(async (req) => {
           id: created.userId,
           email,
           full_name: fullName,
+          phone: phone || null,
+          cpf_cnpj: cpfCnpj || null,
           role: "coach",
           status: "approved",
           coach_id: null,
@@ -241,7 +343,13 @@ serve(async (req) => {
         }, { onConflict: "id" });
       if (profileErr) return json({ error: profileErr.message }, 500);
 
-      return json({ ok: true, action: "create_trainer", user_id: created.userId, reused: created.reused });
+      const subscription = await syncCoachSubscription({
+        coachId: created.userId,
+        mode: activateTrial ? "trialing" : "legacy",
+        trialStartDate: body.trial_start_date,
+      });
+
+      return json({ ok: true, action: "create_trainer", user_id: created.userId, reused: created.reused, subscription });
     }
 
     if (!user_id) {
@@ -328,14 +436,19 @@ serve(async (req) => {
       const fullName = cleanText(body.full_name);
       const email = cleanEmail(body.email);
       const phone = cleanText(body.phone);
+      const cpfCnpj = onlyDigits(body.cpf_cnpj);
       const avatarEmoji = cleanText(body.avatar_emoji);
       const asaasWalletId = cleanText(body.asaas_wallet_id);
       const status = cleanText(body.status || target.status);
       const role = cleanText(body.role || target.role);
       const password = String(body.password || "");
+      const subscriptionMode = cleanText(body.subscription_mode || "");
 
       if (!fullName || !email.includes("@")) {
         return json({ error: "Nome e email válido são obrigatórios." }, 400);
+      }
+      if (cpfCnpj && ![11, 14].includes(cpfCnpj.length)) {
+        return json({ error: "CPF/CNPJ inválido." }, 400);
       }
       if (!["approved", "blocked", "pending"].includes(status)) {
         return json({ error: "Status inválido." }, 400);
@@ -361,6 +474,7 @@ serve(async (req) => {
         email,
         full_name: fullName,
         phone: phone || null,
+        cpf_cnpj: cpfCnpj || null,
         avatar_emoji: avatarEmoji || "🎯",
         status,
         role,
@@ -375,7 +489,17 @@ serve(async (req) => {
         .eq("id", user_id);
 
       if (profileErr) return json({ error: profileErr.message }, 500);
-      return json({ ok: true, action: "update_trainer" });
+
+      let subscription = null;
+      if (role === "coach" && ["legacy", "trialing"].includes(subscriptionMode)) {
+        subscription = await syncCoachSubscription({
+          coachId: user_id,
+          mode: subscriptionMode as "legacy" | "trialing",
+          trialStartDate: body.trial_start_date,
+        });
+      }
+
+      return json({ ok: true, action: "update_trainer", subscription });
     }
 
     if (action === "remove_trainer") {
