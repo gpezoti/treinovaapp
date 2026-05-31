@@ -2135,6 +2135,26 @@ function intensityPill(int) {
 }
 function workoutPretty(w) { if (!w || w === "OFF") return "OFF"; return w; }
 function escape(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+const WORKOUT_CODE_MAX_LENGTH = 12;
+const WORKOUT_CODE_HELP_TEXT = "Use até 12 caracteres: letras, números, _ ou -. Ex: SUPERIOR2";
+function normalizeWorkoutCodeValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Z0-9_-]/g, "")
+    .slice(0, WORKOUT_CODE_MAX_LENGTH);
+}
+function isValidWorkoutCodeValue(value) {
+  return new RegExp(`^[A-Z0-9_-]{1,${WORKOUT_CODE_MAX_LENGTH}}$`).test(String(value || ""));
+}
+function applyWorkoutCodeInputMask(input) {
+  if (!input) return "";
+  const next = normalizeWorkoutCodeValue(input.value);
+  if (input.value !== next) input.value = next;
+  return next;
+}
 function normalizeInstagramHandle(raw) {
   return String(raw || "")
     .trim()
@@ -11922,16 +11942,16 @@ window.openCreateWorkoutSheet = function(studentId) {
     <p style="font-size:13px;color:var(--text-2);margin:0 0 16px">Este treino ficará disponível apenas para este aluno.</p>
     <div class="form-group">
       <label class="form-label">Código do treino <span style="color:var(--red)">*</span></label>
-      <input class="input" id="nw-code" placeholder="Ex: E, F, SUPERIOR2..." maxlength="20" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
-      <div style="font-size:11px;color:var(--text-3);margin-top:3px">Use letras maiúsculas. Ex: E, CARDIO, LOWER2</div>
+      <input class="input" id="nw-code" placeholder="Ex: SUPERIOR2" maxlength="${WORKOUT_CODE_MAX_LENGTH}" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase" oninput="applyWorkoutCodeInputMask(this)">
+      <div style="font-size:11px;color:var(--text-3);margin-top:3px">${WORKOUT_CODE_HELP_TEXT}</div>
     </div>
     <div class="form-group">
       <label class="form-label">Nome do treino <span style="color:var(--red)">*</span></label>
-      <input class="input" id="nw-name" placeholder="Ex: Treino E · Membros Inferiores">
+      <input class="input" id="nw-name" maxlength="80" placeholder="Ex: Treino Superior 2">
     </div>
     <div class="form-group">
       <label class="form-label">Foco / descrição</label>
-      <input class="input" id="nw-focus" placeholder="Ex: Glúteos e Quadríceps">
+      <input class="input" id="nw-focus" maxlength="140" placeholder="Ex: Glúteos e Quadríceps">
     </div>
     <div style="display:flex;gap:8px;margin-top:4px">
       <button class="btn-primary" style="flex:1" onclick="createWorkoutForStudent('${studentId}')">Criar treino</button>
@@ -11941,13 +11961,15 @@ window.openCreateWorkoutSheet = function(studentId) {
 };
 
 window.createWorkoutForStudent = async function(studentId) {
-  const code = (document.getElementById("nw-code")?.value || "").trim().toUpperCase();
+  const codeEl = document.getElementById("nw-code");
+  const code = normalizeWorkoutCodeValue(codeEl?.value || "");
+  if (codeEl) codeEl.value = code;
   const name = (document.getElementById("nw-name")?.value || "").trim();
   const focus = (document.getElementById("nw-focus")?.value || "").trim();
   const btn = document.querySelector('#sheet-content .btn-primary');
   if (!code) { showToast("Informe o código do treino", "error"); return; }
   if (!name) { showToast("Informe o nome do treino", "error"); return; }
-  if (!/^[A-Z0-9_-]{1,20}$/.test(code)) { showToast("Use apenas letras, números, _ ou - no código", "error"); return; }
+  if (!isValidWorkoutCodeValue(code)) { showToast(WORKOUT_CODE_HELP_TEXT, "error"); codeEl?.focus(); return; }
   if (name.length > 80) { showToast("Nome muito longo. Use até 80 caracteres.", "error"); return; }
   if (focus.length > 140) { showToast("Descrição muito longa. Use até 140 caracteres.", "error"); return; }
   if (STATE._savingWorkout) return;
@@ -12549,7 +12571,8 @@ window.openCreateWorkoutTypeSheet = function() {
     <p style="font-size:13px;color:var(--text-2);margin-top:0">Use um código curto para aparecer na periodização do aluno.</p>
     <div class="form-group">
       <label class="form-label">Código</label>
-      <input class="input" id="new-workout-code" maxlength="12" placeholder="Ex.: A, B, FLEX, MOB" style="text-transform:uppercase" />
+      <input class="input" id="new-workout-code" maxlength="${WORKOUT_CODE_MAX_LENGTH}" placeholder="Ex: SUPERIOR2" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase" oninput="applyWorkoutCodeInputMask(this)" />
+      <div style="font-size:11px;color:var(--text-3);margin-top:3px">${WORKOUT_CODE_HELP_TEXT}</div>
     </div>
     <div class="form-group">
       <label class="form-label">Nome</label>
@@ -12570,11 +12593,12 @@ window.createWorkoutType = async function() {
   const codeEl = document.getElementById("new-workout-code");
   const nameEl = document.getElementById("new-workout-name");
   const focusEl = document.getElementById("new-workout-focus");
-  const code = String(codeEl?.value || "").trim().toUpperCase().replace(/\s+/g, "_");
+  const code = normalizeWorkoutCodeValue(codeEl?.value || "");
+  if (codeEl) codeEl.value = code;
   const name = String(nameEl?.value || "").trim() || `Treino ${code}`;
   const focus = String(focusEl?.value || "").trim();
-  if (!/^[A-Z0-9_-]{1,12}$/.test(code)) {
-    showToast("Use um código curto, sem espaços ou acentos", "error");
+  if (!isValidWorkoutCodeValue(code)) {
+    showToast(WORKOUT_CODE_HELP_TEXT, "error");
     codeEl?.focus();
     return;
   }

@@ -78,6 +78,10 @@ assert.doesNotMatch(html.slice(html.indexOf("async function loadPeriodWorkoutOpt
 assert.match(html, /openEditWorkoutTypeSheet/, "Trainer must be able to edit workout model names");
 assert.match(html, /saveWorkoutTypeName/, "Workout model name edits must persist to Supabase");
 assert.match(html, /eq\("coach_id", STATE\.profile\.id\)\.is\("student_id", null\)/, "Coach workout rename must be scoped to owned model workouts");
+assert.match(html, /function normalizeWorkoutCodeValue/, "Workout code creation must use a shared normalizer");
+assert.match(html, /<input[^>]*id="new-workout-code"[^>]*maxlength="\$\{WORKOUT_CODE_MAX_LENGTH\}"/, "Trainer workout models must use the shared workout code limit");
+assert.match(html, /<input[^>]*id="new-workout-code"[^>]*placeholder="Ex: SUPERIOR2"/, "Trainer workout model code placeholder must avoid comma-separated examples");
+assert.doesNotMatch(html, /Ex\.: A, B, FLEX, MOB/, "Trainer workout code examples must not teach comma-separated codes");
 assert.match(html, /addSelectedExercisesToWorkout/, "Exercise picker must support adding multiple exercises");
 assert.match(html, /new Set\(\)/, "Exercise picker must track multi-selection");
 assert.doesNotMatch(html, /id="ne-sets"|id="ne-reps"|id="ne-pause"/, "New exercise form must not configure sets, reps, or pause");

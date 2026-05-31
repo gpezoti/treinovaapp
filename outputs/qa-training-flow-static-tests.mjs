@@ -7,7 +7,10 @@ const paymentRlsSql = readFileSync(new URL("../supabase/migrations/2026051212500
 const workoutBindingSql = readFileSync(new URL("../supabase/migrations/20260518193000_periodization_blocks_workout_binding.sql", import.meta.url), "utf8");
 
 const checks = [
-  ["custom workout validates code format", /Use apenas letras, números, _ ou - no código/.test(html)],
+  ["workout code rules are centralized at 12 chars", /WORKOUT_CODE_MAX_LENGTH\s*=\s*12/.test(html) && /function normalizeWorkoutCodeValue/.test(html)],
+  ["direct custom workout uses the same code limit as trainer library", /<input[^>]*id="nw-code"[^>]*maxlength="\$\{WORKOUT_CODE_MAX_LENGTH\}"/.test(html) && !/<input[^>]*id="nw-code"[^>]*maxlength="20"/.test(html)],
+  ["direct custom workout placeholder has one comma-free example", /<input[^>]*id="nw-code"[^>]*placeholder="Ex: SUPERIOR2"/.test(html) && !/Ex: E, F, SUPERIOR2/.test(html)],
+  ["custom workout validates code format", /WORKOUT_CODE_HELP_TEXT/.test(html) && /isValidWorkoutCodeValue\(code\)/.test(html)],
   ["custom workout save guard exists", /STATE\._savingWorkout/.test(html)],
   ["exercise add guard exists", /STATE\._addingExercise/.test(html)],
   ["exercise picker back button uses existing renderer", /onclick="_renderPickerFull\(\)"/.test(html)],
