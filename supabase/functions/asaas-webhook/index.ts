@@ -22,6 +22,115 @@ function paymentMethod(billingType?: string) {
   return (billingType || "asaas").toLowerCase();
 }
 
+function addDaysIso(dateValue: unknown, days: number) {
+  const raw = String(dateValue || "").slice(0, 10);
+  const base = raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T12:00:00Z`) : new Date();
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString();
+}
+
+async function updatePlatformSubscription(params: {
+  event: string;
+  checkout?: any;
+  subscription?: any;
+  payment?: any;
+}) {
+  const { event, checkout, subscription, payment } = params;
+  const checkoutId = checkout?.id || null;
+  const subscriptionId = subscription?.id || payment?.subscription || null;
+  const externalReference =
+    checkout?.externalReference ||
+    subscription?.externalReference ||
+    payment?.externalReference ||
+    null;
+
+  let row: any = null;
+
+  if (checkoutId) {
+    const { data } = await sb
+      .from("coach_subscriptions")
+      .select("*")
+      .eq("asaas_checkout_id", checkoutId)
+      .maybeSingle();
+    row = data;
+  }
+
+  if (!row && subscriptionId) {
+    const { data } = await sb
+      .from("coach_subscriptions")
+      .select("*")
+      .eq("asaas_subscription_id", subscriptionId)
+      .maybeSingle();
+    row = data;
+  }
+
+  if (!row && externalReference?.startsWith("platform:")) {
+    const coachId = externalReference.split(":")[1];
+    if (coachId) {
+      const { data } = await sb
+        .from("coach_subscriptions")
+        .select("*")
+        .eq("coach_id", coachId)
+        .maybeSingle();
+      row = data;
+    }
+  }
+
+  if (!row) return false;
+
+  const update: any = {
+    last_webhook_event: event,
+    last_webhook_at: new Date().toISOString(),
+  };
+  const profileUpdate: any = {
+    subscription_updated_at: new Date().toISOString(),
+  };
+
+  if (checkoutId) {
+    update.asaas_checkout_id = checkoutId;
+    update.asaas_checkout_url = checkout?.link || row.asaas_checkout_url || null;
+    profileUpdate.asaas_checkout_id = checkoutId;
+    profileUpdate.asaas_checkout_url = checkout?.link || row.asaas_checkout_url || null;
+  }
+
+  if (subscriptionId) {
+    update.asaas_subscription_id = subscriptionId;
+    profileUpdate.asaas_subscription_id = subscriptionId;
+  }
+
+  if (event === "CHECKOUT_PAID" || event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED" || event === "PAYMENT_RECEIVED_IN_CASH") {
+    update.status = "active";
+    update.current_period_ends_at = subscription?.nextDueDate
+      ? addDaysIso(subscription.nextDueDate, 0)
+      : addDaysIso(payment?.dueDate || checkout?.subscription?.nextDueDate, 31);
+    profileUpdate.subscription_status = "active";
+    profileUpdate.subscription_locked_at = null;
+    profileUpdate.subscription_current_period_ends_at = update.current_period_ends_at;
+  } else if (event === "SUBSCRIPTION_CREATED" || event === "SUBSCRIPTION_UPDATED") {
+    update.status = subscription?.status === "ACTIVE" ? "active" : "checkout_pending";
+    update.current_period_ends_at = subscription?.nextDueDate ? addDaysIso(subscription.nextDueDate, 0) : row.current_period_ends_at;
+    profileUpdate.subscription_status = update.status;
+    profileUpdate.subscription_current_period_ends_at = update.current_period_ends_at || null;
+    if (update.status === "active") profileUpdate.subscription_locked_at = null;
+  } else if (event === "PAYMENT_OVERDUE") {
+    update.status = "past_due";
+    profileUpdate.subscription_status = "past_due";
+    profileUpdate.subscription_locked_at = profileUpdate.subscription_locked_at || new Date().toISOString();
+  } else if (event === "CHECKOUT_CANCELED" || event === "CHECKOUT_EXPIRED") {
+    update.status = row.status === "active" ? row.status : "expired";
+    profileUpdate.subscription_status = row.status === "active" ? "active" : "expired";
+    if (row.status !== "active") profileUpdate.subscription_locked_at = new Date().toISOString();
+  } else if (event === "SUBSCRIPTION_INACTIVATED" || event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_DELETED" || event === "PAYMENT_REFUNDED") {
+    update.status = "canceled";
+    profileUpdate.subscription_status = "canceled";
+    profileUpdate.subscription_locked_at = new Date().toISOString();
+  }
+
+  await sb.from("coach_subscriptions").update(update).eq("id", row.id);
+  await sb.from("profiles").update(profileUpdate).eq("id", row.coach_id);
+  return true;
+}
+
 serve(async (req) => {
   try {
     if (req.method !== "POST") {
@@ -46,8 +155,20 @@ serve(async (req) => {
     }
     const event = body.event as string;
     const payment = body.payment;
+    const checkout = body.checkout;
+    const subscription = body.subscription;
+
+    if (checkout || subscription) {
+      const handled = await updatePlatformSubscription({ event, checkout, subscription, payment });
+      if (handled && !payment) return new Response("ok", { status: 200 });
+    }
 
     if (!payment) return new Response("no payment", { status: 200 });
+
+    if (payment.externalReference?.startsWith("platform:") || payment.subscription) {
+      const handled = await updatePlatformSubscription({ event, payment });
+      if (handled) return new Response("ok", { status: 200 });
+    }
 
     // Resolve nosso payment.id via externalReference (preferido) ou asaas_id
     let our: any = null;

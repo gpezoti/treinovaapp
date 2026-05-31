@@ -555,12 +555,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 /* Auth */
 .auth-page { min-height: 100vh; display: flex; flex-direction: column; padding: 24px 16px;
-  padding-top: calc(40px + var(--safe-top)); }
+  padding-top: calc(40px + var(--safe-top)); padding-bottom: calc(76px + var(--safe-bottom)); }
 .auth-logo { text-align: center; margin-bottom: 28px; }
 .auth-logo .brand-logo { width: 60px; height: 60px; font-size: 22px; margin: 0 auto 12px; }
 .auth-logo h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -0.5px; }
 .auth-logo p { color: var(--text-2); font-size: 13px; margin: 4px 0 0; }
 .auth-card { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 20px; }
+.auth-choice { display: grid; gap: 10px; margin-top: 14px; }
+.auth-choice-note { font-size: 12px; color: var(--text-3); line-height: 1.45; text-align: center; }
+.signup-benefits { display: grid; gap: 7px; margin: 10px 0 14px; }
+.signup-benefit { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 12px; line-height: 1.35; }
+.signup-benefit svg { color: var(--green); flex: 0 0 auto; }
+.auth-panel-title { margin: 0 0 6px; font-size: 18px; font-weight: 900; color: var(--text); }
+.auth-panel-sub { margin: 0 0 16px; color: var(--text-2); font-size: 13px; line-height: 1.45; }
+.platform-banner { border: 1px solid rgba(255,214,10,.32); background: linear-gradient(135deg, var(--yellow-soft), transparent 72%), var(--bg-card); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; }
+.platform-banner-title { display: flex; align-items: center; gap: 8px; color: var(--yellow); font-size: 13px; font-weight: 900; }
+.platform-banner-sub { margin-top: 5px; color: var(--text-2); font-size: 12px; line-height: 1.35; }
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg-2); border-radius: 12px;
   padding: 4px; margin-bottom: 18px; }
 .auth-tab { padding: 10px; text-align: center; font-weight: 800; font-size: 13px; color: var(--text-2);
@@ -964,9 +974,41 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       </p>
       <button type="button" class="btn-ghost" style="margin-top:8px" onclick="showAuthForm()">← Voltar ao login</button>
     </div>
+    <div id="signup-panel" style="display:none">
+      <h3 class="auth-panel-title">Teste grátis para treinadores</h3>
+      <p class="auth-panel-sub">Crie seu app em 14 dias grátis. Depois, assine por R$ 59,90/mês para manter o acesso.</p>
+      <div class="signup-benefits">
+        <div class="signup-benefit"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Sem cartão no cadastro inicial.</div>
+        <div class="signup-benefit"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Bloqueio automático se o trial expirar sem assinatura.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome completo</label>
+        <input class="input" id="signup-name" type="text" autocomplete="name" placeholder="Seu nome completo" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">CPF</label>
+        <input class="input" id="signup-cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14" oninput="formatSignupCpf(this)" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Telefone</label>
+        <input class="input" id="signup-phone" type="tel" autocomplete="tel" placeholder="(11) 99999-0000" maxlength="15" oninput="formatSignupPhone(this)" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="input" id="signup-email" type="email" autocomplete="email" placeholder="voce@email.com" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input class="input" id="signup-password" type="password" autocomplete="new-password" placeholder="Mín. 8 com maiúscula e número" />
+      </div>
+      <button type="button" class="btn-primary" id="signup-submit" onclick="submitCoachTrialSignup()">Começar teste grátis</button>
+      <div id="signup-error" style="display:none; margin-top:10px; padding:10px; border-radius:8px; background:rgba(255,59,59,0.1); border:1px solid rgba(255,59,59,0.3); color:#ffaaaa; font-size:12px; line-height:1.4;"></div>
+      <button type="button" class="btn-ghost" style="margin-top:10px" onclick="showAuthForm()">← Já tenho conta</button>
+    </div>
   </div>
-  <div style="text-align:center; margin-top:20px; padding:0 4px;">
-    <p style="font-size:12px; color:var(--text-3); line-height:1.5; margin:0;">
+  <div class="auth-choice" style="text-align:center; margin-top:20px; padding:0 4px;">
+    <button type="button" class="btn-ghost" onclick="showSignupPanel()">Sou treinador e quero testar grátis</button>
+    <p class="auth-choice-note" style="margin:0;">
       Novo por aqui? Seu treinador já criou seu acesso.<br>
       Use o e-mail e senha que ele cadastrou para você.
     </p>
@@ -2754,6 +2796,10 @@ function showAuth() {
   document.getElementById("auth-page").style.display = "flex";
   document.getElementById("app").style.display = "none";
   document.getElementById("cfg-page").style.display = "none";
+  setTimeout(() => {
+    if (hasCoachSignupIntent()) showSignupPanel();
+    else showAuthForm();
+  }, 0);
   try { _BOOT_DONE = true; } catch(e){}
 }
 function showCfg() {
@@ -2781,7 +2827,6 @@ function showApp() {
 }
 
 function setAuthMode(mode) {
-  // Login-only: sem signup público
   STATE.authMode = "signin";
   document.getElementById("auth-error").style.display = "none";
 }
@@ -2789,6 +2834,89 @@ function setAuthRole(role) { STATE.authRole = role || "student"; }
 function showAuthError(msg) {
   const e = document.getElementById("auth-error");
   e.textContent = msg; e.style.display = "block";
+}
+
+function hasCoachSignupIntent() {
+  try {
+    const qs = new URLSearchParams(location.search || "");
+    return qs.get("signup") === "coach" || qs.get("trial") === "coach" || qs.get("trial") === "1";
+  } catch(e) {
+    return false;
+  }
+}
+
+function onlyDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function formatSignupCpf(input) {
+  const digits = onlyDigits(input.value).slice(0, 11);
+  input.value = digits
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
+}
+
+function formatSignupPhone(input) {
+  const digits = onlyDigits(input.value).slice(0, 11);
+  input.value = digits.length <= 10
+    ? digits.replace(/^(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)/, "$1-$2")
+    : digits.replace(/^(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
+}
+
+function showSignupError(msg) {
+  const e = document.getElementById("signup-error");
+  if (!e) return;
+  e.textContent = msg || "Não foi possível concluir.";
+  e.style.display = "block";
+}
+
+function showSignupPanel() {
+  document.getElementById("auth-form").style.display = "none";
+  document.getElementById("forgot-panel").style.display = "none";
+  const panel = document.getElementById("signup-panel");
+  if (panel) panel.style.display = "block";
+  const error = document.getElementById("signup-error");
+  if (error) error.style.display = "none";
+  const ae = document.getElementById("auth-email");
+  const se = document.getElementById("signup-email");
+  if (ae && se && ae.value && !se.value) se.value = ae.value;
+}
+
+async function submitCoachTrialSignup() {
+  const btn = document.getElementById("signup-submit");
+  const payload = {
+    full_name: document.getElementById("signup-name")?.value?.trim() || "",
+    cpf: onlyDigits(document.getElementById("signup-cpf")?.value || ""),
+    phone: onlyDigits(document.getElementById("signup-phone")?.value || ""),
+    email: document.getElementById("signup-email")?.value?.trim()?.toLowerCase() || "",
+    password: document.getElementById("signup-password")?.value || "",
+  };
+  const error = document.getElementById("signup-error");
+  if (error) error.style.display = "none";
+  if (!payload.full_name || !payload.cpf || !payload.phone || !payload.email || !payload.password) {
+    showSignupError("Preencha nome, CPF, telefone, email e senha.");
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = "Criando acesso..."; }
+  try {
+    const { data, error: fnError } = await withTimeout(sb.functions.invoke("platform-signup", {
+      body: payload
+    }), 25000, "platform-signup timeout");
+    if (fnError) throw fnError;
+    if (!data?.ok) throw new Error(data?.error || "Cadastro não confirmado.");
+    const { error: loginError } = await sb.auth.signInWithPassword({
+      email: payload.email,
+      password: payload.password,
+    });
+    if (loginError) throw loginError;
+    try { history.replaceState({}, "", location.pathname); } catch(e) {}
+    showToast("Teste grátis ativado por 14 dias.", "success");
+  } catch (e) {
+    showSignupError(e.message || "Não foi possível criar seu acesso.");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Começar teste grátis"; }
+  }
 }
 
 // [M-05] Login rate limiting — cooldown progressivo após 3 tentativas falhas
@@ -2848,6 +2976,7 @@ async function handleAuthSubmit(ev) {
 function showForgotPanel() {
   document.getElementById("auth-form").style.display = "none";
   document.getElementById("forgot-panel").style.display = "block";
+  document.getElementById("signup-panel").style.display = "none";
   document.getElementById("auth-error").style.display = "none";
   setForgotPanelMessage(null);
   const fe = document.getElementById("forgot-email");
@@ -2857,6 +2986,7 @@ function showForgotPanel() {
 }
 function showAuthForm() {
   document.getElementById("forgot-panel").style.display = "none";
+  document.getElementById("signup-panel").style.display = "none";
   document.getElementById("auth-form").style.display = "block";
 }
 
@@ -5989,6 +6119,94 @@ async function isUserPaymentBlocked(userId) {
   return data && data.length > 0;
 }
 
+function getPlatformSubscriptionAccess(profile = STATE.profile) {
+  if (!profile || profile.role !== "coach") return { locked: false, status: "not_applicable", daysLeft: null };
+  const status = profile.subscription_status || "legacy";
+  if (status === "legacy" || status === "active") return { locked: false, status, daysLeft: null };
+
+  const endsAt = profile.trial_ends_at || profile.subscription_current_period_ends_at || null;
+  const endTs = endsAt ? new Date(endsAt).getTime() : null;
+  const daysLeft = endTs ? Math.ceil((endTs - Date.now()) / 86400000) : null;
+
+  if (status === "trialing" && endTs && endTs > Date.now()) {
+    return { locked: false, status, daysLeft: Math.max(0, daysLeft), endsAt };
+  }
+
+  const lockedStatuses = new Set(["trialing", "checkout_pending", "past_due", "expired", "canceled", "blocked"]);
+  return {
+    locked: lockedStatuses.has(status),
+    status: status === "trialing" ? "expired" : status,
+    daysLeft,
+    endsAt,
+  };
+}
+
+function platformTrialBannerHTML() {
+  const access = getPlatformSubscriptionAccess();
+  if (!STATE.profile || STATE.profile.role !== "coach") return "";
+  if (access.status !== "trialing" || access.daysLeft == null) return "";
+  const label = access.daysLeft === 0 ? "termina hoje" : `${access.daysLeft} dia(s) restantes`;
+  return `<div class="platform-banner">
+    <div class="platform-banner-title">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      Teste grátis ativo · ${escape(label)}
+    </div>
+    <div class="platform-banner-sub">Após o trial, o acesso do treinador fica disponível ao assinar o Treinova Pro por R$ 59,90/mês.</div>
+  </div>`;
+}
+
+function renderPlatformLockedScreen(access = getPlatformSubscriptionAccess()) {
+  const el = document.getElementById("view-home");
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  if (el) {
+    el.classList.add("active");
+    const title = access.status === "past_due" ? "Assinatura em aberto" : "Teste grátis finalizado";
+    const body = access.status === "past_due"
+      ? "Regularize sua assinatura para continuar gerenciando alunos, treinos e financeiro."
+      : "Seu período de 14 dias terminou. Assine o plano mensal para continuar usando seu app.";
+    el.innerHTML = `
+      <div style="min-height:70vh;display:flex;align-items:center;justify-content:center;padding:24px 16px">
+        <div style="width:100%;max-width:420px;background:var(--bg-card);border:1px solid var(--line);border-radius:20px;padding:22px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.28)">
+          <div style="width:58px;height:58px;border-radius:18px;margin:0 auto 14px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand)">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h10M7 9h4"/></svg>
+          </div>
+          <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:var(--text)">${title}</h2>
+          <p style="margin:0 auto 16px;color:var(--text-2);font-size:14px;line-height:1.45;max-width:320px">${body}</p>
+          <div style="border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:16px;background:var(--bg-2);text-align:left">
+            <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:900">Treinova Pro</div>
+            <div style="display:flex;align-items:flex-end;gap:6px;margin-top:4px">
+              <span style="font-size:32px;font-weight:950;color:var(--text)">R$ 59,90</span>
+              <span style="font-size:13px;color:var(--text-2);padding-bottom:5px">/mês</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:6px">Pagamento recorrente com cartão no checkout seguro do Asaas.</div>
+          </div>
+          <button class="btn-primary" id="platform-upgrade-btn" onclick="startPlatformUpgradeCheckout()">Assinar e liberar acesso</button>
+          <button class="btn-ghost" style="margin-top:10px" onclick="signOut()">Sair da conta</button>
+        </div>
+      </div>`;
+  }
+  const bnBar = document.getElementById("bn-bar");
+  if (bnBar) bnBar.style.display = "none";
+  const desktopSidebar = document.getElementById("desktop-sidebar");
+  if (desktopSidebar) desktopSidebar.style.display = "none";
+}
+
+async function startPlatformUpgradeCheckout() {
+  const btn = document.getElementById("platform-upgrade-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Abrindo checkout..."; }
+  try {
+    const { data, error } = await withTimeout(sb.functions.invoke("platform-create-checkout", {
+      body: { source: "platform_locked_screen" }
+    }), 30000, "platform-create-checkout timeout");
+    if (error) throw error;
+    if (!data?.checkout_url) throw new Error(data?.error || "Checkout não retornado pelo Asaas.");
+    window.location.href = data.checkout_url;
+  } catch (e) {
+    showToast(e.message || "Não foi possível abrir o checkout.", "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Assinar e liberar acesso"; }
+  }
+}
+
 function renderCoachFinanceTabs() {
   const ownOpen = (STATE.myPayments || []).filter(p => {
     const status = paymentEffectiveStatus(p);
@@ -6393,6 +6611,10 @@ function navTo(view) {
   // C-03: Aluno bloqueado — redirecionar para tela de bloqueio em qualquer navegação
   if (STATE.profile?.role === "student" && STATE.profile?.status === "blocked") {
     renderBlockedScreen();
+    return;
+  }
+  if (STATE.profile?.role === "coach" && getPlatformSubscriptionAccess().locked) {
+    renderPlatformLockedScreen();
     return;
   }
   // Bloquear saída do treino se sessão ativa e não concluída
@@ -7036,12 +7258,13 @@ function renderCoachHome(el) {
   // Empty state: coach sem alunos e já onboarded
   if (STATE.students.length === 0 && STATE.profile.onboarded === true) {
     el.innerHTML = `
-      <div class="greeting-card">
-        <div class="greeting-eyebrow">Painel do Treinador</div>
-        <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
-        <div class="greeting-sub">Vamos começar. Adicione seu primeiro aluno ou compartilhe o link de cadastro.</div>
-      </div>
-      ${renderSelfTrainingCard()}
+	      <div class="greeting-card">
+	        <div class="greeting-eyebrow">Painel do Treinador</div>
+	        <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
+	        <div class="greeting-sub">Vamos começar. Adicione seu primeiro aluno ou compartilhe o link de cadastro.</div>
+	      </div>
+	      ${platformTrialBannerHTML()}
+	      ${renderSelfTrainingCard()}
       <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:16px;padding:24px;text-align:center;margin-bottom:12px">
         <div style="margin-bottom:12px"><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11M6.5 17.5h11"/><path d="M3 8.5V15.5a1 1 0 0 0 1 1h1V7.5H4a1 1 0 0 0-1 1z"/><path d="M21 8.5a1 1 0 0 0-1-1h-1v9h1a1 1 0 0 0 1-1v-7z"/><path d="M6.5 7.5v9a1 1 0 0 0 1 1h1v-11h-1a1 1 0 0 0-1 1z"/><path d="M17.5 7.5a1 1 0 0 0-1-1h-1v11h1a1 1 0 0 0 1-1v-9z"/></svg></div>
         <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px">Nenhum aluno ainda</div>
@@ -7058,12 +7281,13 @@ function renderCoachHome(el) {
   }
 
   el.innerHTML = `
-    <div class="greeting-card">
-      <div class="greeting-eyebrow">Painel do Treinador</div>
-      <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
-      <div class="greeting-sub">${approved} aluno(s) ativo(s) · ${pending} aguardando</div>
-    </div>
-    <div class="insight-strip" style="margin-bottom:10px">
+	    <div class="greeting-card">
+	      <div class="greeting-eyebrow">Painel do Treinador</div>
+	      <div class="greeting-title">${greet}, ${escape(firstName(STATE.profile.full_name))}</div>
+	      <div class="greeting-sub">${approved} aluno(s) ativo(s) · ${pending} aguardando</div>
+	    </div>
+	    ${platformTrialBannerHTML()}
+	    <div class="insight-strip" style="margin-bottom:10px">
       <button class="insight-card ${totalSessions7d > 0 ? 'is-success' : ''}" onclick="navTo('students')">
         <div class="insight-value">${totalSessions7d}</div>
         <div class="insight-label">treinos / sem.</div>
@@ -13694,11 +13918,19 @@ async function postSignIn() {
       await sb.auth.signOut();
       return;
     }
-    const roleLabel = profile.role === "admin" ? "Admin · " : profile.role === "coach" ? "Treinador · " : "Aluno · ";
-    headerSub.textContent = roleLabel + (profile.full_name || profile.email);
-    if (desktopHeaderSub) desktopHeaderSub.textContent = roleLabel + (profile.full_name || profile.email);
+	    const roleLabel = profile.role === "admin" ? "Admin · " : profile.role === "coach" ? "Treinador · " : "Aluno · ";
+	    headerSub.textContent = roleLabel + (profile.full_name || profile.email);
+	    if (desktopHeaderSub) desktopHeaderSub.textContent = roleLabel + (profile.full_name || profile.email);
 
-  // === GRUPO 1: loaders independentes — executam em paralelo ===
+	    const platformAccess = getPlatformSubscriptionAccess(profile);
+	    if (platformAccess.locked) {
+	      await safeLoad("branding", loadBranding);
+	      renderPlatformLockedScreen(platformAccess);
+	      renderHeaderBell();
+	      return;
+	    }
+
+	  // === GRUPO 1: loaders independentes — executam em paralelo ===
   // (branding, workouts, follows, presets, blocks, periodização, cargas)
   await Promise.all([
     safeLoad("branding", loadBranding),
