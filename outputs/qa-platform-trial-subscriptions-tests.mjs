@@ -6,6 +6,7 @@ const read = (path) => fs.readFileSync(`${root}/${path}`, "utf8");
 
 const index = read("index.html");
 const migration = read("supabase/migrations/20260531143000_platform_trial_subscriptions.sql");
+const accessGateMigration = read("supabase/migrations/20260531203000_platform_access_gate.sql");
 const signupFn = read("supabase/functions/platform-signup/index.ts");
 const checkoutFn = read("supabase/functions/platform-create-checkout/index.ts");
 const webhookFn = read("supabase/functions/asaas-webhook/index.ts");
@@ -30,8 +31,11 @@ includesAll(index, [
   'submitCoachTrialSignup',
   'sb.functions.invoke("platform-signup"',
   'getPlatformSubscriptionAccess',
+  'loadPlatformAccess',
   'renderPlatformLockedScreen',
+  'removeAppSkeleton',
   'startPlatformUpgradeCheckout',
+  'getFunctionErrorMessage(error',
   'sb.functions.invoke("platform-create-checkout"',
   'platformTrialBannerHTML',
   'R$ 59,90',
@@ -57,6 +61,16 @@ includesAll(migration, [
   "profiles_phone_digits_unique_if_clean",
   "profiles_subscription_status_check",
 ], "migration");
+
+includesAll(accessGateMigration, [
+  "create or replace function public.get_my_platform_access()",
+  "security definer",
+  "v_me_role = 'student'",
+  "v_scope := 'coach'",
+  "trial_expired",
+  "blocked_profile_role",
+  "grant execute on function public.get_my_platform_access() to authenticated",
+], "platform access gate migration");
 
 includesAll(signupFn, [
   "platform-signup",
@@ -110,7 +124,7 @@ for (const [name, html] of [["outputs/landing.html", landing], ["outputs/treinov
   assert.ok(html.includes("14 dias"), `${name}: 14-day trial missing`);
   assert.ok(!html.includes("Quero assinar%20o%20Treinova%20Pro%20por%20R%24%2049"), `${name}: stale WhatsApp pricing CTA`);
   assert.ok(!html.includes(">49,90<"), `${name}: stale price amount`);
-  assert.ok(html.includes("WhatsApp Vendas"), `${name}: support/sales WhatsApp should remain`);
+  assert.ok(html.includes('aria-label="Falar no WhatsApp"'), `${name}: support/sales WhatsApp should remain`);
 }
 
 console.log("OK: platform trial/signup/checkout static coverage passed");

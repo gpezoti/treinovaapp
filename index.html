@@ -2117,6 +2117,7 @@ const STATE = {
   paymentAccounts: [],   // coach: contas de recebimento configuradas
   notifications: [],     // central de notificações
   myPaymentBlocked: false, // flag de bloqueio
+  platformAccess: { locked: false, status: "unknown" },
   realtimeChannels: [],
   authMode: "signin",
   authRole: "student",
@@ -6141,6 +6142,26 @@ function getPlatformSubscriptionAccess(profile = STATE.profile) {
   };
 }
 
+async function loadPlatformAccess(profile = STATE.profile) {
+  if (!profile || !["coach", "student"].includes(profile.role)) {
+    STATE.platformAccess = { locked: false, status: "not_applicable" };
+    return STATE.platformAccess;
+  }
+
+  try {
+    const { data, error } = await sb.rpc("get_my_platform_access");
+    if (error) throw error;
+    const access = typeof data === "string" ? JSON.parse(data) : data;
+    STATE.platformAccess = access || { locked: false, status: "unknown" };
+  } catch (e) {
+    console.warn("[platform access] RPC indisponivel, usando fallback local", e);
+    STATE.platformAccess = profile.role === "coach"
+      ? getPlatformSubscriptionAccess(profile)
+      : { locked: false, status: "rpc_unavailable" };
+  }
+  return STATE.platformAccess;
+}
+
 function dateInputFromTimestamp(value) {
   if (!value) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
@@ -6190,15 +6211,45 @@ function platformTrialBannerHTML() {
   </div>`;
 }
 
-function renderPlatformLockedScreen(access = getPlatformSubscriptionAccess()) {
+function removeAppSkeleton() {
+  const sk = document.getElementById("app-skeleton");
+  if (sk) sk.remove();
+}
+
+function renderPlatformLockedScreen(access = STATE.platformAccess || getPlatformSubscriptionAccess()) {
+  removeAppSkeleton();
   const el = document.getElementById("view-home");
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   if (el) {
     el.classList.add("active");
-    const title = access.status === "past_due" ? "Assinatura em aberto" : "Teste grátis finalizado";
-    const body = access.status === "past_due"
-      ? "Regularize sua assinatura para continuar gerenciando alunos, treinos e financeiro."
-      : "Seu período de 14 dias terminou. Assine o plano mensal para continuar usando seu app.";
+    const studentBlockedByCoach = STATE.profile?.role === "student" || access?.blocked_profile_role === "student" || access?.scope === "coach";
+    const title = studentBlockedByCoach
+      ? "Acesso temporariamente indisponível"
+      : access.status === "past_due" ? "Assinatura em aberto" : "Teste grátis finalizado";
+    const body = studentBlockedByCoach
+      ? "O período de testes do seu treinador terminou. Assim que ele regularizar a assinatura, seu acesso volta automaticamente."
+      : access.status === "past_due"
+        ? "Regularize sua assinatura para continuar gerenciando alunos, treinos e financeiro."
+        : "Seu período de 14 dias terminou. Assine o plano mensal para continuar usando seu app.";
+    const coachName = access?.coach_name ? `<div style="font-size:12px;color:var(--text-2);margin-top:8px">Treinador: ${escape(access.coach_name)}</div>` : "";
+    const planCard = studentBlockedByCoach ? `
+          <div style="border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:16px;background:var(--bg-2);text-align:left">
+            <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:900">Acesso do aluno</div>
+            <div style="font-size:14px;color:var(--text-2);line-height:1.45;margin-top:6px">Você não precisa pagar nada aqui. Fale com seu treinador para liberar novamente a plataforma.</div>
+            ${coachName}
+          </div>` : `
+          <div style="border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:16px;background:var(--bg-2);text-align:left">
+            <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:900">Treinova Pro</div>
+            <div style="display:flex;align-items:flex-end;gap:6px;margin-top:4px">
+              <span style="font-size:32px;font-weight:950;color:var(--text)">R$ 59,90</span>
+              <span style="font-size:13px;color:var(--text-2);padding-bottom:5px">/mês</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:6px">Pagamento recorrente com cartão no checkout seguro do Asaas.</div>
+          </div>`;
+    const primaryAction = studentBlockedByCoach
+      ? `<button class="btn-ghost" onclick="signOut()">Sair da conta</button>`
+      : `<button class="btn-primary" id="platform-upgrade-btn" onclick="startPlatformUpgradeCheckout()">Assinar e liberar acesso</button>
+          <button class="btn-ghost" style="margin-top:10px" onclick="signOut()">Sair da conta</button>`;
     el.innerHTML = `
       <div style="min-height:70vh;display:flex;align-items:center;justify-content:center;padding:24px 16px">
         <div style="width:100%;max-width:420px;background:var(--bg-card);border:1px solid var(--line);border-radius:20px;padding:22px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.28)">
@@ -6207,16 +6258,8 @@ function renderPlatformLockedScreen(access = getPlatformSubscriptionAccess()) {
           </div>
           <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:var(--text)">${title}</h2>
           <p style="margin:0 auto 16px;color:var(--text-2);font-size:14px;line-height:1.45;max-width:320px">${body}</p>
-          <div style="border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:16px;background:var(--bg-2);text-align:left">
-            <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:900">Treinova Pro</div>
-            <div style="display:flex;align-items:flex-end;gap:6px;margin-top:4px">
-              <span style="font-size:32px;font-weight:950;color:var(--text)">R$ 59,90</span>
-              <span style="font-size:13px;color:var(--text-2);padding-bottom:5px">/mês</span>
-            </div>
-            <div style="font-size:12px;color:var(--text-2);margin-top:6px">Pagamento recorrente com cartão no checkout seguro do Asaas.</div>
-          </div>
-          <button class="btn-primary" id="platform-upgrade-btn" onclick="startPlatformUpgradeCheckout()">Assinar e liberar acesso</button>
-          <button class="btn-ghost" style="margin-top:10px" onclick="signOut()">Sair da conta</button>
+          ${planCard}
+          ${primaryAction}
         </div>
       </div>`;
   }
@@ -6233,7 +6276,7 @@ async function startPlatformUpgradeCheckout() {
     const { data, error } = await withTimeout(sb.functions.invoke("platform-create-checkout", {
       body: { source: "platform_locked_screen" }
     }), 30000, "platform-create-checkout timeout");
-    if (error) throw error;
+    if (error) throw new Error(await getFunctionErrorMessage(error, "Não foi possível abrir o checkout."));
     if (!data?.checkout_url) throw new Error(data?.error || "Checkout não retornado pelo Asaas.");
     window.location.href = data.checkout_url;
   } catch (e) {
@@ -6600,8 +6643,7 @@ window.onNotifClick = async function(id, kind, relatedId) {
    ============================================================================= */
 function renderCurrentView() {
   // Remove skeleton na primeira renderização
-  const sk = document.getElementById("app-skeleton");
-  if (sk) sk.remove();
+  removeAppSkeleton();
 
   const v = STATE.view;
   if (v === "home") renderHome();
@@ -6623,6 +6665,7 @@ function renderCurrentView() {
 
 function renderBlockedScreen() {
   // C-03: Tela centralizada de acesso bloqueado
+  removeAppSkeleton();
   let el = document.getElementById("view-home");
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   if (el) {
@@ -6648,8 +6691,8 @@ function navTo(view) {
     renderBlockedScreen();
     return;
   }
-  if (STATE.profile?.role === "coach" && getPlatformSubscriptionAccess().locked) {
-    renderPlatformLockedScreen();
+  if (STATE.platformAccess?.locked || (STATE.profile?.role === "coach" && getPlatformSubscriptionAccess().locked)) {
+    renderPlatformLockedScreen(STATE.platformAccess?.locked ? STATE.platformAccess : undefined);
     return;
   }
   // Bloquear saída do treino se sessão ativa e não concluída
@@ -14050,7 +14093,7 @@ async function postSignIn() {
 	    headerSub.textContent = roleLabel + (profile.full_name || profile.email);
 	    if (desktopHeaderSub) desktopHeaderSub.textContent = roleLabel + (profile.full_name || profile.email);
 
-	    const platformAccess = getPlatformSubscriptionAccess(profile);
+	    const platformAccess = await loadPlatformAccess(profile);
 	    if (platformAccess.locked) {
 	      await safeLoad("branding", loadBranding);
 	      renderPlatformLockedScreen(platformAccess);
