@@ -346,6 +346,48 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   border:1px solid rgba(255,255,255,.20); box-shadow:0 6px 18px rgba(0,0,0,.20);
   backdrop-filter:blur(6px); pointer-events:none; opacity:.86; }
 .ex-zoom-cue svg { width:14px; height:14px; color:currentColor; }
+.exercise-media { position:relative; width:100%; height:100%; min-width:0; overflow:hidden;
+  background:linear-gradient(135deg,var(--bg-3),var(--bg-2)); color:var(--brand);
+  border:1px solid var(--line); border-radius:inherit; display:grid; place-items:center; }
+.exercise-media img, .exercise-media video, .exercise-media iframe { width:100%; height:100%; display:block; }
+.exercise-media img, .exercise-media video { object-fit:cover; }
+.exercise-media--thumb { border:0; }
+.exercise-media--hero { aspect-ratio:16/10; min-height:170px; border-radius:14px; margin-bottom:12px; cursor:zoom-in; }
+.exercise-media--hero img { object-fit:cover; }
+.exercise-media--preview { border:0; }
+.exercise-media--video-preview { border:0; background:#05070d; color:#fff; }
+.exercise-media--embed { height:auto; aspect-ratio:16/9; border-radius:14px; margin:12px 0 14px; background:#000; }
+.exercise-media--embed video { object-fit:contain; max-height:64vh; background:#000; }
+.exercise-media__cue { position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:999px;
+  display:grid; place-items:center; background:rgba(8,13,27,.58); color:#fff;
+  border:1px solid rgba(255,255,255,.20); box-shadow:0 6px 18px rgba(0,0,0,.20);
+  backdrop-filter:blur(6px); pointer-events:none; opacity:.86; }
+.exercise-media__cue svg { width:14px; height:14px; color:currentColor; }
+.exercise-media__badge { position:absolute; left:8px; bottom:8px; display:inline-flex; align-items:center; gap:4px;
+  min-height:22px; padding:4px 7px; border-radius:999px; background:rgba(8,13,27,.70);
+  border:1px solid rgba(255,255,255,.14); color:#fff; font-size:10px; font-weight:800; letter-spacing:.2px; }
+.exercise-media__badge svg { width:12px; height:12px; }
+.exercise-media__empty { display:grid; place-items:center; gap:5px; padding:8px; text-align:center;
+  color:var(--text-3); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; }
+.exercise-media__empty svg { width:22px; height:22px; color:var(--brand); }
+.exercise-media.has-media-error::after { content:attr(data-error); position:absolute; inset:auto 8px 8px 8px;
+  padding:6px 8px; border-radius:10px; background:rgba(255,59,59,.90); color:#fff;
+  font-size:11px; font-weight:800; text-align:center; }
+.exercise-media-viewer { position:fixed; inset:0; z-index:9900; background:rgba(0,0,0,.92);
+  display:flex; align-items:center; justify-content:center; padding:18px; }
+.exercise-media-viewer__close { position:absolute; top:max(16px,env(safe-area-inset-top)); right:16px;
+  width:44px; height:44px; border-radius:14px; border:1px solid rgba(255,255,255,.22);
+  background:rgba(15,23,42,.82); color:#fff; font-size:26px; line-height:1; display:grid; place-items:center; }
+.exercise-media-viewer__figure { margin:0; max-width:min(960px,100%); max-height:92vh; width:100%;
+  display:grid; gap:12px; justify-items:center; }
+.exercise-media-viewer__figure img { max-width:100%; max-height:78vh; object-fit:contain; border-radius:18px;
+  background:var(--bg-card); box-shadow:0 18px 60px rgba(0,0,0,.45); }
+.exercise-media-viewer__figure .exercise-media--embed { width:min(960px,100%); max-height:78vh; margin:0; }
+.exercise-media-viewer__caption { color:#e5e7eb; font-size:14px; font-weight:800; text-align:center; line-height:1.35; }
+.exercise-media-viewer__switch { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+.exercise-media-viewer__switch button { width:auto; min-height:36px; padding:8px 12px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.20); background:rgba(15,23,42,.72); color:#e5e7eb; font-weight:800; }
+.exercise-media-viewer__switch button.active { border-color:var(--brand); color:var(--brand); background:rgba(0,180,255,.14); }
 .ex-detail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
 .detail-item { background: var(--bg-2); border: 1px solid var(--line); padding: 10px 12px; border-radius: 10px; }
 .detail-label { font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--text-3); }
@@ -1915,13 +1957,6 @@ function getExerciseImageMeta(ex) {
   return { url, fallback, alt };
 }
 
-// Retorna HTML de imagem para um exercício.
-// Prioridade: imagem própria do professor/treinador → biblioteca com mesmo nome → asset específico por nome → placeholder neutro.
-function getExThumb(ex) {
-  const { url, fallback, alt } = getExerciseImageMeta(ex);
-  return `<img src="${escape(url)}" data-fallback-src="${escape(fallback)}" alt="${escape(alt)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=this.dataset.fallbackSrc" />`;
-}
-
 function getYouTubeVideoId(rawUrl) {
   const value = String(rawUrl || "").trim();
   if (!value) return "";
@@ -1964,27 +1999,103 @@ function normalizeExerciseVideoUrl(rawUrl) {
   }
 }
 
+function getExerciseVideoUrl(ex) {
+  const item = ex || {};
+  if (item.video_url) return item.video_url;
+  const lib = (STATE.library || []).find(l => l.name === item.name && l.video_url);
+  return lib?.video_url || "";
+}
+
+function getExerciseMediaMeta(ex) {
+  const item = ex || {};
+  const image = getExerciseImageMeta(item);
+  const videoUrl = getExerciseVideoUrl(item);
+  return {
+    ...image,
+    name: item.name || "Exercício",
+    videoUrl,
+    videoEmbedUrl: getYouTubeEmbedUrl(videoUrl)
+  };
+}
+
+function exerciseMediaVideoIcon(size = 18) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg>`;
+}
+
+function exerciseMediaImageIcon(size = 18) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="8" cy="10" r="1.5"/><path d="m4 17 4.5-4 3.5 3 3.2-4 4.8 5"/></svg>`;
+}
+
+function exerciseMediaExpandIcon() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M21 3l-7 7"/><path d="M9 21H3v-6"/><path d="M3 21l7-7"/></svg>`;
+}
+
+function renderExerciseMediaImage(meta, options = {}) {
+  const loading = options.loading || "lazy";
+  return `<img class="exercise-media__img" src="${escape(meta.url)}" data-fallback-src="${escape(meta.fallback || meta.url)}" alt="${escape(meta.alt)}" loading="${escape(loading)}" decoding="async" onerror="this.onerror=null;this.src=this.dataset.fallbackSrc;this.closest('.exercise-media')?.classList.add('is-fallback');" />`;
+}
+
+function renderExerciseMediaEmpty(label = "Sem mídia", icon = "image") {
+  return `<div class="exercise-media__empty">${icon === "video" ? exerciseMediaVideoIcon(22) : exerciseMediaImageIcon(22)}<span>${escape(label)}</span></div>`;
+}
+
+function renderExerciseMediaVideoContent(meta, options = {}) {
+  const name = meta.name || "Vídeo do exercício";
+  const mode = options.mode || "embed";
+  const url = meta.videoUrl || options.url || "";
+  if (!url) return renderExerciseMediaEmpty("Sem vídeo", "video");
+  if (meta.videoEmbedUrl) {
+    if (mode === "video-preview") {
+      return `<div class="exercise-media__empty" style="color:#ff6b6b">${exerciseMediaVideoIcon(20)}<span>YouTube</span></div>`;
+    }
+    return `<iframe src="${escape(meta.videoEmbedUrl)}" title="${escape(name)}" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+  }
+  return `<video src="${escape(url)}" aria-label="${escape(name)}" ${mode === "video-preview" ? "muted" : "controls"} playsinline preload="metadata" onerror="this.closest('.exercise-media')?.classList.add('has-media-error');"></video>`;
+}
+
+function renderExerciseMedia(ex = {}, options = {}) {
+  const meta = getExerciseMediaMeta(ex);
+  const mode = options.mode || "thumb";
+  const media = options.media || (mode === "embed" || mode === "video-preview" ? "video" : "image");
+  const interactive = options.interactive !== undefined ? !!options.interactive : mode === "hero";
+  const className = [
+    "exercise-media",
+    `exercise-media--${mode}`,
+    mode === "embed" ? "exercise-video-embed" : "",
+    options.className || "",
+    media === "video" ? "exercise-media--video" : "exercise-media--image"
+  ].filter(Boolean).join(" ");
+  const viewerAction = `openExerciseMediaViewer(${jsArg(meta.url)}, ${jsArg(meta.alt)}, ${jsArg(meta.fallback)}, ${jsArg(meta.videoUrl)}, ${jsArg(media === "video" ? "video" : "image")})`;
+  const attrs = [
+    `class="${escape(className)}"`,
+    `data-error="${escapeAttr(media === "video" ? "Vídeo indisponível" : "Imagem indisponível")}"`,
+    interactive ? `role="button" tabindex="0" aria-label="Ampliar ${escapeAttr(meta.alt)}"` : "",
+    interactive ? `onclick='event.stopPropagation(); ${viewerAction}'` : "",
+    interactive ? `onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${viewerAction}}"` : ""
+  ].filter(Boolean).join(" ");
+  const body = media === "video"
+    ? renderExerciseMediaVideoContent(meta, { mode })
+    : renderExerciseMediaImage(meta, options);
+  const cue = interactive ? `<span class="exercise-media__cue" aria-hidden="true">${exerciseMediaExpandIcon()}</span>` : "";
+  const videoBadge = media !== "video" && meta.videoUrl && options.showVideoBadge !== false
+    ? `<span class="exercise-media__badge">${exerciseMediaVideoIcon(12)} vídeo</span>`
+    : "";
+  return `<div ${attrs}>${body}${cue}${videoBadge}</div>`;
+}
+
+// Retorna HTML de imagem para um exercício.
+// Prioridade: imagem própria do professor/treinador → biblioteca com mesmo nome → asset específico por nome → placeholder neutro.
+function getExThumb(ex) {
+  return renderExerciseMedia(ex, { mode: "thumb", interactive: false });
+}
+
 function renderExerciseVideoPreview(url, name = "Vídeo do exercício") {
-  if (!url) {
-    return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg>`;
-  }
-  if (getYouTubeEmbedUrl(url)) {
-    return `<div style="width:100%;height:100%;display:grid;place-items:center;background:rgba(255,0,0,.12);color:#ff4d4d;font-size:12px;font-weight:900;letter-spacing:.4px;">YT</div>`;
-  }
-  return `<video src="${escape(url)}" aria-label="${escape(name)}" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover;"></video>`;
+  return renderExerciseMedia({ name, video_url: url }, { mode: "video-preview", media: "video", interactive: false });
 }
 
 function renderExerciseVideoEmbed(url, name = "Vídeo do exercício") {
   if (!url) return "";
-  const embed = getYouTubeEmbedUrl(url);
-  if (embed) {
-    return `<div class="exercise-video-embed" style="margin:12px 0 14px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9;">
-      <iframe src="${escape(embed)}" title="${escape(name)}" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="width:100%;height:100%;border:0;display:block;"></iframe>
-    </div>`;
-  }
-  return `<div class="exercise-video-embed" style="margin:12px 0 14px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#000;">
-    <video src="${escape(url)}" controls playsinline preload="metadata" style="width:100%;max-height:64vh;display:block;background:#000;"></video>
-  </div>`;
+  return renderExerciseMedia({ name, video_url: url }, { mode: "embed", media: "video", interactive: false });
 }
 
 const REP_SCHEMES = {
@@ -9352,9 +9463,10 @@ function renderExerciseList(W, intensity, completed) {
     const pauseTxt = scheme.pause;
 
     const thumbInner = getExThumb(ex);
-    const illustInner = getExThumb(ex);
     const imageMeta = getExerciseImageMeta(ex);
-    const openImageAction = `openExerciseImageViewer(${jsArg(imageMeta.url)}, ${jsArg(imageMeta.alt)}, ${jsArg(imageMeta.fallback)})`;
+    const exerciseVideoUrl = getExerciseVideoUrl(ex);
+    const heroMedia = renderExerciseMedia(ex, { mode: "hero", interactive: true, showVideoBadge: false });
+    const openImageAction = `openExerciseMediaViewer(${jsArg(imageMeta.url)}, ${jsArg(imageMeta.alt)}, ${jsArg(imageMeta.fallback)}, ${jsArg(exerciseVideoUrl)}, "image")`;
     const ssInfo = getSupersetIndex(ex);
     const ssClass = ssInfo ? "in-superset" : "";
     const ssBadge = ssInfo ? `<span class="today-pill" style="background:rgba(0,180,255,.10);color:var(--brand);border:1px solid rgba(0,180,255,.30);font-size:9px;padding:2px 6px;margin-right:6px;letter-spacing:.4px">${getSupersetLabel(ssInfo.total)} ${ssInfo.idx+1}/${ssInfo.total}</span>` : "";
@@ -9367,7 +9479,7 @@ function renderExerciseList(W, intensity, completed) {
             <span><b>${target}×${repsTxt || ""}</b></span>
             ${pauseTxt && pauseTxt !== "—" ? `<span>· pausa <b>${pauseTxt}</b></span>` : ""}
             ${ex.cadence && ex.cadence !== "—" ? `<span>· cad. <b>${ex.cadence}</b></span>` : ""}
-            ${ex.video_url ? `<span style="color:var(--brand)">· <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="9"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg> vídeo</span>` : ""}
+            ${exerciseVideoUrl ? `<span style="color:var(--brand)">· ${exerciseMediaVideoIcon(15)} vídeo</span>` : ""}
           </div>
         </div>
         <div class="ex-progress">
@@ -9376,11 +9488,8 @@ function renderExerciseList(W, intensity, completed) {
         </div>
       </div>
       <div class="ex-body">
-        <div class="ex-illust" role="button" aria-label="Ampliar ${escape(imageMeta.alt)}" onclick='${openImageAction}' style="overflow:hidden; position:relative; cursor:zoom-in;">
-          ${illustInner}
-          <span class="ex-zoom-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M21 3l-7 7"/><path d="M9 21H3v-6"/><path d="M3 21l7-7"/></svg></span>
-        </div>
-        ${ex.video_url ? renderExerciseVideoEmbed(ex.video_url, ex.name) : ""}
+        ${heroMedia}
+        ${exerciseVideoUrl ? renderExerciseVideoEmbed(exerciseVideoUrl, ex.name) : ""}
         <div class="ex-method">
           <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           ${escape(ex.method || "")}
@@ -9468,30 +9577,52 @@ function renderSetsTable(ex, logs, scheme, completed) {
   return html;
 }
 
-window.openExerciseImageViewer = function(url, name, fallbackUrl) {
+window.openExerciseMediaViewer = function(url, name, fallbackUrl, videoUrl = "", initial = "image") {
   const previous = document.getElementById("exercise-image-viewer");
   if (previous) previous.remove();
   const overlay = document.createElement("div");
   overlay.id = "exercise-image-viewer";
-  overlay.style.cssText = "position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:18px;";
-  overlay.innerHTML = `
-    <button type="button" aria-label="Fechar imagem" style="position:absolute;top:max(16px,env(safe-area-inset-top));right:16px;width:44px;height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.22);background:rgba(15,23,42,.82);color:#fff;font-size:26px;line-height:1;display:grid;place-items:center;">×</button>
-    <figure style="margin:0;max-width:min(960px,100%);max-height:92vh;width:100%;display:grid;gap:12px;justify-items:center;">
-      <img src="${escape(url)}" data-fallback-src="${escape(fallbackUrl || url)}" alt="${escape(name || "Imagem do exercício")}" style="max-width:100%;max-height:82vh;object-fit:contain;border-radius:18px;background:var(--bg-card);box-shadow:0 18px 60px rgba(0,0,0,.45);" onerror="this.onerror=null;this.src=this.dataset.fallbackSrc" />
-      <figcaption style="color:#e5e7eb;font-size:14px;font-weight:800;text-align:center;line-height:1.35;">${escape(name || "Imagem do exercício")}</figcaption>
-    </figure>
-  `;
+  overlay.className = "exercise-media-viewer";
+  const hasVideo = !!videoUrl;
+  const state = { mode: hasVideo && initial === "video" ? "video" : "image" };
+  const renderViewer = () => {
+    const mediaHtml = state.mode === "video" && hasVideo
+      ? renderExerciseMedia({ name: name || "Vídeo do exercício", video_url: videoUrl }, { mode: "embed", media: "video", interactive: false })
+      : `<img src="${escape(url)}" data-fallback-src="${escape(fallbackUrl || url)}" alt="${escape(name || "Imagem do exercício")}" onerror="this.onerror=null;this.src=this.dataset.fallbackSrc" />`;
+    overlay.innerHTML = `
+      <button type="button" class="exercise-media-viewer__close" aria-label="Fechar mídia">×</button>
+      <figure class="exercise-media-viewer__figure">
+        ${mediaHtml}
+        <figcaption class="exercise-media-viewer__caption">${escape(name || "Mídia do exercício")}</figcaption>
+        ${hasVideo ? `<div class="exercise-media-viewer__switch">
+          <button type="button" class="${state.mode === "image" ? "active" : ""}" data-mode="image">${exerciseMediaImageIcon(14)} Imagem</button>
+          <button type="button" class="${state.mode === "video" ? "active" : ""}" data-mode="video">${exerciseMediaVideoIcon(14)} Vídeo</button>
+        </div>` : ""}
+      </figure>
+    `;
+  };
+  renderViewer();
   overlay.addEventListener("click", (ev) => {
-    if (ev.target === overlay || ev.target.closest("button")) overlay.remove();
+    const switchBtn = ev.target.closest("[data-mode]");
+    if (switchBtn) {
+      state.mode = switchBtn.dataset.mode === "video" ? "video" : "image";
+      renderViewer();
+      return;
+    }
+    if (ev.target === overlay || ev.target.closest(".exercise-media-viewer__close")) overlay.remove();
   });
   document.body.appendChild(overlay);
+};
+
+window.openExerciseImageViewer = function(url, name, fallbackUrl) {
+  openExerciseMediaViewer(url, name, fallbackUrl, "", "image");
 };
 
 window.openExerciseVideo = function(url, name) {
   openSheet(`
     <h3>${escape(name || "Vídeo")}</h3>
     <p class="text-sm muted" style="margin-top:-4px;margin-bottom:12px">Vídeo demonstrativo embedado no exercício.</p>
-    ${renderExerciseVideoEmbed(url, name || "Vídeo")}
+    ${renderExerciseMedia({ name: name || "Vídeo", video_url: url }, { mode: "embed", media: "video", interactive: false })}
     <div style="margin-top:12px"><button class="btn-ghost" onclick="closeSheet()">Fechar</button></div>
   `);
 };
@@ -13192,8 +13323,10 @@ function getExerciseDraftMedia(key) {
 function exerciseDraftImageHTML(key, fallbackEx) {
   const draft = getExerciseDraftMedia(key);
   const src = draft.imagePreview || draft.imageUrl;
-  if (src) return `<img src="${escape(src)}" alt="${escape(fallbackEx?.name || "Exercício")}" style="width:100%;height:100%;object-fit:cover;display:block;" />`;
-  return getExThumb(fallbackEx || { name: "Novo exercício", cat: "chest", muscle_group: "Peito" });
+  const ex = src
+    ? { ...(fallbackEx || {}), image_url: src }
+    : (fallbackEx || { name: "Novo exercício", cat: "chest", muscle_group: "Peito" });
+  return renderExerciseMedia(ex, { mode: "preview", interactive: false, showVideoBadge: false });
 }
 
 function exerciseDraftVideoHTML(key, fallbackName = "Vídeo do exercício") {
