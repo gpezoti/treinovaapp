@@ -7772,14 +7772,12 @@ function applyTrainerFilters(trainers) {
   return trainers.filter(t => `${t.full_name || ""} ${t.email || ""} ${t.phone || ""}`.toLowerCase().includes(q));
 }
 
-function renderTrainers() {
-  const el = document.getElementById("view-trainers");
+function renderTrainerResultsHTML() {
   const allApproved = STATE.trainers.filter(t => t.status !== "blocked");
   const allBlocked = STATE.trainers.filter(t => t.status === "blocked");
   const approved = applyTrainerFilters(allApproved);
   const blocked = applyTrainerFilters(allBlocked);
   const selMode = _trainerSelected.size > 0;
-
   const bulkBar = selMode ? `
     <div style="display:flex;align-items:center;gap:8px;padding:10px 0;flex-wrap:wrap">
       <span class="text-xs muted">${_trainerSelected.size} selecionado(s)</span>
@@ -7787,7 +7785,23 @@ function renderTrainers() {
       <button class="mini-btn" style="background:var(--red-soft);color:var(--red);border:1px solid var(--red-soft)" onclick="bulkDeleteTrainers()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Excluir</button>
       <button class="mini-btn" onclick="clearTrainerSelection()">Cancelar</button>
     </div>` : "";
+  return `
+    <p class="view-subtitle">${approved.length} ativos · ${blocked.length} bloqueados</p>
+    ${bulkBar}
+    <div class="section-title">Ativos (${approved.length})</div>
+    ${approved.length ? approved.map(t => trainerRow(t, selMode)).join("") : `<div class="empty"><p>${_trainerSearch ? "Nenhum treinador encontrado." : "Nenhum treinador ativo"}</p>${!_trainerSearch ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewTrainerSheet()">Novo treinador</button></div>` : ""}</div>`}
+    ${blocked.length ? `<div class="section-title">Bloqueados (${blocked.length})</div>${blocked.map(t => trainerRow(t, selMode)).join("")}` : ""}
+  `;
+}
 
+function renderTrainerResultsOnly() {
+  const target = document.getElementById("trainer-results");
+  if (target) target.innerHTML = renderTrainerResultsHTML();
+  else renderTrainers();
+}
+
+function renderTrainers() {
+  const el = document.getElementById("view-trainers");
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Treinadores</h1>
@@ -7796,17 +7810,13 @@ function renderTrainers() {
         <button class="mini-btn mini-btn-primary" onclick="openNewTrainerSheet()">Novo treinador</button>
       </div>
     </div>
-    <p class="view-subtitle">${approved.length} ativos · ${blocked.length} bloqueados</p>
     <div style="position:relative;margin-bottom:10px">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input class="input" placeholder="Buscar treinador por nome, email ou telefone..." value="${escape(_trainerSearch)}"
+      <input class="input" id="trainer-search-input" placeholder="Buscar treinador por nome, email ou telefone..." value="${escape(_trainerSearch)}"
         oninput="setTrainerSearch(this.value)"
         style="padding-left:32px;margin:0;font-size:14px" />
     </div>
-    ${bulkBar}
-    <div class="section-title">Ativos (${approved.length})</div>
-    ${approved.length ? approved.map(t => trainerRow(t, selMode)).join("") : `<div class="empty"><p>${_trainerSearch ? "Nenhum treinador encontrado." : "Nenhum treinador ativo"}</p>${!_trainerSearch ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewTrainerSheet()">Novo treinador</button></div>` : ""}</div>`}
-    ${blocked.length ? `<div class="section-title">Bloqueados (${blocked.length})</div>${blocked.map(t => trainerRow(t, selMode)).join("")}` : ""}
+    <div id="trainer-results">${renderTrainerResultsHTML()}</div>
   `;
 }
 function trainerRow(t, selMode) {
@@ -7847,7 +7857,11 @@ window.toggleTrainerSelectAll = function() {
   renderTrainers();
 };
 window.clearTrainerSelection = function() { _trainerSelected.clear(); renderTrainers(); };
-window.setTrainerSearch = function(val) { _trainerSearch = val; _trainerSelected.clear(); renderTrainers(); };
+window.setTrainerSearch = function(val) {
+  _trainerSearch = val;
+  _trainerSelected.clear();
+  renderTrainerResultsOnly();
+};
 
 window.bulkBlockTrainers = async function() {
   if (!_trainerSelected.size) return;
@@ -10610,6 +10624,67 @@ function applyStudentFilters(students) {
   });
 }
 
+function renderStudentResultsHTML(canManageStudents = STATE.profile?.role === "coach") {
+  const allStudents = STATE.students;
+  const pending = allStudents.filter(s => s.status === "pending");
+  const approved = allStudents.filter(s => s.status === "approved");
+  const blocked = allStudents.filter(s => s.status === "blocked");
+  const selMode = _studentSelected.size > 0;
+  const bulkBar = selMode ? `
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 0;flex-wrap:wrap">
+      <span class="text-xs muted">${_studentSelected.size} selecionado(s)</span>
+      ${canManageStudents ? `<button class="mini-btn" style="background:var(--brand-soft);color:var(--brand);border:1px solid var(--brand-soft)" onclick="bulkMessageStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Mensagem</button>
+      <button class="mini-btn mini-btn-danger" onclick="bulkBlockStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Bloquear</button>` : ""}
+      <button class="mini-btn" style="background:var(--red-soft);color:var(--red);border:1px solid var(--red-soft)" onclick="bulkDeleteStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Excluir</button>
+      <button class="mini-btn" onclick="clearStudentSelection()">Cancelar</button>
+    </div>` : "";
+
+  const cutoff7d = new Date(Date.now() - 7 * 86400000).toISOString();
+  const countInactive = approved.filter(s => !s.last_session_at || s.last_session_at < cutoff7d).length;
+  const countOverdue  = allStudents.filter(s => s.payment_status === "overdue" || s.payment_status === "pending_overdue").length;
+  const tabs = [
+    { id: "all",      label: "Todos",        count: allStudents.length },
+    { id: "active",   label: "Ativos",       count: approved.length },
+    { id: "inactive", label: "Sem treino 7d",count: countInactive },
+    { id: "overdue",  label: "Inadimplentes",count: countOverdue  },
+  ];
+  const tabsHTML = `
+    <div class="segmented-scroll">
+      ${tabs.map(t => `
+        <button onclick="setStudentTab('${t.id}')" style="flex-shrink:0;padding:7px 13px;border-radius:999px;border:1px solid ${_studentTab===t.id?'var(--brand)':'var(--line)'};background:${_studentTab===t.id?'var(--brand)':'transparent'};color:${_studentTab===t.id?'var(--brand-on)':'var(--text-2)'};font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
+          ${t.label}${t.count > 0 ? ` <span style="opacity:.7">${t.count}</span>` : ""}
+        </button>`).join("")}
+    </div>`;
+  const filteredApproved = applyStudentFilters(approved);
+  const filteredBlocked  = _studentTab === "all" ? blocked : [];
+  const filteredPending  = _studentTab === "all" ? pending : [];
+  return `
+    ${tabsHTML}
+    ${bulkBar}
+    ${filteredPending.length ? `
+      <div class="section-title">Pendentes (${filteredPending.length})</div>
+      ${filteredPending.map(s => studentRow(s, selMode)).join("")}
+    ` : ""}
+    ${_studentTab !== "overdue" && _studentTab !== "inactive" ? `
+      <div class="section-title">${_studentTab === "all" ? `Ativos (${filteredApproved.length})` : `Resultados (${filteredApproved.length})`}</div>
+      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>${_studentSearch ? "Nenhum aluno encontrado." : canManageStudents ? "Nenhum aluno ativo ainda. Adicione um aluno ou compartilhe o link de cadastro." : "Nenhum aluno ativo encontrado."}</p>${!_studentSearch && canManageStudents ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewStudentSheet()">Adicionar aluno</button><button class="btn-ghost" style="width:auto" onclick="openShareLinkSheet()">Compartilhar link</button></div>` : ""}</div>`}
+    ` : `
+      <div class="section-title">Resultados (${filteredApproved.length})</div>
+      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>Nenhum aluno nessa categoria.</p><div class="empty-actions"><button class="btn-ghost" style="width:auto" onclick="setStudentTab('all')">Ver todos</button></div></div>`}
+    `}
+    ${filteredBlocked.length ? `
+      <div class="section-title">Bloqueados (${filteredBlocked.length})</div>
+      ${filteredBlocked.map(s => studentRow(s, selMode)).join("")}
+    ` : ""}
+  `;
+}
+
+function renderStudentResultsOnly() {
+  const target = document.getElementById("student-results");
+  if (target) target.innerHTML = renderStudentResultsHTML(STATE.profile?.role === "coach");
+  else renderStudents();
+}
+
 function renderStudents() {
   const el = document.getElementById("view-students");
   // Bloqueio para coach inadimplente
@@ -10624,48 +10699,13 @@ function renderStudents() {
     return;
   }
   const allStudents = STATE.students;
-  const pending = allStudents.filter(s => s.status === "pending");
   const approved = allStudents.filter(s => s.status === "approved");
-  const blocked = allStudents.filter(s => s.status === "blocked");
-  const selMode = _studentSelected.size > 0;
   const canManageStudents = STATE.profile.role === "coach";
-
-  const bulkBar = selMode ? `
-    <div style="display:flex;align-items:center;gap:8px;padding:10px 0;flex-wrap:wrap">
-      <span class="text-xs muted">${_studentSelected.size} selecionado(s)</span>
-      ${canManageStudents ? `<button class="mini-btn" style="background:var(--brand-soft);color:var(--brand);border:1px solid var(--brand-soft)" onclick="bulkMessageStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Mensagem</button>
-      <button class="mini-btn mini-btn-danger" onclick="bulkBlockStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Bloquear</button>` : ""}
-      <button class="mini-btn" style="background:var(--red-soft);color:var(--red);border:1px solid var(--red-soft)" onclick="bulkDeleteStudents()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Excluir</button>
-      <button class="mini-btn" onclick="clearStudentSelection()">Cancelar</button>
-    </div>` : "";
-
-  // Filtered list for main section (non-pending, non-blocked)
-  const filtered = applyStudentFilters(
-    _studentTab === "all" ? allStudents : allStudents
-  );
 
   // Tab counts
   const cutoff7d = new Date(Date.now() - 7 * 86400000).toISOString();
   const countInactive = approved.filter(s => !s.last_session_at || s.last_session_at < cutoff7d).length;
   const countOverdue  = allStudents.filter(s => s.payment_status === "overdue" || s.payment_status === "pending_overdue").length;
-
-  const tabs = [
-    { id: "all",      label: "Todos",        count: allStudents.length },
-    { id: "active",   label: "Ativos",       count: approved.length },
-    { id: "inactive", label: "Sem treino 7d",count: countInactive },
-    { id: "overdue",  label: "Inadimplentes",count: countOverdue  },
-  ];
-  const tabsHTML = `
-    <div class="segmented-scroll">
-      ${tabs.map(t => `
-        <button onclick="setStudentTab('${t.id}')" style="flex-shrink:0;padding:7px 13px;border-radius:999px;border:1px solid ${_studentTab===t.id?'var(--brand)':'var(--line)'};background:${_studentTab===t.id?'var(--brand)':'transparent'};color:${_studentTab===t.id?'var(--brand-on)':'var(--text-2)'};font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
-          ${t.label}${t.count > 0 ? ` <span style="opacity:.7">${t.count}</span>` : ""}
-        </button>`).join("")}
-    </div>`;
-
-  const filteredApproved = applyStudentFilters(approved);
-  const filteredBlocked  = _studentTab === "all" ? blocked : [];
-  const filteredPending  = _studentTab === "all" ? pending : [];
 
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
@@ -10693,31 +10733,15 @@ function renderStudents() {
     </div>
     <div style="position:relative;margin-bottom:10px">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input class="input" placeholder="Buscar por nome ou email..." value="${escape(_studentSearch)}"
+      <input class="input" id="student-search-input" placeholder="Buscar por nome ou email..." value="${escape(_studentSearch)}"
         oninput="setStudentSearch(this.value)"
         style="padding-left:32px;margin:0;font-size:14px" />
     </div>
-    ${tabsHTML}
-    ${bulkBar}
-    ${filteredPending.length ? `
-      <div class="section-title">Pendentes (${filteredPending.length})</div>
-      ${filteredPending.map(s => studentRow(s, selMode)).join("")}
-    ` : ""}
-    ${_studentTab !== "overdue" && _studentTab !== "inactive" ? `
-      <div class="section-title">${_studentTab === "all" ? `Ativos (${filteredApproved.length})` : `Resultados (${filteredApproved.length})`}</div>
-      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>${_studentSearch ? "Nenhum aluno encontrado." : canManageStudents ? "Nenhum aluno ativo ainda. Adicione um aluno ou compartilhe o link de cadastro." : "Nenhum aluno ativo encontrado."}</p>${!_studentSearch && canManageStudents ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openNewStudentSheet()">Adicionar aluno</button><button class="btn-ghost" style="width:auto" onclick="openShareLinkSheet()">Compartilhar link</button></div>` : ""}</div>`}
-    ` : `
-      <div class="section-title">Resultados (${filteredApproved.length})</div>
-      ${filteredApproved.length ? filteredApproved.map(s => studentRow(s, selMode)).join("") : `<div class="empty"><p>Nenhum aluno nessa categoria.</p><div class="empty-actions"><button class="btn-ghost" style="width:auto" onclick="setStudentTab('all')">Ver todos</button></div></div>`}
-    `}
-    ${filteredBlocked.length ? `
-      <div class="section-title">Bloqueados (${filteredBlocked.length})</div>
-      ${filteredBlocked.map(s => studentRow(s, selMode)).join("")}
-    ` : ""}
+    <div id="student-results">${renderStudentResultsHTML(canManageStudents)}</div>
   `;
 }
-window.setStudentSearch = function(val) { _studentSearch = val; renderStudents(); };
-window.setStudentTab    = function(tab) { _studentTab = tab; renderStudents(); };
+window.setStudentSearch = function(val) { _studentSearch = val; renderStudentResultsOnly(); };
+window.setStudentTab    = function(tab) { _studentTab = tab; renderStudentResultsOnly(); };
 function studentRow(s, selMode) {
   const id = s.student_id;
   const lastTxt = s.last_session_at ? `Último: ${fmtTimeAgo(s.last_session_at)}` : "Nunca treinou";
@@ -12981,13 +13005,10 @@ function renderExerciseLibraryManagerHTML() {
   const currentMode = STATE.exerciseLibraryMode || "all";
   const favoriteCount = getExerciseFavoriteIds().size;
   const usedCount = Object.keys(getExerciseUsageStats()).length;
-  const page = getExerciseLibraryVisibleGroups();
-  const visible = page.visible;
-  const grouped = page.grouped;
 
   return `
     <div class="form-group" style="margin-bottom:10px">
-      <input class="input" value="${escape(query)}" placeholder="Buscar por nome, grupo ou método..."
+      <input class="input" id="exercise-library-search-input" value="${escape(query)}" placeholder="Buscar por nome, grupo ou método..."
         autocomplete="off" autocorrect="off" autocapitalize="off"
         oninput="setExerciseLibraryQuery(this.value)" />
     </div>
@@ -13003,6 +13024,15 @@ function renderExerciseLibraryManagerHTML() {
         return `<button class="mini-btn ${currentGroup === g ? "mini-btn-primary" : "mini-btn-ghost"}" aria-pressed="${currentGroup === g ? "true" : "false"}" onclick="setExerciseLibraryGroup('${escapeAttr(g)}')">${escape(g)}</button>`;
       }).join("")}
     </div>
+    <div id="exercise-library-results">${renderExerciseLibraryResultsHTML()}</div>
+  `;
+}
+
+function renderExerciseLibraryResultsHTML() {
+  const page = getExerciseLibraryVisibleGroups();
+  const visible = page.visible;
+  const grouped = page.grouped;
+  return `
     ${STATE._exerciseLibraryLoading && !visible.length ? renderExerciseLibrarySkeleton() : ""}
     ${!STATE._exerciseLibraryLoading && visible.length ? Object.keys(grouped).map(group => `
       <div class="section-title">${escape(group)} (${grouped[group].length})</div>
@@ -13010,6 +13040,12 @@ function renderExerciseLibraryManagerHTML() {
     `).join("") : (!STATE._exerciseLibraryLoading ? `<div class="empty"><p>Nenhum exercício encontrado.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openLibraryExerciseSheet()">Criar exercício</button></div></div>` : "")}
     ${visible.length && STATE.exerciseLibraryHasMore ? `<div id="exercise-library-sentinel" class="card" style="padding:14px;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--bg-2)"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div><span class="text-xs muted">${STATE._exerciseLibraryLoading ? "Carregando mais exercícios..." : "Role para carregar mais"}</span></div>` : ""}
   `;
+}
+
+function renderExerciseLibraryResultsOnly() {
+  const target = document.getElementById("exercise-library-results");
+  if (target) target.innerHTML = renderExerciseLibraryResultsHTML();
+  else renderAdminWorkouts();
 }
 
 function renderExerciseLibrarySkeleton(count = 6) {
@@ -13071,14 +13107,14 @@ window.setExerciseLibraryQuery = function(value) {
   resetExerciseLibraryViewport();
   clearTimeout(STATE._exerciseLibrarySearchTimer);
   STATE._exerciseLibraryLoading = true;
-  renderAdminWorkouts();
+  renderExerciseLibraryResultsOnly();
   STATE._exerciseLibrarySearchTimer = setTimeout(() => {
     loadExerciseLibraryPage({ reset: true }).catch((e) => {
       console.error("[setExerciseLibraryQuery]", e);
       showToast("Erro ao buscar exercícios", "error");
     }).finally(() => {
       STATE._exerciseLibraryLoading = false;
-      renderAdminWorkouts();
+      renderExerciseLibraryResultsOnly();
     });
   }, 180);
 };
@@ -13123,23 +13159,123 @@ window.toggleLibraryExerciseFavorite = function(exId, event) {
   }
 };
 
+function resetExerciseDraftMedia(key, ex = {}) {
+  const prev = STATE[key] || {};
+  ["imagePreview", "videoPreview"].forEach(field => {
+    if (prev[field] && String(prev[field]).startsWith("blob:")) {
+      try { URL.revokeObjectURL(prev[field]); } catch (e) {}
+    }
+  });
+  STATE[key] = {
+    imageFile: null,
+    imagePreview: "",
+    videoFile: null,
+    videoPreview: "",
+    imageUrl: ex?.image_url || "",
+    videoUrl: ex?.video_url || ""
+  };
+}
+
+function getExerciseDraftMedia(key) {
+  if (!STATE[key]) resetExerciseDraftMedia(key, {});
+  return STATE[key];
+}
+
+function exerciseDraftImageHTML(key, fallbackEx) {
+  const draft = getExerciseDraftMedia(key);
+  const src = draft.imagePreview || draft.imageUrl;
+  if (src) return `<img src="${escape(src)}" alt="${escape(fallbackEx?.name || "Exercício")}" style="width:100%;height:100%;object-fit:cover;display:block;" />`;
+  return getExThumb(fallbackEx || { name: "Novo exercício", cat: "chest", muscle_group: "Peito" });
+}
+
+function exerciseDraftVideoHTML(key, fallbackName = "Vídeo do exercício") {
+  const draft = getExerciseDraftMedia(key);
+  if (draft.videoPreview) return `<video src="${escape(draft.videoPreview)}" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover;display:block;background:#000;"></video>`;
+  return renderExerciseVideoPreview(draft.videoUrl, fallbackName);
+}
+
+function refreshExerciseDraftMediaPreview(key, imageBoxId, videoBoxId, fallbackEx = {}) {
+  const imageBox = document.getElementById(imageBoxId);
+  if (imageBox) imageBox.innerHTML = exerciseDraftImageHTML(key, fallbackEx);
+  const videoBox = document.getElementById(videoBoxId);
+  if (videoBox) videoBox.innerHTML = exerciseDraftVideoHTML(key, fallbackEx?.name || "Vídeo do exercício");
+}
+
+window.pickExerciseDraftImage = function(key, imageBoxId, videoBoxId, fallbackName = "Exercício") {
+  pickImageFile((file) => {
+    const draft = getExerciseDraftMedia(key);
+    if (draft.imagePreview && String(draft.imagePreview).startsWith("blob:")) {
+      try { URL.revokeObjectURL(draft.imagePreview); } catch (e) {}
+    }
+    draft.imageFile = file;
+    draft.imagePreview = URL.createObjectURL(file);
+    refreshExerciseDraftMediaPreview(key, imageBoxId, videoBoxId, { name: fallbackName });
+  });
+};
+
+window.pickExerciseDraftVideo = function(key, imageBoxId, videoBoxId, fallbackName = "Exercício") {
+  pickVideoFile((file) => {
+    const draft = getExerciseDraftMedia(key);
+    if (draft.videoPreview && String(draft.videoPreview).startsWith("blob:")) {
+      try { URL.revokeObjectURL(draft.videoPreview); } catch (e) {}
+    }
+    draft.videoFile = file;
+    draft.videoPreview = URL.createObjectURL(file);
+    refreshExerciseDraftMediaPreview(key, imageBoxId, videoBoxId, { name: fallbackName });
+  });
+};
+
+function syncExerciseDraftVideoUrl(key, inputId, videoBoxId, fallbackName = "Exercício") {
+  const draft = getExerciseDraftMedia(key);
+  draft.videoUrl = document.getElementById(inputId)?.value || "";
+  const videoBox = document.getElementById(videoBoxId);
+  if (videoBox) {
+    try {
+      videoBox.innerHTML = exerciseDraftVideoHTML(key, fallbackName);
+    } catch (e) {
+      videoBox.innerHTML = renderExerciseVideoPreview("", fallbackName);
+    }
+  }
+}
+
+async function uploadExerciseDraftMedia(savedId, key, currentVideoUrl = "") {
+  if (!savedId) throw new Error("Exercício não retornou ID para salvar mídia.");
+  const draft = getExerciseDraftMedia(key);
+  const patch = {};
+  if (draft.imageFile) patch.image_url = await uploadImage("exercises", savedId, draft.imageFile, 1024);
+  if (draft.videoFile) patch.video_url = await uploadVideoFile("exercises", savedId, draft.videoFile);
+  else if (currentVideoUrl !== undefined) patch.video_url = currentVideoUrl || null;
+  if (Object.keys(patch).length) {
+    const { error } = await sb.from("exercises").update(patch).eq("id", savedId);
+    if (error) throw error;
+  }
+  return patch;
+}
+
 window.openLibraryExerciseSheet = function(exId = "") {
   const ex = exId
     ? ((STATE.exerciseLibraryPageItems || []).find(item => item.id === exId) || (STATE.library || []).find(item => item.id === exId))
     : null;
   const groupMeta = getExerciseGroupMeta(ex?.muscle_group || ex?.cat || "Peito");
   const previewEx = ex || { name: "Novo exercício", cat: groupMeta.cat, muscle_group: groupMeta.value };
+  resetExerciseDraftMedia("_libraryExerciseDraftMedia", ex || {});
   openSheet(`
     <h3>${ex ? "Editar exercício" : "Novo exercício"}</h3>
     <p style="font-size:13px;color:var(--text-2);margin-top:0">Cadastro da biblioteca. O treino usará séries, repetições e descanso definidos na periodização.</p>
     <div class="card mb-12">
       <div class="row-flex" style="gap:10px;align-items:center">
-        <div class="ex-thumb" style="width:82px;height:82px;flex:0 0 82px;overflow:hidden;">${getExThumb(previewEx)}</div>
+        <div id="lib-ex-img-prev" class="ex-thumb" style="width:82px;height:82px;flex:0 0 82px;overflow:hidden;">${exerciseDraftImageHTML("_libraryExerciseDraftMedia", previewEx)}</div>
         <div style="flex:1;min-width:0">
-          <div class="fw-700 text-sm">Imagem padrão realista</div>
-          <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Gerada automaticamente pelo nome/grupo. Se existir asset específico, ele é usado; senão cai para a imagem realista da categoria.</div>
+          <div class="fw-700 text-sm">Foto ou vídeo do exercício</div>
+          <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Opcional. Se não enviar mídia, o app mantém a imagem realista padrão pelo nome/grupo.</div>
         </div>
       </div>
+      <div class="row-flex" style="gap:8px;margin-top:10px;align-items:center">
+        <button class="btn-ghost" style="flex:1;width:auto" onclick="pickExerciseDraftImage('_libraryExerciseDraftMedia','lib-ex-img-prev','lib-ex-vid-prev',document.getElementById('lib-ex-name')?.value || 'Exercício')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Foto</button>
+        <button class="btn-ghost" style="flex:1;width:auto" onclick="pickExerciseDraftVideo('_libraryExerciseDraftMedia','lib-ex-img-prev','lib-ex-vid-prev',document.getElementById('lib-ex-name')?.value || 'Exercício')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Vídeo</button>
+        <div id="lib-ex-vid-prev" style="width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--bg-3),var(--bg-2));border:1px solid var(--line);overflow:hidden;flex:0 0 44px;display:grid;place-items:center;">${exerciseDraftVideoHTML("_libraryExerciseDraftMedia", previewEx.name)}</div>
+      </div>
+      <input class="input" id="lib-ex-video-url" type="url" inputmode="url" autocomplete="off" value="${escape(ex?.video_url || "")}" placeholder="Link do YouTube: https://youtu.be/..." oninput="syncExerciseDraftVideoUrl('_libraryExerciseDraftMedia','lib-ex-video-url','lib-ex-vid-prev',document.getElementById('lib-ex-name')?.value || 'Exercício')" style="margin-top:10px" />
     </div>
     <div class="form-group"><label class="form-label">Nome</label><input class="input" id="lib-ex-name" value="${escape(ex?.name || "")}" placeholder="Ex.: Supino reto com halteres" /></div>
     <div class="form-group"><label class="form-label">Grupo muscular</label>
@@ -13174,6 +13310,16 @@ window.saveLibraryExercise = async function(exId = "") {
   const meta = getExerciseGroupMeta(group);
   if (!name) { showToast("Preencha o nome do exercício", "error"); return; }
   if (name.length > 90) { showToast("Nome muito longo", "error"); return; }
+  let videoUrl = "";
+  try {
+    videoUrl = normalizeExerciseVideoUrl(document.getElementById("lib-ex-video-url")?.value || "");
+  } catch (e) {
+    showToast(e.message || "Link de vídeo inválido", "error");
+    return;
+  }
+  const currentEx = exId
+    ? ((STATE.exerciseLibraryPageItems || []).find(item => item.id === exId) || (STATE.library || []).find(item => item.id === exId))
+    : null;
   const payload = {
     workout_id: null,
     student_id: null,
@@ -13188,7 +13334,8 @@ window.saveLibraryExercise = async function(exId = "") {
     cadence: String(document.getElementById("lib-ex-cadence")?.value || "").trim(),
     method: String(document.getElementById("lib-ex-method")?.value || "").trim() || "Séries múltiplas",
     observations: String(document.getElementById("lib-ex-obs")?.value || "").trim(),
-    image_url: null
+    image_url: currentEx?.image_url || null,
+    video_url: videoUrl || null
   };
   try {
     const { data: duplicateRows, error: duplicateError } = await sb
@@ -13201,10 +13348,12 @@ window.saveLibraryExercise = async function(exId = "") {
     const duplicate = (duplicateRows || []).find(e => e.id !== exId && normalizeExerciseText(e.name) === normalizeExerciseText(name));
     if (duplicate) { showToast("Já existe exercício com esse nome na biblioteca", "error"); return; }
     const q = exId
-      ? sb.from("exercises").update(payload).eq("id", exId).eq("is_library", true)
-      : sb.from("exercises").insert(payload);
-    const { error } = await q;
+      ? sb.from("exercises").update(payload).eq("id", exId).eq("is_library", true).select("id").single()
+      : sb.from("exercises").insert(payload).select("id").single();
+    const { data: saved, error } = await q;
     if (error) throw error;
+    const savedId = saved?.id || exId;
+    await uploadExerciseDraftMedia(savedId, "_libraryExerciseDraftMedia", videoUrl);
     showToast(exId ? "Exercício salvo" : "Exercício criado", "success");
     STATE.library = [];
     STATE.exerciseLibraryLoadedAt = 0;
@@ -13913,8 +14062,24 @@ window.onPickerPick = async function(libExId) {
 
 window.onPickerCreateNew = function() {
   const ctx = STATE._pickerCtx;
+  resetExerciseDraftMedia("_newExerciseDraftMedia", {});
   openSheet(`
     <h3>Novo exercício</h3>
+    <div class="card mb-12">
+      <div class="row-flex" style="gap:10px;align-items:center">
+        <div id="ne-img-prev" class="ex-thumb" style="width:72px;height:72px;flex:0 0 72px;overflow:hidden;">${exerciseDraftImageHTML("_newExerciseDraftMedia", { name: "Novo exercício", cat: "chest", muscle_group: "Peito" })}</div>
+        <div style="flex:1;min-width:0">
+          <div class="fw-700 text-sm">Mídia opcional</div>
+          <div class="text-xs muted" style="margin-top:4px;line-height:1.4">Adicione foto, vídeo curto ou link do YouTube já no cadastro.</div>
+        </div>
+      </div>
+      <div class="row-flex" style="gap:8px;margin-top:10px;align-items:center">
+        <button class="btn-ghost" style="flex:1;width:auto" onclick="pickExerciseDraftImage('_newExerciseDraftMedia','ne-img-prev','ne-vid-prev',document.getElementById('ne-name')?.value || 'Exercício')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Foto</button>
+        <button class="btn-ghost" style="flex:1;width:auto" onclick="pickExerciseDraftVideo('_newExerciseDraftMedia','ne-img-prev','ne-vid-prev',document.getElementById('ne-name')?.value || 'Exercício')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Vídeo</button>
+        <div id="ne-vid-prev" style="width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--bg-3),var(--bg-2));border:1px solid var(--line);overflow:hidden;flex:0 0 44px;display:grid;place-items:center;">${exerciseDraftVideoHTML("_newExerciseDraftMedia", "Novo exercício")}</div>
+      </div>
+      <input class="input" id="ne-video-url" type="url" inputmode="url" autocomplete="off" placeholder="Link do YouTube: https://youtu.be/..." oninput="syncExerciseDraftVideoUrl('_newExerciseDraftMedia','ne-video-url','ne-vid-prev',document.getElementById('ne-name')?.value || 'Exercício')" style="margin-top:10px" />
+    </div>
     <div class="form-group"><label class="form-label">Nome</label><input class="input" id="ne-name" placeholder="Ex.: Crucifixo declinado" /></div>
     <div class="form-group"><label class="form-label">Grupo muscular</label>
       <select class="input" id="ne-group">
@@ -13942,6 +14107,13 @@ window.submitNewExercise = async function() {
   if (!name) { showToast("Preencha o nome", "error"); return; }
   const muscle = get("ne-group").value;
   if (name.length > 80) { showToast("Nome do exercício muito longo", "error"); return; }
+  let videoUrl = "";
+  try {
+    videoUrl = normalizeExerciseVideoUrl(get("ne-video-url")?.value || "");
+  } catch (e) {
+    showToast(e.message || "Link de vídeo inválido", "error");
+    return;
+  }
   if (STATE._addingExercise) return;
   const groupMeta = getExerciseGroupMeta(muscle);
   const data = {
@@ -13954,7 +14126,8 @@ window.submitNewExercise = async function() {
     cadence: get("ne-cadence").value.trim(),
     method: get("ne-method").value.trim() || "Séries múltiplas",
     observations: get("ne-obs").value.trim(),
-    image_url: null
+    image_url: null,
+    video_url: videoUrl || null
   };
   // Insere no workout
   const wId = ctx.workoutId || (w && w.id);
@@ -13966,17 +14139,22 @@ window.submitNewExercise = async function() {
     const { data: existingEx, error: posError } = await sb.from("exercises").select("position").eq("workout_id", wId).order("position", { ascending: false }).limit(1);
     if (posError) throw posError;
     const nextPos = (existingEx && existingEx.length > 0 ? existingEx[0].position : 0) + 1;
-    const { error: e1 } = await sb.from("exercises").insert({
+    const { data: createdEx, error: e1 } = await sb.from("exercises").insert({
       ...data, workout_id: wId, student_id: ctx.studentId || null,
       position: nextPos, is_library: false
-    });
+    }).select("id").single();
     if (e1) throw e1;
+    const mediaPatch = await uploadExerciseDraftMedia(createdEx?.id, "_newExerciseDraftMedia", videoUrl);
+    const reusableData = { ...data, ...mediaPatch };
     // Salva também na biblioteca?
     if (get("ne-add-library").checked) {
       const { error: libErr } = await sb.from("exercises").insert({
-        ...data, workout_id: null, position: 0, is_library: true
+        ...reusableData, workout_id: null, student_id: null, position: 0, is_library: true
       });
-      if (libErr) console.warn("[submitNewExercise] library insert:", libErr);
+      if (libErr) {
+        console.warn("[submitNewExercise] library insert:", libErr);
+        showToast("Exercício adicionado ao treino. Biblioteca não salvou por permissão.", "error");
+      }
       await loadExerciseLibrary();
     }
     showToast("Exercício adicionado", "success");
