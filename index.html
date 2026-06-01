@@ -2277,6 +2277,7 @@ function avatarHTML(p) {
 function userFacingErrorMessage(msg) {
   const raw = String(msg == null ? "" : msg).trim();
   if (!raw) return "Não foi possível concluir. Tente novamente.";
+  if (/Asaas HTTP/i.test(raw)) return raw.replace(/^Asaas HTTP\s+\d+:\s*/i, "");
   if (/duplicate key|violates unique constraint|23505/i.test(raw)) return "Este cadastro já existe. Revise os dados e tente novamente.";
   if (/row-level|rls|policy|permission denied|unauthorized|forbidden|sem permissão/i.test(raw)) return "Você não tem permissão para esta ação.";
   if (/non-2xx|edge function|functions? returned|failed to fetch|network|timeout|load failed/i.test(raw)) return "Serviço temporariamente indisponível. Tente novamente em instantes.";

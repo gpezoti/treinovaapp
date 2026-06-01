@@ -36,6 +36,7 @@ includesAll(index, [
   'removeAppSkeleton',
   'startPlatformUpgradeCheckout',
   'getFunctionErrorMessage(error',
+  'Asaas HTTP',
   'sb.functions.invoke("platform-create-checkout"',
   'platformTrialBannerHTML',
   'R$ 59,90',
