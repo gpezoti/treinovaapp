@@ -1902,13 +1902,84 @@ function getExerciseImageUrl(ex) {
   return custom || lib || getStandardExerciseAssetUrl(ex);
 }
 
+function getExerciseImageMeta(ex) {
+  const item = ex || {};
+  const url = getExerciseImageUrl(item);
+  const fallback = getMissingExerciseImageUrl(item);
+  const alt = item.name ? `Imagem de ${item.name}` : "Imagem do exercício";
+  return { url, fallback, alt };
+}
+
 // Retorna HTML de imagem para um exercício.
 // Prioridade: imagem própria do professor/treinador → biblioteca com mesmo nome → asset específico por nome → placeholder neutro.
 function getExThumb(ex) {
-  const url = getExerciseImageUrl(ex || {});
-  const fallback = getMissingExerciseImageUrl(ex || {});
-  const alt = ex && ex.name ? `Imagem de ${ex.name}` : "Imagem do exercício";
+  const { url, fallback, alt } = getExerciseImageMeta(ex);
   return `<img src="${escape(url)}" data-fallback-src="${escape(fallback)}" alt="${escape(alt)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=this.dataset.fallbackSrc" />`;
+}
+
+function getYouTubeVideoId(rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!value) return "";
+  const normalized = /^(https?:)?\/\//i.test(value)
+    ? value.replace(/^\/\//, "https://")
+    : (/^(www\.)?(youtube\.com|youtu\.be)\//i.test(value) ? `https://${value}` : value);
+  try {
+    const url = new URL(normalized);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (host === "youtu.be") return (url.pathname.split("/").filter(Boolean)[0] || "").slice(0, 32);
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+      if (url.pathname.startsWith("/watch")) return (url.searchParams.get("v") || "").slice(0, 32);
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (["embed", "shorts", "live"].includes(parts[0])) return (parts[1] || "").slice(0, 32);
+    }
+  } catch (e) {
+    const match = value.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{6,32})/);
+    return match ? match[1] : "";
+  }
+  return "";
+}
+
+function getYouTubeEmbedUrl(rawUrl) {
+  const id = getYouTubeVideoId(rawUrl);
+  return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}?rel=0&modestbranding=1&playsinline=1` : "";
+}
+
+function normalizeExerciseVideoUrl(rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!value) return "";
+  const normalized = /^(https?:)?\/\//i.test(value)
+    ? value.replace(/^\/\//, "https://")
+    : (/^(www\.)?(youtube\.com|youtu\.be)\//i.test(value) ? `https://${value}` : value);
+  try {
+    const url = new URL(normalized);
+    if (!["http:", "https:"].includes(url.protocol)) throw new Error();
+    return url.href;
+  } catch (e) {
+    throw new Error("Informe um link de vídeo válido. Ex: https://youtu.be/abc123");
+  }
+}
+
+function renderExerciseVideoPreview(url, name = "Vídeo do exercício") {
+  if (!url) {
+    return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg>`;
+  }
+  if (getYouTubeEmbedUrl(url)) {
+    return `<div style="width:100%;height:100%;display:grid;place-items:center;background:rgba(255,0,0,.12);color:#ff4d4d;font-size:12px;font-weight:900;letter-spacing:.4px;">YT</div>`;
+  }
+  return `<video src="${escape(url)}" aria-label="${escape(name)}" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover;"></video>`;
+}
+
+function renderExerciseVideoEmbed(url, name = "Vídeo do exercício") {
+  if (!url) return "";
+  const embed = getYouTubeEmbedUrl(url);
+  if (embed) {
+    return `<div class="exercise-video-embed" style="margin:12px 0 14px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9;">
+      <iframe src="${escape(embed)}" title="${escape(name)}" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="width:100%;height:100%;border:0;display:block;"></iframe>
+    </div>`;
+  }
+  return `<div class="exercise-video-embed" style="margin:12px 0 14px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#000;">
+    <video src="${escape(url)}" controls playsinline preload="metadata" style="width:100%;max-height:64vh;display:block;background:#000;"></video>
+  </div>`;
 }
 
 const REP_SCHEMES = {
@@ -2178,6 +2249,13 @@ function intensityPill(int) {
 }
 function workoutPretty(w) { if (!w || w === "OFF") return "OFF"; return w; }
 function escape(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+function jsArg(value) {
+  return JSON.stringify(String(value == null ? "" : value))
+    .replace(/&/g, "\\u0026")
+    .replace(/</g, "\\u003C")
+    .replace(/>/g, "\\u003E")
+    .replace(/'/g, "\\u0027");
+}
 const WORKOUT_CODE_MAX_LENGTH = 12;
 const WORKOUT_CODE_HELP_TEXT = "Use até 12 caracteres: letras, números, _ ou -. Ex: SUPERIOR2";
 function normalizeWorkoutCodeValue(value) {
@@ -9253,19 +9331,21 @@ function renderExerciseList(W, intensity, completed) {
 
     const thumbInner = getExThumb(ex);
     const illustInner = getExThumb(ex);
+    const imageMeta = getExerciseImageMeta(ex);
+    const openImageAction = `openExerciseImageViewer(${jsArg(imageMeta.url)}, ${jsArg(imageMeta.alt)}, ${jsArg(imageMeta.fallback)})`;
     const ssInfo = getSupersetIndex(ex);
     const ssClass = ssInfo ? "in-superset" : "";
     const ssBadge = ssInfo ? `<span class="today-pill" style="background:rgba(0,180,255,.10);color:var(--brand);border:1px solid rgba(0,180,255,.30);font-size:9px;padding:2px 6px;margin-right:6px;letter-spacing:.4px">${getSupersetLabel(ssInfo.total)} ${ssInfo.idx+1}/${ssInfo.total}</span>` : "";
     return `<div class="exercise-card ${allDone ? "done" : ""} ${isMobility ? "is-mobility" : ""} ${expanded ? "expanded" : ""} ${ssClass}" data-pos="${ex.position}">
       <div class="ex-head" onclick="toggleExercise(${ex.position})">
-        <div class="ex-thumb" style="overflow:hidden;">${thumbInner}</div>
+        <div class="ex-thumb" role="button" aria-label="Ampliar ${escape(imageMeta.alt)}" onclick='event.stopPropagation(); ${openImageAction}' style="overflow:hidden;cursor:zoom-in;">${thumbInner}</div>
         <div class="ex-info">
           <div class="ex-name">${ssBadge}${escape(ex.name)}</div>
           <div class="ex-quick">
             <span><b>${target}×${repsTxt || ""}</b></span>
             ${pauseTxt && pauseTxt !== "—" ? `<span>· pausa <b>${pauseTxt}</b></span>` : ""}
             ${ex.cadence && ex.cadence !== "—" ? `<span>· cad. <b>${ex.cadence}</b></span>` : ""}
-            ${ex.video_url ? `<span style="color:var(--brand)">· <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="2" y1="17" x2="7" y2="17"/></svg> vídeo</span>` : ""}
+            ${ex.video_url ? `<span style="color:var(--brand)">· <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="9"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg> vídeo</span>` : ""}
           </div>
         </div>
         <div class="ex-progress">
@@ -9274,10 +9354,11 @@ function renderExerciseList(W, intensity, completed) {
         </div>
       </div>
       <div class="ex-body">
-        <div class="ex-illust" style="overflow:hidden; position:relative;">
+        <div class="ex-illust" role="button" aria-label="Ampliar ${escape(imageMeta.alt)}" onclick='${openImageAction}' style="overflow:hidden; position:relative; cursor:zoom-in;">
           ${illustInner}
-          ${ex.video_url ? `<button onclick="openExerciseVideo('${escape(ex.video_url)}','${escape(ex.name).replace(/'/g, "&#39;")}')" style="position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.65); color:#fff; border-radius:999px; padding:7px 12px; font-size:12px; font-weight:700; display:inline-flex; align-items:center; gap:6px; backdrop-filter:blur(4px);">▶ Ver vídeo</button>` : ""}
+          <span style="position:absolute;right:10px;bottom:10px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;padding:6px 10px;font-size:11px;font-weight:800;display:inline-flex;align-items:center;gap:5px;backdrop-filter:blur(4px);"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg> Ampliar</span>
         </div>
+        ${ex.video_url ? renderExerciseVideoEmbed(ex.video_url, ex.name) : ""}
         <div class="ex-method">
           <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           ${escape(ex.method || "")}
@@ -9365,10 +9446,30 @@ function renderSetsTable(ex, logs, scheme, completed) {
   return html;
 }
 
+window.openExerciseImageViewer = function(url, name, fallbackUrl) {
+  const previous = document.getElementById("exercise-image-viewer");
+  if (previous) previous.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "exercise-image-viewer";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:18px;";
+  overlay.innerHTML = `
+    <button type="button" aria-label="Fechar imagem" style="position:absolute;top:max(16px,env(safe-area-inset-top));right:16px;width:44px;height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.22);background:rgba(15,23,42,.82);color:#fff;font-size:26px;line-height:1;display:grid;place-items:center;">×</button>
+    <figure style="margin:0;max-width:min(960px,100%);max-height:92vh;width:100%;display:grid;gap:12px;justify-items:center;">
+      <img src="${escape(url)}" data-fallback-src="${escape(fallbackUrl || url)}" alt="${escape(name || "Imagem do exercício")}" style="max-width:100%;max-height:82vh;object-fit:contain;border-radius:18px;background:var(--bg-card);box-shadow:0 18px 60px rgba(0,0,0,.45);" onerror="this.onerror=null;this.src=this.dataset.fallbackSrc" />
+      <figcaption style="color:#e5e7eb;font-size:14px;font-weight:800;text-align:center;line-height:1.35;">${escape(name || "Imagem do exercício")}</figcaption>
+    </figure>
+  `;
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay || ev.target.closest("button")) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+};
+
 window.openExerciseVideo = function(url, name) {
   openSheet(`
     <h3>${escape(name || "Vídeo")}</h3>
-    <video src="${escape(url)}" controls autoplay playsinline style="width:100%; max-height:70vh; border-radius:12px; background:#000;"></video>
+    <p class="text-sm muted" style="margin-top:-4px;margin-bottom:12px">Vídeo demonstrativo embedado no exercício.</p>
+    ${renderExerciseVideoEmbed(url, name || "Vídeo")}
     <div style="margin-top:12px"><button class="btn-ghost" onclick="closeSheet()">Fechar</button></div>
   `);
 };
@@ -13922,15 +14023,16 @@ window.editExercise = async function(exId) {
         <p class="text-xs muted">${hasCustomExerciseImage(ex) ? "Imagem personalizada deste exercício." : "Usando imagem padrão contextual. Suba uma foto para substituir."} Comprimida para 1024px JPEG antes do upload.</p>
       </div>
       <div class="form-group">
-        <label class="form-label">Vídeo curto (até 30s)</label>
+        <label class="form-label">Vídeo do exercício</label>
         <div class="row-flex" style="gap:8px; margin-bottom:6px;">
           <div id="ex-vid-prev" style="width:64px; height:64px; border-radius:10px; background:linear-gradient(135deg,var(--bg-3),var(--bg-2)); border:1px solid var(--line); overflow:hidden; flex:0 0 64px; display:grid; place-items:center;">
-            ${ex.video_url ? `<video src="${escape(ex.video_url)}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>` : `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/></svg>`}
+            ${renderExerciseVideoPreview(ex.video_url, ex.name)}
           </div>
-          <button class="btn-ghost" style="flex:1; width:auto;" onclick="onExerciseVideoUpload('${exId}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="2" y1="17" x2="7" y2="17"/></svg> Alterar vídeo</button>
+          <button class="btn-ghost" style="flex:1; width:auto;" onclick="onExerciseVideoUpload('${exId}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Subir vídeo curto</button>
           ${ex.video_url ? `<button class="mini-btn mini-btn-danger" onclick="clearExerciseMedia('${exId}','video')">×</button>` : ''}
         </div>
-        <p class="text-xs muted">Máx. 30 segundos · 25MB. Use vídeo já curto/recortado para subir rápido.</p>
+        <input class="input" id="ex-video-url" type="url" inputmode="url" autocomplete="off" value="${escape(ex.video_url || '')}" placeholder="https://youtu.be/..." />
+        <p class="text-xs muted">Cole um link do YouTube para embedar no exercício, ou suba um vídeo curto de até 30s/25MB.</p>
       </div>
     </div>
 
@@ -14010,6 +14112,13 @@ window.saveExercise = async function(id) {
     ? Math.max(1, Math.min(30, parseInt(setsOverrideRaw, 10) || 1))
     : null;
   const repsOverride = normalizeExerciseOverrideValue(document.getElementById("ex-reps-override")?.value);
+  let videoUrl = "";
+  try {
+    videoUrl = normalizeExerciseVideoUrl(document.getElementById("ex-video-url")?.value);
+  } catch (e) {
+    showToast(e.message || "Link de vídeo inválido", "error");
+    return;
+  }
   const patch = {
     name: document.getElementById("ex-name").value.trim(),
     cat: document.getElementById("ex-cat").value.trim(),
@@ -14020,7 +14129,8 @@ window.saveExercise = async function(id) {
     pause: "Seguir período",
     cadence: document.getElementById("ex-cadence").value.trim(),
     method: document.getElementById("ex-method").value.trim(),
-    observations: document.getElementById("ex-obs").value.trim()
+    observations: document.getElementById("ex-obs").value.trim(),
+    video_url: videoUrl || null
   };
   const { error } = await sb.from("exercises").update(patch).eq("id", id);
   if (error) { showToast("Erro: "+error.message, "error"); return; }
@@ -17255,7 +17365,8 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
       #wc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9800;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .3s}
       #wc-overlay .wc-card{background:var(--bg);border:1px solid var(--brand);border-radius:18px;max-width:380px;width:100%;padding:28px 22px;text-align:center;animation:popIn .4s cubic-bezier(.2,.8,.4,1.2)}
       @keyframes popIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
-      #wc-overlay .wc-emoji{font-size:60px;margin-bottom:8px}
+      #wc-overlay .wc-emoji{width:58px;height:58px;border-radius:18px;margin:0 auto 12px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);border:1px solid rgba(0,180,255,.26)}
+      #wc-overlay .wc-emoji svg{width:34px;height:34px}
       #wc-overlay h2{margin:0 0 6px;font-size:24px}
       #wc-overlay .wc-sub{color:var(--text-2);margin:0 0 18px;font-size:14px}
       #wc-overlay .wc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}
@@ -17263,13 +17374,14 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
       #wc-overlay .wc-val{font-size:20px;font-weight:900;color:var(--brand)}
       #wc-overlay .wc-lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
       #wc-overlay .wc-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
-      #wc-overlay .wc-btn{padding:13px;border-radius:10px;font-weight:700;border:0;cursor:pointer;font-size:13px}
+      #wc-overlay .wc-btn{padding:13px;border-radius:10px;font-weight:700;border:0;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px}
+      #wc-overlay .wc-btn svg{width:17px;height:17px;flex:0 0 auto}
       #wc-overlay .wc-share{background:var(--brand);color:var(--brand-on)}
       #wc-overlay .wc-share2{background:var(--bg-card);color:var(--brand);border:1.5px solid var(--brand)}
       #wc-overlay .wc-cont{background:var(--bg-card);color:var(--text);border:1px solid var(--line);width:100%;margin-top:0}
     </style>
     <div class="wc-card">
-      <div class="wc-emoji"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <div class="wc-emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
       <h2>Treino concluído!</h2>
       <p class="wc-sub">${escapeHtml(wname)}</p>
       <div class="wc-stats">
@@ -17287,8 +17399,8 @@ function showWorkoutCompleteModal({ totalVolume, duration, sessionId }) {
         </div>
       </div>
       <div class="wc-buttons">
-        <button class="wc-btn wc-share" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone}, window._shareWorkoutMeta||{}, 'post')"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/></svg> Post</button>
-        <button class="wc-btn wc-share2" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone}, window._shareWorkoutMeta||{}, 'stories')"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/></svg> Stories</button>
+        <button class="wc-btn wc-share" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone}, window._shareWorkoutMeta||{}, 'post')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="8" cy="10" r="1.4"/><path d="m6 17 4.2-4 3.2 3 3.4-4.2L21 17"/></svg> Post</button>
+        <button class="wc-btn wc-share2" onclick="shareWorkout(${totalVolume}, ${duration}, '${escapeAttr(wname)}', ${setsDone}, window._shareWorkoutMeta||{}, 'stories')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="3"/><path d="m11 9 4 3-4 3z" fill="currentColor" stroke="none"/></svg> Stories</button>
       </div>
       <button class="wc-btn wc-cont" onclick="document.getElementById('wc-overlay').remove();navTo('feed')">Ver feed</button>
       ${("Notification" in window && Notification.permission === "default") ? `

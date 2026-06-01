@@ -39,7 +39,11 @@ const checks = [
   ["recovery SQL supports reopen restart delete", /'reopen', 'restart', 'delete'/.test(recoverySql) && /delete from public\.set_logs/.test(recoverySql)],
   ["payment RLS helper can be executed by authenticated users", /grant execute on function public\.is_payment_ok\(uuid\) to authenticated, service_role/.test(paymentRlsSql)],
   ["payment RLS helper is scoped to current user", /uid = auth\.uid\(\)/.test(paymentRlsSql)],
-  ["premium illustration fallback exists", /EXERCISE_ILLUSTRATION_PROMPTS/.test(html)]
+  ["premium illustration fallback exists", /EXERCISE_ILLUSTRATION_PROMPTS/.test(html)],
+  ["student can open exercise image fullscreen", /openExerciseImageViewer/.test(html) && /cursor:zoom-in/.test(html)],
+  ["exercise video supports youtube embeds", /function getYouTubeEmbedUrl/.test(html) && /youtube\.com\/embed/.test(html) && /renderExerciseVideoEmbed/.test(html)],
+  ["exercise edit accepts pasted video url", /id="ex-video-url"/.test(html) && /normalizeExerciseVideoUrl/.test(html) && /video_url:\s*videoUrl \|\| null/.test(html)],
+  ["workout completion share icons are explicit", /<circle cx="8" cy="10" r="1\.4"\/>/.test(html) && /<path d="m11 9 4 3-4 3z"/.test(html)]
 ];
 
 for (const [label, ok] of checks) {
