@@ -6217,6 +6217,77 @@ function removeAppSkeleton() {
   if (sk) sk.remove();
 }
 
+function getPlatformBillingStatus(profile = STATE.profile) {
+  const cpfCnpj = onlyDigits(profile?.cpf_cnpj || "");
+  const phone = onlyDigits(profile?.phone || "");
+  return {
+    cpfCnpj,
+    phone,
+    cpfValid: cpfCnpj.length === 11 || cpfCnpj.length === 14,
+    phoneValid: phone.length >= 10 && phone.length <= 11,
+    ready: (cpfCnpj.length === 11 || cpfCnpj.length === 14) && phone.length >= 10 && phone.length <= 11,
+  };
+}
+
+function platformBillingFieldsHTML() {
+  const status = getPlatformBillingStatus();
+  if (status.ready) return "";
+  return `
+    <div style="border:1px solid var(--line);border-radius:16px;padding:14px;margin:-4px 0 16px;background:rgba(255,255,255,.025);text-align:left">
+      <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:900;margin-bottom:8px">Dados para assinatura</div>
+      <p style="font-size:12px;color:var(--text-2);line-height:1.4;margin:0 0 10px">O Asaas exige CPF/CNPJ e telefone válidos para abrir o checkout recorrente.</p>
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label" for="platform-billing-cpf">CPF/CNPJ</label>
+        <input class="input" id="platform-billing-cpf" inputmode="numeric" autocomplete="off" value="${escape(status.cpfCnpj)}" placeholder="Somente números" />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label" for="platform-billing-phone">Telefone</label>
+        <input class="input" id="platform-billing-phone" type="tel" autocomplete="tel" value="${escape(STATE.profile?.phone || '')}" placeholder="(11) 99999-0000" oninput="formatSignupPhone(this)" />
+      </div>
+      <div id="platform-billing-error" style="display:none;margin-top:10px;color:var(--red);font-size:12px;font-weight:800;line-height:1.35"></div>
+    </div>`;
+}
+
+function setPlatformBillingError(message) {
+  const el = document.getElementById("platform-billing-error");
+  if (!el) return;
+  el.textContent = message || "";
+  el.style.display = message ? "block" : "none";
+}
+
+async function savePlatformBillingDataFromLockScreen() {
+  const cpfInput = document.getElementById("platform-billing-cpf");
+  const phoneInput = document.getElementById("platform-billing-phone");
+  const cpfCnpj = onlyDigits(cpfInput?.value || STATE.profile?.cpf_cnpj || "");
+  const phone = onlyDigits(phoneInput?.value || STATE.profile?.phone || "");
+
+  if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
+    const msg = "Informe CPF/CNPJ válido antes de assinar.";
+    setPlatformBillingError(msg);
+    cpfInput?.focus();
+    throw new Error(msg);
+  }
+  if (phone.length < 10 || phone.length > 11) {
+    const msg = "Informe telefone válido no perfil antes de assinar.";
+    setPlatformBillingError(msg);
+    phoneInput?.focus();
+    throw new Error(msg);
+  }
+
+  if (STATE.profile?.cpf_cnpj === cpfCnpj && onlyDigits(STATE.profile?.phone || "") === phone) {
+    setPlatformBillingError("");
+    return;
+  }
+
+  const { error } = await sb.from("profiles")
+    .update({ cpf_cnpj: cpfCnpj, phone })
+    .eq("id", STATE.profile.id);
+  if (error) throw new Error(await getFunctionErrorMessage(error, "Não foi possível salvar os dados de cobrança."));
+
+  STATE.profile = { ...STATE.profile, cpf_cnpj: cpfCnpj, phone };
+  setPlatformBillingError("");
+}
+
 function renderPlatformLockedScreen(access = STATE.platformAccess || getPlatformSubscriptionAccess()) {
   removeAppSkeleton();
   const el = document.getElementById("view-home");
@@ -6247,9 +6318,11 @@ function renderPlatformLockedScreen(access = STATE.platformAccess || getPlatform
             </div>
             <div style="font-size:12px;color:var(--text-2);margin-top:6px">Pagamento recorrente com cartão no checkout seguro do Asaas.</div>
           </div>`;
+    const billingFields = studentBlockedByCoach ? "" : platformBillingFieldsHTML();
+    const billingReady = studentBlockedByCoach ? false : getPlatformBillingStatus().ready;
     const primaryAction = studentBlockedByCoach
       ? `<button class="btn-ghost" onclick="signOut()">Sair da conta</button>`
-      : `<button class="btn-primary" id="platform-upgrade-btn" onclick="startPlatformUpgradeCheckout()">Assinar e liberar acesso</button>
+      : `<button class="btn-primary" id="platform-upgrade-btn" onclick="startPlatformUpgradeCheckout()">${billingReady ? "Assinar e liberar acesso" : "Salvar dados e assinar"}</button>
           <button class="btn-ghost" style="margin-top:10px" onclick="signOut()">Sair da conta</button>`;
     el.innerHTML = `
       <div style="min-height:70vh;display:flex;align-items:center;justify-content:center;padding:24px 16px">
@@ -6260,6 +6333,7 @@ function renderPlatformLockedScreen(access = STATE.platformAccess || getPlatform
           <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:var(--text)">${title}</h2>
           <p style="margin:0 auto 16px;color:var(--text-2);font-size:14px;line-height:1.45;max-width:320px">${body}</p>
           ${planCard}
+          ${billingFields}
           ${primaryAction}
         </div>
       </div>`;
@@ -6272,8 +6346,10 @@ function renderPlatformLockedScreen(access = STATE.platformAccess || getPlatform
 
 async function startPlatformUpgradeCheckout() {
   const btn = document.getElementById("platform-upgrade-btn");
-  if (btn) { btn.disabled = true; btn.textContent = "Abrindo checkout..."; }
+  if (btn) { btn.disabled = true; btn.textContent = "Validando dados..."; }
   try {
+    await savePlatformBillingDataFromLockScreen();
+    if (btn) btn.textContent = "Abrindo checkout...";
     const { data, error } = await withTimeout(sb.functions.invoke("platform-create-checkout", {
       body: { source: "platform_locked_screen" }
     }), 30000, "platform-create-checkout timeout");
@@ -6282,7 +6358,8 @@ async function startPlatformUpgradeCheckout() {
     window.location.href = data.checkout_url;
   } catch (e) {
     showToast(e.message || "Não foi possível abrir o checkout.", "error");
-    if (btn) { btn.disabled = false; btn.textContent = "Assinar e liberar acesso"; }
+    setPlatformBillingError(e.message || "");
+    if (btn) { btn.disabled = false; btn.textContent = getPlatformBillingStatus().ready ? "Assinar e liberar acesso" : "Salvar dados e assinar"; }
   }
 }
 
