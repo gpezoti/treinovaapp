@@ -7466,6 +7466,9 @@ function renderSelfTrainingCard({ emptyCta = true } = {}) {
         <div class="today-title">Dia OFF</div>
         <div class="today-meta">Recuperação também faz parte do plano.</div>
         <span class="today-pill pill-off">Descanso</span>
+        <div style="margin-top:14px">
+          <button class="btn-ghost" onclick="openStudentPeriodSheet('${STATE.profile.id}')">Editar ciclo</button>
+        </div>
       </div>`;
   }
   const W = resolveWorkoutRef(info.workout_code, info.workout_id);
@@ -7478,7 +7481,7 @@ function renderSelfTrainingCard({ emptyCta = true } = {}) {
       <span class="today-pill ${pillCls}">${pillTxt}</span>
       <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <button class="btn-primary" onclick="openWorkout('${today}','${info.workout_code}','${info.intensity}','${info.workout_id || ""}')">Iniciar treino</button>
-        <button class="btn-ghost" onclick="navTo('calendar')">Periodização</button>
+        <button class="btn-ghost" onclick="openStudentPeriodSheet('${STATE.profile.id}')">Editar ciclo</button>
       </div>
     </div>`;
 }
