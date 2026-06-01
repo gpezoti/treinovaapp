@@ -32,6 +32,7 @@ includesAll(index, [
   'sb.functions.invoke("platform-signup"',
   'getPlatformSubscriptionAccess',
   'loadPlatformAccess',
+  'profile.role === "student" && profile.status === "blocked"',
   'renderPlatformLockedScreen',
   'removeAppSkeleton',
   'startPlatformUpgradeCheckout',

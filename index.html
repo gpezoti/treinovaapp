@@ -14094,6 +14094,13 @@ async function postSignIn() {
 	    headerSub.textContent = roleLabel + (profile.full_name || profile.email);
 	    if (desktopHeaderSub) desktopHeaderSub.textContent = roleLabel + (profile.full_name || profile.email);
 
+      if (profile.role === "student" && profile.status === "blocked") {
+        await safeLoad("branding", loadBranding);
+        renderBlockedScreen();
+        renderHeaderBell();
+        return;
+      }
+
 	    const platformAccess = await loadPlatformAccess(profile);
 	    if (platformAccess.locked) {
 	      await safeLoad("branding", loadBranding);
