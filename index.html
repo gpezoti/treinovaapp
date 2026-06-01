@@ -6218,15 +6218,44 @@ function removeAppSkeleton() {
 }
 
 function getPlatformBillingStatus(profile = STATE.profile) {
+  const draft = getPlatformBillingAddressDraft(profile?.id);
   const cpfCnpj = onlyDigits(profile?.cpf_cnpj || "");
   const phone = onlyDigits(profile?.phone || "");
+  const postalCode = onlyDigits(draft.postalCode || "");
+  const address = String(draft.address || "").trim();
+  const addressNumber = String(draft.addressNumber || "").trim();
+  const province = String(draft.province || "").trim();
   return {
     cpfCnpj,
     phone,
+    postalCode,
+    address,
+    addressNumber,
+    complement: String(draft.complement || "").trim(),
+    province,
     cpfValid: cpfCnpj.length === 11 || cpfCnpj.length === 14,
     phoneValid: phone.length >= 10 && phone.length <= 11,
-    ready: (cpfCnpj.length === 11 || cpfCnpj.length === 14) && phone.length >= 10 && phone.length <= 11,
+    addressValid: postalCode.length === 8 && Boolean(address) && Boolean(addressNumber) && Boolean(province),
+    ready: (cpfCnpj.length === 11 || cpfCnpj.length === 14) && phone.length >= 10 && phone.length <= 11 && postalCode.length === 8 && Boolean(address) && Boolean(addressNumber) && Boolean(province),
   };
+}
+
+function getPlatformBillingAddressStorageKey(profileId = STATE.profile?.id) {
+  return `treinova_platform_billing_address_v1_${profileId || "anon"}`;
+}
+
+function getPlatformBillingAddressDraft(profileId = STATE.profile?.id) {
+  try {
+    return JSON.parse(localStorage.getItem(getPlatformBillingAddressStorageKey(profileId)) || "{}") || {};
+  } catch(e) {
+    return {};
+  }
+}
+
+function savePlatformBillingAddressDraft(address) {
+  try {
+    localStorage.setItem(getPlatformBillingAddressStorageKey(), JSON.stringify(address || {}));
+  } catch(e) {}
 }
 
 function platformBillingFieldsHTML() {
@@ -6235,7 +6264,7 @@ function platformBillingFieldsHTML() {
   return `
     <div style="border:1px solid var(--line);border-radius:16px;padding:14px;margin:-4px 0 16px;background:rgba(255,255,255,.025);text-align:left">
       <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:900;margin-bottom:8px">Dados para assinatura</div>
-      <p style="font-size:12px;color:var(--text-2);line-height:1.4;margin:0 0 10px">O Asaas exige CPF/CNPJ e telefone válidos para abrir o checkout recorrente.</p>
+      <p style="font-size:12px;color:var(--text-2);line-height:1.4;margin:0 0 10px">O Asaas exige CPF/CNPJ, telefone e endereço válidos para abrir o checkout recorrente.</p>
       <div class="form-group" style="margin-bottom:10px">
         <label class="form-label" for="platform-billing-cpf">CPF/CNPJ</label>
         <input class="input" id="platform-billing-cpf" inputmode="numeric" autocomplete="off" value="${escape(status.cpfCnpj)}" placeholder="Somente números" />
@@ -6243,6 +6272,30 @@ function platformBillingFieldsHTML() {
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label" for="platform-billing-phone">Telefone</label>
         <input class="input" id="platform-billing-phone" type="tel" autocomplete="tel" value="${escape(STATE.profile?.phone || '')}" placeholder="(11) 99999-0000" oninput="formatSignupPhone(this)" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" for="platform-billing-postal">CEP</label>
+          <input class="input" id="platform-billing-postal" inputmode="numeric" autocomplete="postal-code" value="${escape(status.postalCode)}" placeholder="00000000" />
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" for="platform-billing-number">Número</label>
+          <input class="input" id="platform-billing-number" autocomplete="address-line2" value="${escape(status.addressNumber)}" placeholder="123" />
+        </div>
+      </div>
+      <div class="form-group" style="margin:10px 0 0">
+        <label class="form-label" for="platform-billing-address">Endereço</label>
+        <input class="input" id="platform-billing-address" autocomplete="address-line1" value="${escape(status.address)}" placeholder="Rua, avenida, condomínio..." />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" for="platform-billing-province">Bairro</label>
+          <input class="input" id="platform-billing-province" autocomplete="address-level3" value="${escape(status.province)}" placeholder="Bairro" />
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" for="platform-billing-complement">Complemento</label>
+          <input class="input" id="platform-billing-complement" autocomplete="address-line3" value="${escape(status.complement)}" placeholder="Opcional" />
+        </div>
       </div>
       <div id="platform-billing-error" style="display:none;margin-top:10px;color:var(--red);font-size:12px;font-weight:800;line-height:1.35"></div>
     </div>`;
@@ -6258,8 +6311,20 @@ function setPlatformBillingError(message) {
 async function savePlatformBillingDataFromLockScreen() {
   const cpfInput = document.getElementById("platform-billing-cpf");
   const phoneInput = document.getElementById("platform-billing-phone");
+  const postalInput = document.getElementById("platform-billing-postal");
+  const addressInput = document.getElementById("platform-billing-address");
+  const numberInput = document.getElementById("platform-billing-number");
+  const provinceInput = document.getElementById("platform-billing-province");
+  const complementInput = document.getElementById("platform-billing-complement");
   const cpfCnpj = onlyDigits(cpfInput?.value || STATE.profile?.cpf_cnpj || "");
   const phone = onlyDigits(phoneInput?.value || STATE.profile?.phone || "");
+  const billingAddress = {
+    postalCode: onlyDigits(postalInput?.value || getPlatformBillingAddressDraft().postalCode || ""),
+    address: String(addressInput?.value || getPlatformBillingAddressDraft().address || "").trim(),
+    addressNumber: String(numberInput?.value || getPlatformBillingAddressDraft().addressNumber || "").trim(),
+    province: String(provinceInput?.value || getPlatformBillingAddressDraft().province || "").trim(),
+    complement: String(complementInput?.value || getPlatformBillingAddressDraft().complement || "").trim(),
+  };
 
   if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
     const msg = "Informe CPF/CNPJ válido antes de assinar.";
@@ -6273,10 +6338,35 @@ async function savePlatformBillingDataFromLockScreen() {
     phoneInput?.focus();
     throw new Error(msg);
   }
+  if (billingAddress.postalCode.length !== 8) {
+    const msg = "Informe CEP válido antes de assinar.";
+    setPlatformBillingError(msg);
+    postalInput?.focus();
+    throw new Error(msg);
+  }
+  if (!billingAddress.address) {
+    const msg = "Informe o endereço antes de assinar.";
+    setPlatformBillingError(msg);
+    addressInput?.focus();
+    throw new Error(msg);
+  }
+  if (!billingAddress.addressNumber) {
+    const msg = "Informe o número do endereço antes de assinar.";
+    setPlatformBillingError(msg);
+    numberInput?.focus();
+    throw new Error(msg);
+  }
+  if (!billingAddress.province) {
+    const msg = "Informe o bairro antes de assinar.";
+    setPlatformBillingError(msg);
+    provinceInput?.focus();
+    throw new Error(msg);
+  }
 
   if (STATE.profile?.cpf_cnpj === cpfCnpj && onlyDigits(STATE.profile?.phone || "") === phone) {
+    savePlatformBillingAddressDraft(billingAddress);
     setPlatformBillingError("");
-    return;
+    return billingAddress;
   }
 
   const { error } = await sb.from("profiles")
@@ -6285,7 +6375,9 @@ async function savePlatformBillingDataFromLockScreen() {
   if (error) throw new Error(await getFunctionErrorMessage(error, "Não foi possível salvar os dados de cobrança."));
 
   STATE.profile = { ...STATE.profile, cpf_cnpj: cpfCnpj, phone };
+  savePlatformBillingAddressDraft(billingAddress);
   setPlatformBillingError("");
+  return billingAddress;
 }
 
 function renderPlatformLockedScreen(access = STATE.platformAccess || getPlatformSubscriptionAccess()) {
@@ -6348,10 +6440,10 @@ async function startPlatformUpgradeCheckout() {
   const btn = document.getElementById("platform-upgrade-btn");
   if (btn) { btn.disabled = true; btn.textContent = "Validando dados..."; }
   try {
-    await savePlatformBillingDataFromLockScreen();
+    const billingAddress = await savePlatformBillingDataFromLockScreen();
     if (btn) btn.textContent = "Abrindo checkout...";
     const { data, error } = await withTimeout(sb.functions.invoke("platform-create-checkout", {
-      body: { source: "platform_locked_screen" }
+      body: { source: "platform_locked_screen", billing_address: billingAddress }
     }), 30000, "platform-create-checkout timeout");
     if (error) throw new Error(await getFunctionErrorMessage(error, "Não foi possível abrir o checkout."));
     if (!data?.checkout_url) throw new Error(data?.error || "Checkout não retornado pelo Asaas.");
@@ -10231,6 +10323,17 @@ function renderBrandingPanel() {
     </div>
   `;
 }
+
+window.openBrandingSheet = function() {
+  navTo("profile");
+  setTimeout(() => {
+    const titles = Array.from(document.querySelectorAll(".section-title"));
+    const title = titles.find(el => /identidade do app|white-label/i.test(el.textContent || ""));
+    const target = title || document.getElementById("br-name");
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => document.getElementById("br-name")?.focus({ preventScroll: true }), 250);
+  }, 250);
+};
 
 window.selectDefaultTheme = function(t) {
   STATE.branding.default_theme = t;

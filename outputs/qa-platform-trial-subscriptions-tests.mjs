@@ -37,6 +37,10 @@ includesAll(index, [
   'removeAppSkeleton',
   'getPlatformBillingStatus',
   'platform-billing-phone',
+  'platform-billing-postal',
+  'platform-billing-address',
+  'platform-billing-number',
+  'platform-billing-province',
   'savePlatformBillingDataFromLockScreen',
   'startPlatformUpgradeCheckout',
   'getFunctionErrorMessage(error',
@@ -49,6 +53,7 @@ includesAll(index, [
   'id="nt-trial-start"',
   'subscription_mode',
   'trial_start_date',
+  'window.openBrandingSheet = function()',
 ], "index.html");
 
 assert.ok(index.includes('hasCoachSignupIntent()'), "index.html: signup query param handler missing");
@@ -94,6 +99,9 @@ includesAll(checkoutFn, [
   'billingTypes: ["CREDIT_CARD"]',
   'chargeTypes: ["RECURRENT"]',
   "customerData",
+  "postalCode",
+  "addressNumber",
+  "province",
   "subscription",
   "coach_subscriptions",
   "checkout_url",

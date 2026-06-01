@@ -37,6 +37,10 @@ function onlyDigits(value: unknown) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
 function todayIso() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
@@ -92,6 +96,7 @@ serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Método não permitido." }, 405);
 
   try {
+    const body = await req.json().catch(() => ({}));
     const authHeader = req.headers.get("authorization");
     if (!authHeader) return json({ error: "Não autenticado." }, 401);
 
@@ -117,6 +122,26 @@ serve(async (req) => {
     }
     if (phone.length < 10) {
       return json({ error: "Informe telefone válido no perfil antes de assinar." }, 400);
+    }
+
+    const incomingAddress = body?.billing_address || body?.billingAddress || {};
+    const postalCode = onlyDigits(incomingAddress.postalCode || incomingAddress.postal_code || incomingAddress.cep);
+    const address = cleanText(incomingAddress.address || incomingAddress.street || incomingAddress.logradouro);
+    const addressNumber = cleanText(incomingAddress.addressNumber || incomingAddress.address_number || incomingAddress.number || incomingAddress.numero);
+    const province = cleanText(incomingAddress.province || incomingAddress.neighborhood || incomingAddress.bairro);
+    const complement = cleanText(incomingAddress.complement || incomingAddress.complemento);
+
+    if (postalCode.length !== 8) {
+      return json({ error: "Informe CEP válido antes de assinar." }, 400);
+    }
+    if (!address) {
+      return json({ error: "Informe o endereço antes de assinar." }, 400);
+    }
+    if (!addressNumber) {
+      return json({ error: "Informe o número do endereço antes de assinar." }, 400);
+    }
+    if (!province) {
+      return json({ error: "Informe o bairro antes de assinar." }, 400);
     }
 
     const { data: sub } = await sbAdmin
@@ -159,6 +184,12 @@ serve(async (req) => {
           cpfCnpj,
           email: profile.email,
           phone,
+          mobilePhone: phone,
+          postalCode,
+          address,
+          addressNumber,
+          province,
+          ...(complement ? { complement } : {}),
         },
         subscription: {
           cycle: "MONTHLY",
