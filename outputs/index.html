@@ -3837,7 +3837,7 @@ async function trackFeedViews(posts) {
 
 async function loadFeed() {
   let q = sb.from("feed_posts")
-    .select("*, student:profiles!feed_posts_student_id_fkey(id, email, full_name, avatar_emoji, avatar_url, role)")
+    .select("*, student:profiles!feed_posts_student_id_fkey(id, full_name, avatar_emoji, avatar_url, role)")
     .order("created_at", { ascending: false }).limit(50);
   // Feed social:
   // - Admin: tudo
@@ -3963,16 +3963,7 @@ async function loadSocialProfilesByIds(ids = []) {
   }
   const stillMissing = uniqueIds.filter(id => !STATE._socialProfilesById[id]);
   if (stillMissing.length) {
-    try {
-      const { data, error } = await sb.from("profiles")
-        .select("id, email, full_name, avatar_emoji, avatar_url, role")
-        .in("id", stillMissing)
-        .eq("status", "approved");
-      if (!error) cacheSocialProfiles(data || []);
-      else console.warn("[profiles fallback]", error);
-    } catch(e) {
-      console.warn("[profiles fallback]", e);
-    }
+    console.warn("[profiles edge] perfis não retornados pela regra social", stillMissing);
   }
   return STATE._socialProfilesById || {};
 }
@@ -4082,22 +4073,6 @@ async function searchPeople(query) {
     if (error || data?.error) console.warn("[people-search edge]", error || data.error);
   } catch(e) {
     console.warn("[people-search edge]", e);
-  }
-  try {
-    const { data, error } = await sb.from("profiles")
-      .select("id, email, full_name, avatar_emoji, avatar_url, role")
-      .neq("id", STATE.profile.id)
-      .eq("status", "approved")
-      .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
-      .order("full_name", { ascending: true })
-      .limit(30);
-    if (!error) {
-      cacheSocialProfiles(data || []);
-      return data || [];
-    }
-    console.warn("[people-search fallback]", error);
-  } catch(e) {
-    console.warn("[people-search fallback]", e);
   }
   showToast("Não foi possível buscar pessoas agora.", "error");
   return [];
@@ -9825,11 +9800,11 @@ function renderFeed() {
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
         <div>
           <div style="font-size:13px;font-weight:800;color:var(--text)">Encontrar pessoas</div>
-          <div style="font-size:11px;color:var(--text-3)">Busque qualquer aluno, treinador ou admin cadastrado.</div>
+          <div style="font-size:11px;color:var(--text-3)">Busque pessoas da sua rede Treinova.</div>
         </div>
         <button class="mini-btn mini-btn-ghost" style="flex:0 0 auto;min-width:70px;white-space:nowrap" onclick="openPeopleSearch()">Abrir</button>
       </div>
-      <input class="input" id="feed-people-search" placeholder="Nome ou email" oninput="onFeedPeopleSearch(this.value)" />
+      <input class="input" id="feed-people-search" placeholder="Buscar por nome" oninput="onFeedPeopleSearch(this.value)" />
       <div id="feed-people-results" style="margin-top:10px"></div>
     </div>
 
@@ -10459,13 +10434,13 @@ window.openPeopleSearch = function() {
   STATE._peopleResults = [];
   openSheet(`
     <h3>Buscar pessoas</h3>
-    <p>Busque qualquer pessoa cadastrada no app. Ao seguir, os treinos dela entram no seu feed.</p>
+    <p>Encontre alunos da sua rede, seu treinador ou suporte. Ao seguir, os treinos permitidos entram no seu feed.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
       <button class="btn-ghost" onclick="openSocialList('following')">Seguindo</button>
       <button class="btn-ghost" onclick="openSocialList('followers')">Seguidores</button>
     </div>
     <div class="form-group">
-      <input class="input" id="ps-search" placeholder="Buscar por nome ou email" oninput="onPeopleSearch(this.value)" />
+      <input class="input" id="ps-search" placeholder="Buscar por nome" oninput="onPeopleSearch(this.value)" />
     </div>
     <div id="ps-results" style="max-height:50vh; overflow-y:auto;">
       <div class="empty"><p>Digite para buscar pessoas</p></div>
@@ -10555,7 +10530,7 @@ window.onFeedPeopleSearch = function(q) {
 function peopleRow(p, context = "sheet") {
   const following = isFollowing(p.id);
   const roleLabel = p.role === "coach" ? "Treinador" : p.role === "admin" ? "Admin" : "Aluno";
-  const sub = [roleLabel, p.email].filter(Boolean).join(" · ");
+  const sub = roleLabel;
   const rowStyle = context === "feed" ? ' style="padding:9px;border:1px solid var(--line);border-radius:12px;background:var(--bg-2,var(--bg-card))"' : "";
   return `<div class="list-row"${rowStyle}>
     <div class="lr-avatar" style="overflow:hidden;">${avatarHTML(p)}</div>

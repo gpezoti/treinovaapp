@@ -5,8 +5,9 @@ const html = fs.readFileSync("index.html", "utf8");
 const socialPeopleEdge = fs.readFileSync("supabase/functions/social-people/index.ts", "utf8");
 const sql = fs.readFileSync("sql/social_feed_coach_training_2026_05_08.sql", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20260508223000_social_feed_coach_training.sql", "utf8");
+const hardening = fs.readFileSync("supabase/migrations/20260602153000_harden_social_people_discovery.sql", "utf8");
 
-assert.equal(sql, migration, "migration must mirror sql script");
+assert.equal(sql, migration, "migration must mirror legacy social script");
 
 assert.match(html, /async function ensureCoachStudentFollows\(\)/);
 assert.match(html, /async function trackFeedViews\(posts\)/);
@@ -27,8 +28,10 @@ assert.match(html, /personDisplayName\(p\.student, "Usuário"\)/);
 assert.match(html, /\^\(aluno\|usu\[aá\]rio\|student\)\$/);
 assert.match(html, /Encontrar pessoas/);
 assert.match(html, /sb\.functions\.invoke\("social-people"/);
-assert.match(html, /student:profiles!feed_posts_student_id_fkey\(id, email, full_name, avatar_emoji, avatar_url, role\)/);
+assert.match(html, /student:profiles!feed_posts_student_id_fkey\(id, full_name, avatar_emoji, avatar_url, role\)/);
+assert.doesNotMatch(html, /student:profiles!feed_posts_student_id_fkey\(id, email/);
 assert.match(html, /function peopleRow\(p, context = "sheet"\)/);
+assert.doesNotMatch(html, /const sub = \[roleLabel, p\.email\]/);
 assert.match(html, /row\?\.profile \|\| profileById\[id\]/);
 assert.match(html, /window\.onFollowToggle = async function\(id, currentlyFollowing = null\)/);
 assert.match(html, /function renderSelfTrainingCard\(/);
@@ -36,8 +39,10 @@ assert.match(html, /\{ id: "feed", label: "Feed"/);
 assert.match(html, /\{ id: "workout", label: "Treino"/);
 assert.match(html, /if \(isCoach\)[\s\S]*?\{ id: "feed", label: "Feed"/, "coach nav must expose feed directly");
 assert.match(html, /profile\.role === "student" \|\| profile\.role === "coach"/);
-assert.match(html, /full_name\.ilike\.%\$\{term\}%/);
-assert.match(html, /email\.ilike\.%\$\{term\}%/);
+assert.doesNotMatch(html, /Busque qualquer aluno, treinador ou admin cadastrado/);
+assert.doesNotMatch(html, /Busque qualquer pessoa cadastrada no app/);
+assert.doesNotMatch(html, /placeholder="Nome ou email"/);
+assert.doesNotMatch(html, /placeholder="Buscar por nome ou email"/);
 
 assert.match(sql, /create policy "profiles approved social discovery"/);
 assert.match(sql, /create policy "follows insert self"/);
@@ -57,9 +62,27 @@ assert.match(socialPeopleEdge, /body\.action === "unfollow"/);
 assert.match(socialPeopleEdge, /body\.action === "push_audit"/);
 assert.match(socialPeopleEdge, /lookupProfiles/);
 assert.match(socialPeopleEdge, /profileById/);
-assert.match(socialPeopleEdge, /neq\("id", user\.id\)/);
+assert.match(socialPeopleEdge, /neq\("id", requester\.id\)/);
 assert.match(socialPeopleEdge, /eq\("status", "approved"\)/);
+assert.match(socialPeopleEdge, /function canDiscoverProfile\(requester: Profile, target: Profile, includeSelf = true\)/);
+assert.match(socialPeopleEdge, /requester\.role === "admin"/);
+assert.match(socialPeopleEdge, /requester\.role === "coach"[\s\S]*target\.coach_id === requester\.id/);
+assert.match(socialPeopleEdge, /requester\.role === "student" && requester\.coach_id/);
+assert.match(socialPeopleEdge, /function toPublicProfile\(profile: Profile\)/);
+const publicProfileBlock = socialPeopleEdge.slice(
+  socialPeopleEdge.indexOf("function toPublicProfile(profile: Profile)"),
+  socialPeopleEdge.indexOf("function profileMatchesTerm")
+);
+assert.doesNotMatch(publicProfileBlock, /email/);
+assert.match(socialPeopleEdge, /Você não tem permissão para seguir este perfil/);
 assert.match(socialPeopleEdge, /onConflict: "follower_id,following_id"/);
 assert.match(socialPeopleEdge, /Apenas ADM MASTER/);
+
+assert.match(hardening, /drop policy if exists "profiles approved social discovery"/);
+assert.match(hardening, /create or replace function public\.can_social_discover/);
+assert.match(hardening, /create policy "profiles social scoped read"/);
+assert.match(hardening, /delete from public\.follows f\s+where not public\.can_social_discover/);
+assert.match(hardening, /create policy "follows insert self"[\s\S]*public\.can_social_discover\(auth\.uid\(\), following_id, false\)/);
+assert.match(hardening, /create policy "feed social read"[\s\S]*public\.can_social_discover\(auth\.uid\(\), feed_posts\.student_id, true\)/);
 
 console.log("qa-social-feed-coach-training ok");
