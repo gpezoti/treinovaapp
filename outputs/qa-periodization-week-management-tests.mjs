@@ -2,7 +2,7 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 
 const html = fs.readFileSync("index.html", "utf8");
-const sql = fs.readFileSync("sql/beta_periodization_week_management_2026_05_05.sql", "utf8");
+const sql = fs.readFileSync("supabase/migrations/20260602170000_periodization_week_bulk_rpcs.sql", "utf8");
 
 function has(source, needle, message) {
   assert.ok(source.includes(needle), message || `Missing: ${needle}`);
@@ -49,5 +49,7 @@ has(sql, "set date = v_temp_base + o.idx", "RPC must use temporary dates to avoi
 has(sql, "target.day_offset = source.day_offset", "move must preserve day order inside week");
 has(sql, "grant execute on function public.duplicate_periodization_week", "duplicate RPC must be callable by authenticated users");
 has(sql, "grant execute on function public.move_periodization_week", "move RPC must be callable by authenticated users");
+has(sql, "revoke all on function public.duplicate_periodization_week", "duplicate RPC must not be public/anon callable");
+has(sql, "revoke all on function public.move_periodization_week", "move RPC must not be public/anon callable");
 
 console.log("Periodization week management static QA checks passed");
