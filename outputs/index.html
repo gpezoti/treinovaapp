@@ -2313,7 +2313,7 @@ const STATE = {
   timer: { id:null, running:false, paused:false, status:"idle", secondsLeft:0, secondsTotal:0,
            startedAt:null, startTimestamp:null, pausedAt:null, pausedRemaining:null,
            raf:null, onDone:null, label:"Próxima série", exerciseName:"Próxima série",
-           focusExercisePosition:null }
+           focusExercisePosition:null, pushScheduled:false, pushScheduling:false, notified:false }
 };
 
 let _PULL_TO_REFRESH_BOUND = false;
@@ -5320,7 +5320,10 @@ function resetTimerState() {
     onDone: null,
     label: "Próxima série",
     exerciseName: "Próxima série",
-    focusExercisePosition: null
+    focusExercisePosition: null,
+    pushScheduled: false,
+    pushScheduling: false,
+    notified: false
   };
 }
 function clearPersistedTimer() {
@@ -5379,6 +5382,8 @@ function readPersistedTimer() {
         status: state.status === "paused" ? "paused" : "running",
         pausedAt: state.pausedAt ? Number(state.pausedAt) : null,
         pausedRemaining: Number.isFinite(Number(state.pausedRemaining)) ? Number(state.pausedRemaining) : null,
+        pushScheduled: state.pushScheduled === true,
+        pushScheduling: state.pushScheduling === true,
         notified: state.notified === true
       };
     }
@@ -5394,6 +5399,8 @@ function readPersistedTimer() {
       status: "running",
       pausedAt: null,
       pausedRemaining: null,
+      pushScheduled: false,
+      pushScheduling: false,
       notified: false
     };
   } catch(e) {
@@ -5422,7 +5429,9 @@ function persistTimerState(extra = {}) {
       focusExercisePosition: Number.isFinite(Number(STATE.timer.focusExercisePosition))
         ? Number(STATE.timer.focusExercisePosition)
         : null,
-      notified: false,
+      pushScheduled: STATE.timer.pushScheduled === true,
+      pushScheduling: STATE.timer.pushScheduling === true,
+      notified: STATE.timer.notified === true,
       ...extra
     };
     localStorage.setItem(REST_TIMER_KEY, JSON.stringify(state));
@@ -5470,6 +5479,22 @@ function markPersistedTimerNotified(state) {
   try {
     const next = { ...(state || readPersistedTimer() || {}), notified: true };
     localStorage.setItem(REST_TIMER_KEY, JSON.stringify(next));
+    if (STATE.timer?.id && next.id && STATE.timer.id === next.id) {
+      STATE.timer.notified = true;
+      STATE.timer.pushScheduling = false;
+    }
+  } catch(e) {}
+}
+function markRestTimerPushDelivered(timerId, detail = "Push recebido pelo aparelho.") {
+  try {
+    const saved = readPersistedTimer();
+    if (saved && (!timerId || saved.id === timerId)) markPersistedTimerNotified(saved);
+    if (STATE.timer?.id && (!timerId || STATE.timer.id === timerId)) {
+      STATE.timer.notified = true;
+      STATE.timer.pushScheduling = false;
+      STATE.timer.pushScheduled = true;
+    }
+    rememberRestPushStatus("delivered", detail);
   } catch(e) {}
 }
 async function ensureRestNotificationPermission() {
@@ -5512,34 +5537,42 @@ function buildRestTimerWorkoutUrl(context = {}) {
   const workoutId = context.selectedWorkoutId || context.workoutId || context.workout_id || STATE.currentSession?.workout_id || STATE.selectedWorkoutId;
   const intensity = context.selectedIntensity || context.intensity || STATE.currentSession?.intensity || STATE.selectedIntensity;
   const focus = Number.isFinite(Number(context.focusExercisePosition)) ? Number(context.focusExercisePosition) : null;
+  const timerId = context.timerId || context.timer_id || context.id || STATE.timer?.id || null;
   if (sessionId) params.set("sessionId", String(sessionId));
   if (date) params.set("date", String(date));
   if (workoutCode) params.set("workout", String(workoutCode));
   if (workoutId) params.set("workoutId", String(workoutId));
   if (intensity) params.set("intensity", String(intensity));
   if (focus !== null) params.set("focus", String(focus));
+  if (timerId) params.set("timerId", String(timerId));
   return `${location.pathname || "/"}?${params.toString()}`;
 }
 
 async function notifyRestFinished(exerciseName, context = {}) {
   if (!("Notification" in window) || Notification.permission !== "granted") return false;
+  const timerId = context.timerId || context.timer_id || context.id || STATE.timer?.id || null;
+  if (context.notified === true || (timerId && readPersistedTimer()?.id === timerId && readPersistedTimer()?.notified === true)) {
+    return false;
+  }
+  if (isAppForegroundActive()) return false;
   const title = "Descanso finalizado";
   const body = `Próximo exercício: ${exerciseName || "Próxima série"}`;
   const opts = {
     body,
-    tag: "treinova-rest-timer",
+    tag: timerId ? `treinova-rest-timer-${timerId}` : "treinova-rest-timer",
     renotify: true,
     silent: false,
     vibrate: [160, 80, 160],
     icon: "/assets/icon-192.png",
     badge: "/assets/favicon-32x32.png",
-    data: { url: buildRestTimerWorkoutUrl(context) }
+    data: { url: buildRestTimerWorkoutUrl(context), timerId }
   };
   try {
     if ("serviceWorker" in navigator) {
       const reg = await navigator.serviceWorker.ready;
       if (reg && reg.showNotification) {
         await reg.showNotification(title, opts);
+        markRestTimerPushDelivered(timerId, "Notificação local exibida pelo app.");
         return true;
       }
     }
@@ -5548,6 +5581,7 @@ async function notifyRestFinished(exerciseName, context = {}) {
   }
   try {
     new Notification(title, opts);
+    markRestTimerPushDelivered(timerId, "Notificação local exibida pela Notification API.");
     return true;
   } catch(e) {
     console.warn("[rest notification api]", e);
@@ -5565,6 +5599,7 @@ function postRestTimerToServiceWorker(type, payload = {}) {
 function scheduleBackgroundRestNotification() {
   const saved = readPersistedTimer();
   if (!saved || saved.status !== "running" || !("Notification" in window) || Notification.permission !== "granted") return;
+  if (saved.notified || saved.pushScheduled || saved.pushScheduling) return;
   const remaining = getTimerRemainingSeconds(saved);
   if (remaining <= 0) return;
   postRestTimerToServiceWorker("SCHEDULE_REST_TIMER", {
@@ -5619,8 +5654,8 @@ async function upsertRestTimerPushJobDirect(timerId, seconds, exerciseName) {
   if (error) throw error;
   return true;
 }
-// Compensa latencia tipica de entrega do push (APNs/FCM ~10-15s).
-const PUSH_LATENCY_COMPENSATION_MS = 12000;
+// Push nunca deve antecipar o descanso: atraso é aceitável, notificação antes da hora quebra o treino.
+const PUSH_LATENCY_COMPENSATION_MS = 0;
 function buildRestPushFireAt(seconds) {
   const totalMs = Math.max(1, Number(seconds || 0)) * 1000;
   const adjustedMs = Math.max(1000, totalMs - PUSH_LATENCY_COMPENSATION_MS);
@@ -5630,10 +5665,17 @@ function buildRestPushFireAt(seconds) {
 async function scheduleServerRestPush(seconds, exerciseName) {
   try {
     if (!sb || !STATE.user || !STATE.timer?.id) return false;
+    STATE.timer.pushScheduling = true;
+    STATE.timer.pushScheduled = false;
+    persistTimerState();
     const pushReady = await ensureRestNotificationPermission();
     if (!pushReady) {
       console.warn("[rest timer server schedule] Push não está pronto. Verifique permissão, PWA instalado e tabela push_subscriptions.");
       rememberRestPushStatus("subscription_failed", "Permissão/assinatura Web Push não está pronta.");
+      STATE.timer.pushScheduling = false;
+      STATE.timer.pushScheduled = false;
+      persistTimerState();
+      if (document.visibilityState === "hidden") scheduleBackgroundRestNotification();
       return false;
     }
     const fireAt = buildRestPushFireAt(seconds);
@@ -5654,11 +5696,21 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       await upsertRestTimerPushJobDirect(STATE.timer.id, seconds, exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série");
       verified = await verifyRestTimerPushJob(STATE.timer.id);
     }
+    STATE.timer.pushScheduling = false;
+    STATE.timer.pushScheduled = verified;
+    persistTimerState();
     rememberRestPushStatus(verified ? "scheduled" : "schedule_unverified", verified ? "Job agendado no Supabase." : "A Edge Function respondeu, mas o job não foi confirmado.");
+    if (!verified && document.visibilityState === "hidden") scheduleBackgroundRestNotification();
     return verified;
   } catch(e) {
     console.warn("[rest timer server schedule]", e);
     rememberRestPushStatus("schedule_failed", e.message || e);
+    if (STATE.timer) {
+      STATE.timer.pushScheduling = false;
+      STATE.timer.pushScheduled = false;
+      persistTimerState();
+    }
+    if (document.visibilityState === "hidden") scheduleBackgroundRestNotification();
     return false;
   }
 }
@@ -5725,7 +5777,6 @@ function reconcileTimerAfterLifecycle(reason = "resume") {
       cancelBackgroundRestNotification();
       markPersistedTimerNotified(saved);
       rememberLastFinishedRestTimerContext(saved);
-      notifyRestFinished(saved.exerciseName || saved.label, saved).catch(()=>{});
       clearPersistedTimer();
       document.getElementById("timer-bar")?.classList.add("active","done");
       document.getElementById("timer-ring")?.classList.add("done");
@@ -5791,6 +5842,9 @@ async function startTimer(sec, label, onDone, options = {}) {
   STATE.timer.pausedRemaining = null;
   STATE.timer.label = label || "Próxima série";
   STATE.timer.exerciseName = exerciseName;
+  STATE.timer.pushScheduled = false;
+  STATE.timer.pushScheduling = false;
+  STATE.timer.notified = false;
   STATE.timer.onDone = onDone || null;
   STATE.timer.focusExercisePosition = Number.isFinite(Number(options.focusExercisePosition))
     ? Number(options.focusExercisePosition)
@@ -5890,9 +5944,23 @@ function finishTimer() {
   STATE.timer.running = false;
   STATE.timer.paused = false;
   STATE.timer.status = "finished";
+  STATE.timer.notified = true;
   _releaseWakeLock();
   cancelBackgroundRestNotification();
-  notifyRestFinished(STATE.timer.exerciseName || STATE.timer.label).catch(()=>{});
+  rememberLastFinishedRestTimerContext({
+    id: STATE.timer.id,
+    startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
+    duration: STATE.timer.secondsTotal,
+    exerciseName: STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
+    label: STATE.timer.label || "Próxima série",
+    selectedDate: STATE.selectedDate || todayISO(),
+    selectedWorkout: STATE.selectedWorkout || null,
+    selectedWorkoutId: STATE.selectedWorkoutId || STATE.currentSession?.workout_id || null,
+    selectedIntensity: STATE.selectedIntensity || null,
+    sessionId: STATE.currentSession?.id || null,
+    focusExercisePosition: Number.isFinite(Number(STATE.timer.focusExercisePosition)) ? Number(STATE.timer.focusExercisePosition) : null,
+    notified: true
+  });
   clearPersistedTimer();
   document.getElementById("timer-bar")?.classList.add("done");
   document.getElementById("timer-ring")?.classList.add("done");
@@ -5966,6 +6034,9 @@ function adjustTimer(delta) {
     return;
   }
   if (wasPaused) {
+    STATE.timer.pushScheduled = false;
+    STATE.timer.pushScheduling = false;
+    persistTimerState();
     cancelServerRestPush(STATE.timer.id);
   } else {
     rescheduleServerRestPushFromTimer("adjust");
@@ -5985,6 +6056,8 @@ function pauseToggle() {
     STATE.timer.pausedAt = Date.now();
     STATE.timer.pausedRemaining = STATE.timer.secondsLeft;
     if (STATE.timer.raf) { clearTimeout(STATE.timer.raf); STATE.timer.raf = null; }
+    STATE.timer.pushScheduled = false;
+    STATE.timer.pushScheduling = false;
     persistTimerState();
     setTimerIcon(true);
     cancelServerRestPush(STATE.timer.id);
@@ -6015,6 +6088,7 @@ function isAppForegroundActive() {
   return document.visibilityState === "visible" && document.hasFocus();
 }
 function bindRestTimerLifecycle() {
+  bindRestTimerServiceWorkerMessages();
   const persistBeforeBackground = () => {
     if (STATE.timer && (STATE.timer.running || STATE.timer.paused)) {
       if (STATE.timer.running) STATE.timer.secondsLeft = getTimerRemainingSeconds({
@@ -6037,6 +6111,17 @@ function bindRestTimerLifecycle() {
   window.addEventListener("blur", persistBeforeBackground);
   window.addEventListener("pageshow", () => { cancelBackgroundRestNotification(); reconcileTimerAfterLifecycle("timer-pageshow"); });
   window.addEventListener("focus", () => { cancelBackgroundRestNotification(); reconcileTimerAfterLifecycle("timer-focus"); });
+}
+let _REST_TIMER_SW_MESSAGE_BOUND = false;
+function bindRestTimerServiceWorkerMessages() {
+  if (_REST_TIMER_SW_MESSAGE_BOUND || !("serviceWorker" in navigator)) return;
+  _REST_TIMER_SW_MESSAGE_BOUND = true;
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    const data = event.data || {};
+    if (data.type === "REST_TIMER_PUSH_DELIVERED") {
+      markRestTimerPushDelivered(data.timerId || data.timer_id || "", "Push entregue pelo Service Worker.");
+    }
+  });
 }
 
 /* =============================================================================
@@ -7115,8 +7200,10 @@ function prepareWorkoutDeepLinkFromRestTimer() {
       selectedWorkout: qs.get("workout") || null,
       selectedWorkoutId: qs.get("workoutId") || null,
       selectedIntensity: qs.get("intensity") || null,
-      focusExercisePosition: qs.get("focus") || null
+      focusExercisePosition: qs.get("focus") || null,
+      timerId: qs.get("timerId") || null
     };
+    if (queryContext.timerId) markRestTimerPushDelivered(queryContext.timerId, "Push aberto pela notificação.");
     const hasQueryContext = Object.values(queryContext).some(Boolean);
     const saved = typeof readPersistedTimer === "function"
       ? (readPersistedTimer() || readLastFinishedRestTimerContext())

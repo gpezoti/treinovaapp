@@ -64,6 +64,23 @@ const checks = [
       html.includes("buildRestTimerWorkoutUrl"),
   },
   {
+    name: "timer nao antecipa push remoto nem duplica fallback local",
+    pass: html.includes("const PUSH_LATENCY_COMPENSATION_MS = 0") &&
+      html.includes("if (saved.notified || saved.pushScheduled || saved.pushScheduling) return") &&
+      html.includes("STATE.timer.pushScheduling = true") &&
+      html.includes("STATE.timer.pushScheduled = verified") &&
+      html.includes("markRestTimerPushDelivered") &&
+      (html.match(/notifyRestFinished\(/g) || []).length === 1,
+  },
+  {
+    name: "service worker evita duplicar notificacao quando app esta visivel",
+    pass: sw.includes("REST_TIMER_PUSH_DELIVERED") &&
+      sw.includes('client.visibilityState === "visible" || client.focused') &&
+      sw.includes("if (isRestTimer && hasVisibleApp) return") &&
+      sw.includes("treinova-rest-timer-${id}") &&
+      sw.includes("timerId"),
+  },
+  {
     name: "timer preserva push remoto ao finalizar localmente",
     pass: html.includes("function isAppForegroundActive()") &&
       !html.includes('if (isAppForegroundActive()) cancelServerRestPush(STATE.timer.id);') &&
@@ -194,6 +211,8 @@ checks.push(
       edge.includes("rest_timer_push_jobs") &&
       edge.includes("push_subscriptions") &&
       edge.includes("Descanso finalizado") &&
+      edge.includes("timer_id: job.timer_id || job.id || \"\"") &&
+      edge.includes("timerId=${encodeURIComponent(job.timer_id") &&
       edge.includes("treinova-rest-timer-${job.timer_id") &&
       edge.includes("silent: false") &&
       edge.includes("/?view=workout&restTimer=1"),

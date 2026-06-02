@@ -4,7 +4,7 @@
    - Cache-first com revalidação para assets estáticos (CDN, imagens)
    - Push notifications nativos
 */
-const VERSION = "v11";
+const VERSION = "v12";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
 const REST_TIMER_HANDLES = new Map();
@@ -81,27 +81,44 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { data = { title: event.data ? event.data.text() : "Treinova" }; }
-  const title = data.title || "Treinova";
-  const opts = {
-    body: data.body || "",
-    icon: data.icon || "https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg",
-    badge: data.badge || "https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg",
-    tag: data.tag || undefined,
-    data: data.url ? { url: data.url } : {},
-    vibrate: [80, 40, 80],
-    silent: data.silent === true ? true : false,
-    renotify: data.renotify !== false,
-  };
-  event.waitUntil(self.registration.showNotification(title, opts));
+  event.waitUntil((async () => {
+    const title = data.title || "Treinova";
+    const timerId = data.timer_id || data.timerId || "";
+    const tag = data.tag || undefined;
+    const isRestTimer = title === "Descanso finalizado" || String(tag || "").startsWith("treinova-rest-timer") || !!timerId;
+    const appClients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of appClients) {
+      if (isRestTimer) client.postMessage({ type: "REST_TIMER_PUSH_DELIVERED", timerId, tag });
+    }
+    const hasVisibleApp = appClients.some((client) => client.visibilityState === "visible" || client.focused);
+    if (isRestTimer && hasVisibleApp) return;
+    const opts = {
+      body: data.body || "",
+      icon: data.icon || "https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg",
+      badge: data.badge || "https://mjftgknutxxgxhwlmsln.supabase.co/storage/v1/object/public/branding/logos/1777323170543.jpg",
+      tag,
+      data: {
+        ...(data.url ? { url: data.url } : {}),
+        ...(timerId ? { timerId } : {})
+      },
+      vibrate: [80, 40, 80],
+      silent: data.silent === true ? true : false,
+      renotify: data.renotify !== false,
+    };
+    await self.registration.showNotification(title, opts);
+  })());
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const rawUrl = (event.notification.data && event.notification.data.url) || "/?view=workout&restTimer=1";
+  const notificationData = event.notification.data || {};
+  const rawUrl = notificationData.url || "/?view=workout&restTimer=1";
   const url = new URL(rawUrl, self.location.origin).href;
+  const timerId = notificationData.timerId || "";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
       for (const w of wins) {
+        if (timerId) w.postMessage({ type: "REST_TIMER_PUSH_DELIVERED", timerId });
         if (w.url.includes(self.location.origin)) { w.focus(); w.navigate(url); return; }
       }
       return self.clients.openWindow(url);
@@ -118,15 +135,20 @@ self.addEventListener("message", (e) => {
     if (REST_TIMER_HANDLES.has(id)) clearTimeout(REST_TIMER_HANDLES.get(id));
     const handle = setTimeout(() => {
       REST_TIMER_HANDLES.delete(id);
-      self.registration.showNotification("Descanso finalizado", {
-        body: `Próximo exercício: ${data.exerciseName || "Próxima série"}`,
-        icon: "/assets/icon-192.png",
-        badge: "/assets/favicon-32x32.png",
-        tag: "treinova-rest-timer",
-        renotify: true,
-        vibrate: [160, 80, 160],
-        silent: false,
-        data: { url: data.url || "/?view=workout&restTimer=1" },
+      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+        for (const client of clients) client.postMessage({ type: "REST_TIMER_PUSH_DELIVERED", timerId: id, tag: `treinova-rest-timer-${id}` });
+        const hasVisibleApp = clients.some((client) => client.visibilityState === "visible" || client.focused);
+        if (hasVisibleApp) return;
+        return self.registration.showNotification("Descanso finalizado", {
+          body: `Próximo exercício: ${data.exerciseName || "Próxima série"}`,
+          icon: "/assets/icon-192.png",
+          badge: "/assets/favicon-32x32.png",
+          tag: `treinova-rest-timer-${id}`,
+          renotify: true,
+          vibrate: [160, 80, 160],
+          silent: false,
+          data: { url: data.url || `/?view=workout&restTimer=1&timerId=${encodeURIComponent(id)}`, timerId: id },
+        });
       }).catch(()=>{});
     }, delay);
     REST_TIMER_HANDLES.set(id, handle);

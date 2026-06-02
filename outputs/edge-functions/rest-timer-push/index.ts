@@ -375,7 +375,8 @@ async function sendJobNotification(job: any) {
   const payload = JSON.stringify({
     title: "Descanso finalizado",
     body: `Próximo exercício: ${job.exercise_name || "Próxima série"}`,
-    url: "/?view=workout&restTimer=1",
+    url: `/?view=workout&restTimer=1&timerId=${encodeURIComponent(job.timer_id || job.id || "")}`,
+    timer_id: job.timer_id || job.id || "",
     tag: `treinova-rest-timer-${job.timer_id || job.id || Date.now()}`,
     icon: "/assets/icon-192.png",
     badge: "/assets/favicon-32x32.png",
