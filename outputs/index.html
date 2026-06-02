@@ -2355,12 +2355,47 @@ function fmtDuration(sec) {
   if (m >= 60) return Math.floor(m/60) + "h" + (m%60).toString().padStart(2,"0");
   return m + "m" + (s ? " " + s + "s" : "");
 }
-function intensityClass(int) { return "intensity-" + (int || "off"); }
-function intensityPill(int) {
-  if (int === "yellow") return ["pill-yellow","Hipertrofia · 12-15"];
-  if (int === "red") return ["pill-red","Força · 4-6"];
-  if (int === "white") return ["pill-white","Força · 8-10"];
-  if (int === "flex") return ["pill-flex","Mobilidade"];
+function isAeroPresetCode(presetCode) {
+  const code = String(presetCode || "").trim().toLowerCase();
+  return code === "aero" || code === "cardio";
+}
+function legacyIntensityFromPresetCode(presetCode, fallbackIntensity = "off") {
+  const code = String(presetCode || "").trim().toLowerCase();
+  const map = {
+    hipertrofia: "yellow",
+    forca: "red",
+    força: "red",
+    deload: "white",
+    flex: "flex",
+    mobility: "flex",
+    mobilidade: "flex",
+    aero: "flex",
+    cardio: "flex",
+    off: "off",
+    descanso: "off"
+  };
+  return map[code] || fallbackIntensity || "off";
+}
+function getPrimaryPeriodizationBlock(blocks, presetCode = null) {
+  const list = Array.isArray(blocks) ? blocks : [];
+  return list.find(b => b.workout_code && !isAeroPresetCode(b.preset_code))
+    || list.find(b => b.preset_code && !isAeroPresetCode(b.preset_code))
+    || list.find(b => b.workout_code)
+    || list.find(b => b.preset_code === presetCode)
+    || list[0]
+    || null;
+}
+function intensityClass(int, presetCode = null) {
+  return "intensity-" + legacyIntensityFromPresetCode(presetCode, int || "off");
+}
+function intensityPill(int, presetCode = null) {
+  const normalized = legacyIntensityFromPresetCode(presetCode, int || "off");
+  const preset = presetCode && typeof getPreset === "function" ? getPreset(presetCode) : null;
+  const presetLabel = preset?.label || null;
+  if (normalized === "yellow") return ["pill-yellow", presetLabel || "Hipertrofia · 12-15"];
+  if (normalized === "red") return ["pill-red", presetLabel || "Força · 4-6"];
+  if (normalized === "white") return ["pill-white", presetLabel || "Força · 8-10"];
+  if (normalized === "flex") return ["pill-flex", presetLabel || "Mobilidade"];
   return ["pill-off","Descanso"];
 }
 function workoutPretty(w) { if (!w || w === "OFF") return "OFF"; return w; }
@@ -2585,13 +2620,14 @@ function findDayInfo(iso) {
   let presetCode = d.preset_code || null;
   let workoutCode = d.workout_code;
   let workoutId = d.workout_id || null;
-  const firstWorkoutBlock = blocks.find(b => b.workout_code) || blocks.find(b => b.preset_code && (b.preset_code === "flex" || b.preset_code === presetCode));
+  const firstWorkoutBlock = getPrimaryPeriodizationBlock(blocks, presetCode);
   if (firstWorkoutBlock) {
     presetCode = firstWorkoutBlock.preset_code || presetCode;
     workoutCode = firstWorkoutBlock.workout_code || workoutCode;
     workoutId = firstWorkoutBlock.workout_id || workoutId;
   }
-  return { ...d, workout_code: workoutCode, workout_id: workoutId, preset_code: presetCode, blocks, week: Math.floor(idx / 7) + 1 };
+  const resolvedIntensity = legacyIntensityFromPresetCode(presetCode, d.intensity || "off");
+  return { ...d, workout_code: workoutCode, workout_id: workoutId, preset_code: presetCode, intensity: resolvedIntensity, legacy_intensity: d.intensity, blocks, week: Math.floor(idx / 7) + 1 };
 }
 
 function resolveWorkoutRef(workoutCode, workoutId = null) {
@@ -3512,11 +3548,13 @@ async function loadPeriodization() {
   }
   STATE.periodization = (days || []).map(d => {
     const blocks = blocksByDay[d.id] || [];
-    const first = blocks[0];
+    const first = getPrimaryPeriodizationBlock(blocks);
     return {
       ...d,
       blocks,
       preset_code: first?.preset_code || null,
+      intensity: legacyIntensityFromPresetCode(first?.preset_code, d.intensity || "off"),
+      legacy_intensity: d.intensity,
       workout_code: first?.workout_code || d.workout_code,
       workout_id: first?.workout_id || null
     };
@@ -7406,13 +7444,13 @@ function renderHome() {
     if (!W) {
       todayCardHTML = `<div class="today-card intensity-off"><div class="today-title">Treino ${info.workout_code} não encontrado</div></div>`;
 	    } else {
-	      const [pillCls, pillTxt] = intensityPill(info.intensity);
+	      const [pillCls, pillTxt] = intensityPill(info.intensity, info.preset_code);
 	      const scheme = getTrainingScheme(info.preset_code, info.intensity);
 	      const totalSets = W.exercises ? W.exercises.reduce((a,e)=>a+getExerciseTargetSets(e, scheme),0) : 0;
         const knownSession = findKnownSessionForWorkout(today, info.workout_code, info.workout_id);
         const ctaLabel = knownSession?.status === "completed" ? "Ver treino" : knownSession?.status === "in_progress" ? "Continuar treino" : "Iniciar treino";
 	      todayCardHTML = `
-        <div class="today-card ${intensityClass(info.intensity)}">
+        <div class="today-card ${intensityClass(info.intensity, info.preset_code)}">
           <div class="today-eyebrow">Hoje · ${WEEKDAY_FULL[new Date(today+"T00:00:00").getDay()]} · ${fmtDateBR(today)}</div>
           <div class="today-title">${escape(W.name)}</div>
           <div class="today-meta">${escape(W.focus || "")}</div>
@@ -7456,7 +7494,7 @@ function renderHome() {
           const isToday = d.date === today;
           const w = workoutPretty(d.workout_code);
           const wTxt = w === "FLEX" ? "Flex" : (w === "OFF" ? "—" : w);
-          return `<div class="day-pill ${intensityClass(d.intensity)} ${isToday ? "is-today" : ""}" onclick="onDayClick('${d.date}')">
+          return `<div class="day-pill ${intensityClass(d.intensity, d.preset_code)} ${isToday ? "is-today" : ""}" onclick="onDayClick('${d.date}')">
             <span class="dp-day">${WEEKDAY_LABELS[dt.getDay()]}</span>
             <span class="dp-num">${dt.getDate()}</span>
             <span class="dp-w">${wTxt}</span>
@@ -7609,8 +7647,8 @@ window.openWorkout = function(iso, code, intensity, workoutId = null) {
   STATE.selectedDate = iso;
   STATE.selectedWorkout = code;
   STATE.selectedWorkoutId = workoutId || null;
-  STATE.selectedIntensity = intensity || "yellow";
   STATE.selectedPresetCode = resolvePresetForWorkoutDate(iso, code, workoutId);
+  STATE.selectedIntensity = legacyIntensityFromPresetCode(STATE.selectedPresetCode, intensity || "yellow");
   STATE.expandedEx = null;
   navTo("workout");
 };
@@ -7645,15 +7683,15 @@ function renderSelfTrainingCard({ emptyCta = true } = {}) {
       </div>`;
   }
   const W = resolveWorkoutRef(info.workout_code, info.workout_id);
-  const [pillCls, pillTxt] = intensityPill(info.intensity);
+  const [pillCls, pillTxt] = intensityPill(info.intensity, info.preset_code);
   return `
-    <div class="today-card ${intensityClass(info.intensity)}">
+    <div class="today-card ${intensityClass(info.intensity, info.preset_code)}">
       <div class="today-eyebrow">Meu treino hoje · ${WEEKDAY_FULL[new Date(today+"T00:00:00").getDay()]} · ${fmtDateBR(today)}</div>
       <div class="today-title">${escape(W ? W.name : "Treino " + info.workout_code)}</div>
       <div class="today-meta">${escape(W ? W.focus || "" : "Seu treino pessoal")}</div>
       <span class="today-pill ${pillCls}">${pillTxt}</span>
       <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <button class="btn-primary" onclick="openWorkout('${today}','${info.workout_code}','${info.intensity}','${info.workout_id || ""}')">Iniciar treino</button>
+        <button class="btn-primary" onclick="${info.preset_code ? `openWorkoutWithPreset('${today}','${info.workout_code}','${info.preset_code}','${info.workout_id || ""}')` : `openWorkout('${today}','${info.workout_code}','${info.intensity}','${info.workout_id || ""}')`}">Iniciar treino</button>
         <button class="btn-ghost" onclick="openStudentPeriodSheet('${STATE.profile.id}')">Editar ciclo</button>
       </div>
     </div>`;
@@ -7906,15 +7944,15 @@ function renderAdminHome(el) {
         </div>`;
     } else {
       const W = resolveWorkoutRef(myInfo.workout_code, myInfo.workout_id);
-      const [pillCls, pillTxt] = intensityPill(myInfo.intensity);
+      const [pillCls, pillTxt] = intensityPill(myInfo.intensity, myInfo.preset_code);
       myWorkoutCard = `
-        <div class="today-card ${intensityClass(myInfo.intensity)}">
+        <div class="today-card ${intensityClass(myInfo.intensity, myInfo.preset_code)}">
           <div class="today-eyebrow">Meu treino hoje · ${WEEKDAY_FULL[new Date(today+"T00:00:00").getDay()]} · ${fmtDateBR(today)}</div>
           <div class="today-title">${escape(W ? W.name : "Treino " + myInfo.workout_code)}</div>
           <div class="today-meta">${escape(W ? W.focus || "" : "")}</div>
           <span class="today-pill ${pillCls}">${pillTxt}</span>
           <div style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <button class="btn-primary" onclick="openWorkout('${today}','${myInfo.workout_code}','${myInfo.intensity}','${myInfo.workout_id || ""}')">Iniciar treino</button>
+            <button class="btn-primary" onclick="${myInfo.preset_code ? `openWorkoutWithPreset('${today}','${myInfo.workout_code}','${myInfo.preset_code}','${myInfo.workout_id || ""}')` : `openWorkout('${today}','${myInfo.workout_code}','${myInfo.intensity}','${myInfo.workout_id || ""}')`}">Iniciar treino</button>
             <button class="btn-ghost" onclick="navTo('calendar')">Periodização</button>
           </div>
         </div>`;
@@ -9079,7 +9117,7 @@ function renderCalendar() {
           const clickFn  = isDone
             ? `openDayHistory('${d.date}','${d.workout_code}')`
             : `onDayClick('${d.date}')`;
-          return `<div class="day-pill ${intensityClass(d.intensity)} ${isToday ? "is-today" : ""} ${extraCls}" onclick="${clickFn}">
+          return `<div class="day-pill ${intensityClass(d.intensity, d.preset_code)} ${isToday ? "is-today" : ""} ${extraCls}" onclick="${clickFn}">
             <span class="dp-day">${WEEKDAY_LABELS[dt.getDay()]}</span>
             <span class="dp-num">${dt.getDate()}</span>
             <span class="dp-w">${isDone ? "✓" : wTxt}</span>
@@ -9229,6 +9267,8 @@ async function renderWorkout() {
   if (!STATE.selectedPresetCode) {
     STATE.selectedPresetCode = resolvePresetForWorkoutDate(date, code, STATE.selectedWorkoutId);
   }
+  intensity = legacyIntensityFromPresetCode(STATE.selectedPresetCode, intensity || STATE.selectedIntensity || "yellow");
+  STATE.selectedIntensity = intensity;
 
   if (!code || code === "OFF") {
     el.innerHTML = `<div class="empty">
@@ -9284,7 +9324,7 @@ async function renderWorkout() {
   const completed = session && session.status === "completed";
   const sessionActive = session && session.status !== "completed";
 
-  const [pillCls, pillTxt] = intensityPill(intensity);
+  const [pillCls, pillTxt] = intensityPill(intensity, STATE.selectedPresetCode);
   const scheme = getCurrentTrainingScheme(intensity);
 
   // Stats
@@ -9832,6 +9872,14 @@ function renderFeed() {
   trackFeedViews(feed);
 }
 window.setFeedFilter = function() { STATE.feedFilter = "ALL"; renderFeed(); };
+function feedIntensityPill(post) {
+  const raw = post?.intensity || "off";
+  const name = String(post?.workout_name || post?.workout_code || "").toLowerCase();
+  if (raw === "flex" && /aero|cardio|bike|bicicleta|corrida|esteira|el[ií]ptico|remo/.test(name)) {
+    return ["pill-flex", "Aeróbio"];
+  }
+  return intensityPill(raw, post?.preset_code || null);
+}
 function feedPostHTML(p, compact) {
   const liked = STATE.feedLikes[p.id];
   const isMine = STATE.profile && p.student_id === STATE.profile.id;
@@ -9840,8 +9888,7 @@ function feedPostHTML(p, compact) {
   const studentName = personDisplayName(p.student, "Usuário");
   const role = p.student && p.student.role === "coach" ? ' <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>' : (p.student && p.student.role === "admin" ? ' <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zM4 20h16"/></svg>' : "");
   const avatarInner = avatarHTML(p.student || {});
-  const intCls = p.intensity === "red" ? "pill-red" : (p.intensity === "yellow" ? "pill-yellow" : "pill-flex");
-  const intLabel = p.intensity === "red" ? "Força" : (p.intensity === "yellow" ? "Hipertrofia" : "Mobilidade");
+  const [intCls, intLabel] = feedIntensityPill(p);
   const viewCount = Number(p.view_count || 0);
   const commentCount = Number(p.comments_count || 0);
   const viewsLabel = viewCount === 1 ? "1 visualização" : `${viewCount} visualizações`;
@@ -12328,11 +12375,9 @@ async function syncDayLegacy(dayId) {
     await sb.from("periodization_days").update({ workout_code: 'OFF', intensity: 'off', aero: false }).eq("id", dayId);
     return;
   }
-  const first = blocks[0];
+  const first = getPrimaryPeriodizationBlock(blocks);
   const aero = blocks.some(b => b.preset_code === 'aero');
-  // legacy intensity: hipertrofia→yellow, forca→red, deload→white, flex→flex, off→off
-  const intMap = { hipertrofia: 'yellow', forca: 'red', deload: 'white', flex: 'flex', off: 'off', aero: 'flex' };
-  const intensity = intMap[first.preset_code] || 'yellow';
+  const intensity = legacyIntensityFromPresetCode(first?.preset_code, 'yellow');
   const workout_code = first.workout_code || (first.preset_code === 'off' ? 'OFF' : (first.preset_code === 'flex' ? 'FLEX' : null));
   await sb.from("periodization_days").update({
     workout_code: workout_code,
@@ -18482,12 +18527,10 @@ window.renderTodayBlocksCard = renderTodayBlocksCard;
 /* Abre treino com o preset selecionado (rep range + pause vêm do preset) */
 window.openWorkoutWithPreset = function(date, code, presetCode, workoutId = null) {
   STATE.selectedPresetCode = presetCode;
-  // mapeia preset → intensity legacy pra UI atual
-  const intMap = { hipertrofia: 'yellow', forca: 'red', deload: 'white', flex: 'flex', off: 'off', aero: 'flex' };
   STATE.selectedDate = date;
   STATE.selectedWorkout = code;
   STATE.selectedWorkoutId = workoutId || null;
-  STATE.selectedIntensity = intMap[presetCode] || 'yellow';
+  STATE.selectedIntensity = legacyIntensityFromPresetCode(presetCode, 'yellow');
   STATE.expandedEx = null;
   navTo("workout");
 };
