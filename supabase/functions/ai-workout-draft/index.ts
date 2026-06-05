@@ -114,6 +114,27 @@ function plainText(text: unknown) {
     .toLowerCase();
 }
 
+const groupAliases = [
+  { group: "Peito", pattern: /peito|supino|crucifixo|crossover|peck/ },
+  { group: "Costas", pattern: /costas|dorsal|puxada|remada|barra fixa|pulldown/ },
+  { group: "Ombros", pattern: /ombro|ombros|desenvolvimento|elevacao lateral|elevação lateral|face pull/ },
+  { group: "Bíceps", pattern: /biceps|bíceps|rosca/ },
+  { group: "Tríceps", pattern: /triceps|tríceps|pulley|frances|francês|testa/ },
+  { group: "Quadríceps", pattern: /quadriceps|quadríceps|extensora|agachamento|leg press|afundo|passada|hack/ },
+  { group: "Posterior de coxa", pattern: /posterior(?: de coxa)?|flexora|stiff|terra romeno|levantamento terra/ },
+  { group: "Glúteos", pattern: /gluteos|glúteos|gluteo|glúteo|pelvica|pélvica|hip thrust|coice/ },
+  { group: "Panturrilha", pattern: /panturrilha|gemeos|gêmeos/ },
+  { group: "Abdômen/Core", pattern: /abdomen|abdômen|core|abdominal|prancha|crunch|pallof/ },
+  { group: "Mobilidade", pattern: /mobilidade|alongamento|flexibilidade/ },
+  { group: "Cardio/Aeróbio", pattern: /cardio|aerobio|aeróbio|corrida|caminhada|bicicleta|escada|eliptico|elíptico|remo/ },
+];
+
+function canonicalGroup(label: string) {
+  const text = plainText(label);
+  const match = groupAliases.find((item) => item.pattern.test(text));
+  return match ? match.group : titleCasePt(String(label || "").trim());
+}
+
 function inferGoal(prompt: string, profile: ReturnType<typeof normalizeStudentProfile>) {
   const text = `${plainText(prompt)} ${plainText(profile.goal)}`;
   if (/forca|max|1rm|carga/.test(text)) return "Força";
@@ -133,6 +154,62 @@ function inferFocus(prompt: string) {
 }
 
 const exerciseBank: Record<string, Array<[string, string, string]>> = {
+  "Peito": [
+    ["Supino reto com barra", "Peito", "Barra"],
+    ["Supino inclinado com halteres", "Peito", "Halteres"],
+    ["Crucifixo com halteres", "Peito", "Halteres"],
+    ["Crossover na polia", "Peito", "Polia"],
+    ["Peck deck", "Peito", "Máquina"],
+  ],
+  "Costas": [
+    ["Puxada alta na polia", "Costas", "Polia"],
+    ["Remada baixa", "Costas", "Máquina"],
+    ["Remada unilateral com halter", "Costas", "Halter"],
+    ["Pulldown", "Costas", "Polia"],
+    ["Barra fixa", "Costas", "Peso corporal"],
+  ],
+  "Ombros": [
+    ["Desenvolvimento com halteres", "Ombros", "Halteres"],
+    ["Elevação lateral", "Ombros", "Halteres"],
+    ["Elevação frontal", "Ombros", "Halteres"],
+    ["Crucifixo inverso", "Ombros", "Máquina"],
+    ["Face pull", "Ombros", "Polia"],
+  ],
+  "Bíceps": [
+    ["Rosca direta", "Bíceps", "Barra"],
+    ["Rosca alternada", "Bíceps", "Halteres"],
+    ["Rosca martelo", "Bíceps", "Halteres"],
+    ["Rosca Scott", "Bíceps", "Máquina"],
+    ["Rosca concentrada", "Bíceps", "Halter"],
+  ],
+  "Tríceps": [
+    ["Tríceps corda", "Tríceps", "Polia"],
+    ["Tríceps testa", "Tríceps", "Barra"],
+    ["Tríceps francês", "Tríceps", "Halter"],
+    ["Tríceps pulley", "Tríceps", "Polia"],
+    ["Mergulho nas paralelas", "Tríceps", "Peso corporal"],
+  ],
+  "Quadríceps": [
+    ["Agachamento livre", "Quadríceps", "Barra"],
+    ["Leg press", "Quadríceps", "Máquina"],
+    ["Cadeira extensora", "Quadríceps", "Máquina"],
+    ["Afundo", "Quadríceps", "Halteres"],
+    ["Passada", "Quadríceps", "Halteres"],
+  ],
+  "Posterior de coxa": [
+    ["Flexora unilateral", "Posterior de coxa", "Máquina"],
+    ["Mesa flexora", "Posterior de coxa", "Máquina"],
+    ["Cadeira flexora", "Posterior de coxa", "Máquina"],
+    ["Stiff", "Posterior de coxa", "Barra"],
+    ["Levantamento terra", "Posterior de coxa", "Barra"],
+  ],
+  "Glúteos": [
+    ["Elevação pélvica", "Glúteos", "Barra"],
+    ["Hip thrust", "Glúteos", "Barra"],
+    ["Coice no cabo", "Glúteos", "Polia"],
+    ["Glúteo na polia", "Glúteos", "Polia"],
+    ["Agachamento sumô", "Glúteos", "Halter"],
+  ],
   "Peito, ombros e tríceps": [
     ["Supino reto com barra", "Peito", "Barra"],
     ["Supino inclinado com halteres", "Peito", "Halteres"],
@@ -238,6 +315,60 @@ function extractRequestedExercises(prompt: string) {
   return found;
 }
 
+function extractRequestedGroupQuotas(prompt: string) {
+  const text = plainText(prompt)
+    .replace(/\s+/g, " ")
+    .replace(/,/g, " ")
+    .replace(/\be\b/g, " e ");
+  const groupPattern = "(costas|dorsal|biceps|bíceps|triceps|tríceps|peito|ombros?|quadriceps|quadríceps|posterior(?: de coxa)?|gluteos|glúteos|gluteo|glúteo|panturrilhas?|abdomen|abdômen|core|mobilidade|cardio|aerobio|aeróbio)";
+  const regex = new RegExp(`(\\d{1,2})\\s*(?:exercicios?|movimentos?)?\\s*(?:de|para|focados? em)?\\s*${groupPattern}`, "g");
+  const quotas: Array<{ group: string; count: number }> = [];
+  const seen = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text))) {
+    const count = Math.max(1, Number(match[1] || 0));
+    const group = canonicalGroup(match[2] || "");
+    if (!group || !count || seen.has(group)) continue;
+    seen.add(group);
+    quotas.push({ group, count });
+  }
+  return quotas;
+}
+
+function buildExercisesFromGroupQuotas(prompt: string, requestedExercises: Array<[string, string, string]>) {
+  const quotas = extractRequestedGroupQuotas(prompt);
+  if (!quotas.length) return [] as Array<[string, string, string]>;
+
+  const requestedByGroup = new Map<string, Array<[string, string, string]>>();
+  for (const exercise of requestedExercises) {
+    const group = canonicalGroup(exercise[1] || "");
+    const list = requestedByGroup.get(group) || [];
+    list.push([exercise[0], group, exercise[2]]);
+    requestedByGroup.set(group, list);
+  }
+
+  const output: Array<[string, string, string]> = [];
+  for (const { group, count } of quotas) {
+    const bank = exerciseBank[group] || [];
+    const used = new Set<string>();
+    const chosen: Array<[string, string, string]> = [];
+    for (const exercise of requestedByGroup.get(group) || []) {
+      if (chosen.length >= count) break;
+      if (used.has(exercise[0])) continue;
+      chosen.push(exercise);
+      used.add(exercise[0]);
+    }
+    for (const exercise of bank) {
+      if (chosen.length >= count) break;
+      if (used.has(exercise[0])) continue;
+      chosen.push([exercise[0], canonicalGroup(exercise[1] || group), exercise[2]]);
+      used.add(exercise[0]);
+    }
+    output.push(...chosen.slice(0, count));
+  }
+  return output;
+}
+
 function generateFallbackPlan(prompt: string, profile: ReturnType<typeof normalizeStudentProfile>) {
   const goal = inferGoal(prompt, profile);
   const focus = inferFocus(prompt);
@@ -247,7 +378,8 @@ function generateFallbackPlan(prompt: string, profile: ReturnType<typeof normali
     : focus.split(/[ ,]/).filter(Boolean)[0].slice(0, 4).toUpperCase();
   const code = extractWorkoutCode(prompt, fallbackCode);
   const requestedExercises = extractRequestedExercises(prompt);
-  const sourceExercises = requestedExercises.length ? requestedExercises : exerciseBank[focus] || exerciseBank["Treino completo"];
+  const quotaExercises = buildExercisesFromGroupQuotas(prompt, requestedExercises);
+  const sourceExercises = quotaExercises.length ? quotaExercises : (requestedExercises.length ? requestedExercises : exerciseBank[focus] || exerciseBank["Treino completo"]);
   const exercises = sourceExercises.map(([name, group, equipment]) => ({
     name,
     muscle_group: group,
@@ -378,6 +510,7 @@ async function generateWithOpenAI(prompt: string, profile: ReturnType<typeof nor
               "Gere uma prescrição inicial de treino em PT-BR, objetiva e revisável.",
               "Não invente diagnóstico médico. Preserve segurança e deixe claro quando o treinador deve revisar.",
               "Use nomes comuns de academia no Brasil e evite exercícios raros sem necessidade.",
+              "Se o briefing pedir quantidades exatas por grupo muscular ou por exercício, respeite exatamente essa distribuição.",
               "O resultado deve ser estruturado para o Treinova.",
             ].join(" "),
           }],

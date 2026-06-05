@@ -336,6 +336,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .ai-manual-meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .ai-manual-actions { display:grid; gap:6px; justify-items:stretch; align-self:start; min-width:102px; }
 .ai-manual-actions .mini-btn { min-height:34px; padding:6px 9px; font-size:10px; }
+.ai-order-btn { width:40px; min-width:40px; padding:0; justify-content:center; }
+.ai-order-btn svg { width:16px; height:16px; }
 .ai-manual-body { padding:0 14px 14px; border-top:1px solid var(--line); }
 .ai-manual-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:14px 0 10px; }
 .ai-manual-stat { min-height:68px; border:1px solid var(--line); border-radius:14px; background:var(--bg-2); padding:9px; display:grid; align-content:center; gap:5px; color:var(--text-3); font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; }
@@ -357,6 +359,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .ai-manual-thumb { width:44px!important; height:44px!important; flex-basis:44px!important; }
   .ai-manual-title { grid-column:3; }
   .ai-manual-actions { grid-column:1 / -1; width:100%; min-width:0; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ai-order-btn { width:100%; min-width:0; }
   .ai-manual-meta { grid-template-columns:1fr; }
   .ai-manual-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
@@ -2526,6 +2529,8 @@ function iconSvg(name, size = 18, extra = "") {
     message: `<svg ${attrs}><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>`,
     money: `<svg ${attrs}><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`,
     copy: `<svg ${attrs}><rect x="9" y="9" width="13" height="13" rx="2"/><rect x="2" y="2" width="13" height="13" rx="2"/></svg>`,
+    chevronUp: `<svg ${attrs}><path d="m18 15-6-6-6 6"/></svg>`,
+    chevronDown: `<svg ${attrs}><path d="m6 9 6 6 6-6"/></svg>`,
     star: `<svg ${attrs}><polygon points="12 2 15 8.5 22 9.3 16.8 14 18.2 21 12 17.4 5.8 21 7.2 14 2 9.3 9 8.5 12 2"/></svg>`,
     user: `<svg ${attrs}><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>`,
     trophy: `<svg ${attrs}><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v6a5 5 0 0 1-10 0V4z"/><path d="M5 5H3v3a4 4 0 0 0 4 4"/><path d="M19 5h2v3a4 4 0 0 1-4 4"/></svg>`,
@@ -13046,7 +13051,7 @@ window.deleteCustomWorkout = async function(workoutId, studentId) {
    ============================================================================= */
 const AI_WORKOUT_FUNCTION_NAME = "ai-workout-draft";
 const AI_WORKOUT_LOCAL_FALLBACK_ENDPOINT = "http://127.0.0.1:4177/api/generate-workout";
-const AI_WORKOUT_DEFAULT_PROMPT = "Monte um treino D focado em posterior, com flexora unilateral, stiff, levantamento terra e elevação pélvica. Quero 4 séries de 8 a 12 repetições, 90 segundos de descanso e ordem segura para aluno iniciante.";
+const AI_WORKOUT_DEFAULT_PROMPT = "";
 
 function getAIWorkoutSandboxState() {
   STATE.aiWorkoutSandbox = STATE.aiWorkoutSandbox || {
@@ -13068,6 +13073,12 @@ function aiPlainText(text) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function aiTitleCase(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/(^|\s)([a-záàâãéêíóôõúç])/g, (_, space, char) => `${space}${char.toUpperCase()}`);
 }
 
 function canUseLocalAIWorkoutFallbackEndpoint() {
@@ -13146,8 +13157,91 @@ function extractAIRequestedExercises(prompt) {
   return found;
 }
 
+function canonicalAIWorkoutGroup(label) {
+  const text = aiPlainText(label);
+  const match = AI_WORKOUT_GROUP_ALIASES.find(item => item.pattern.test(text));
+  return match ? match.group : aiTitleCase(String(label || "").trim());
+}
+
+function extractAIRequestedGroupQuotas(prompt) {
+  const text = aiPlainText(prompt)
+    .replace(/\s+/g, " ")
+    .replace(/,/g, " ")
+    .replace(/\be\b/g, " e ");
+  const groupPattern = "(costas|dorsal|biceps|bíceps|triceps|tríceps|peito|ombros?|quadriceps|quadríceps|posterior(?: de coxa)?|gluteos|glúteos|gluteo|glúteo|panturrilhas?|abdomen|abdômen|core|mobilidade|cardio|aerobio|aeróbio)";
+  const regex = new RegExp(`(\\d{1,2})\\s*(?:exercicios?|movimentos?)?\\s*(?:de|para|focados? em)?\\s*${groupPattern}`, "g");
+  const quotas = [];
+  const seen = new Set();
+  let match;
+  while ((match = regex.exec(text))) {
+    const count = Math.max(1, Number(match[1] || 0));
+    const group = canonicalAIWorkoutGroup(match[2] || "");
+    if (!group || !count) continue;
+    if (seen.has(group)) continue;
+    seen.add(group);
+    quotas.push({ group, count });
+  }
+  return quotas;
+}
+
 function fallbackAIWorkoutExercises(focus) {
   const bank = {
+    "Peito": [
+      { name:"Supino reto com barra", muscle_group:"Peito", equipment:"Barra" },
+      { name:"Supino inclinado com halteres", muscle_group:"Peito", equipment:"Halteres" },
+      { name:"Crucifixo com halteres", muscle_group:"Peito", equipment:"Halteres" },
+      { name:"Crossover na polia", muscle_group:"Peito", equipment:"Polia" },
+      { name:"Peck deck", muscle_group:"Peito", equipment:"Máquina" }
+    ],
+    "Costas": [
+      { name:"Puxada alta na polia", muscle_group:"Costas", equipment:"Polia" },
+      { name:"Remada baixa", muscle_group:"Costas", equipment:"Máquina" },
+      { name:"Remada unilateral com halter", muscle_group:"Costas", equipment:"Halter" },
+      { name:"Pulldown", muscle_group:"Costas", equipment:"Polia" },
+      { name:"Barra fixa", muscle_group:"Costas", equipment:"Peso corporal" }
+    ],
+    "Ombros": [
+      { name:"Desenvolvimento com halteres", muscle_group:"Ombros", equipment:"Halteres" },
+      { name:"Elevação lateral", muscle_group:"Ombros", equipment:"Halteres" },
+      { name:"Elevação frontal", muscle_group:"Ombros", equipment:"Halteres" },
+      { name:"Crucifixo inverso", muscle_group:"Ombros", equipment:"Máquina" },
+      { name:"Face pull", muscle_group:"Ombros", equipment:"Polia" }
+    ],
+    "Bíceps": [
+      { name:"Rosca direta", muscle_group:"Bíceps", equipment:"Barra" },
+      { name:"Rosca alternada", muscle_group:"Bíceps", equipment:"Halteres" },
+      { name:"Rosca martelo", muscle_group:"Bíceps", equipment:"Halteres" },
+      { name:"Rosca Scott", muscle_group:"Bíceps", equipment:"Máquina" },
+      { name:"Rosca concentrada", muscle_group:"Bíceps", equipment:"Halter" }
+    ],
+    "Tríceps": [
+      { name:"Tríceps corda", muscle_group:"Tríceps", equipment:"Polia" },
+      { name:"Tríceps testa", muscle_group:"Tríceps", equipment:"Barra" },
+      { name:"Tríceps francês", muscle_group:"Tríceps", equipment:"Halter" },
+      { name:"Tríceps pulley", muscle_group:"Tríceps", equipment:"Polia" },
+      { name:"Mergulho nas paralelas", muscle_group:"Tríceps", equipment:"Peso corporal" }
+    ],
+    "Quadríceps": [
+      { name:"Agachamento livre", muscle_group:"Quadríceps", equipment:"Barra" },
+      { name:"Leg press", muscle_group:"Quadríceps", equipment:"Máquina" },
+      { name:"Cadeira extensora", muscle_group:"Quadríceps", equipment:"Máquina" },
+      { name:"Afundo", muscle_group:"Quadríceps", equipment:"Halteres" },
+      { name:"Passada", muscle_group:"Quadríceps", equipment:"Halteres" }
+    ],
+    "Posterior de coxa": [
+      { name:"Flexora unilateral", muscle_group:"Posterior de coxa", equipment:"Máquina" },
+      { name:"Mesa flexora", muscle_group:"Posterior de coxa", equipment:"Máquina" },
+      { name:"Cadeira flexora", muscle_group:"Posterior de coxa", equipment:"Máquina" },
+      { name:"Stiff", muscle_group:"Posterior de coxa", equipment:"Barra" },
+      { name:"Levantamento terra", muscle_group:"Posterior de coxa", equipment:"Barra" }
+    ],
+    "Glúteos": [
+      { name:"Elevação pélvica", muscle_group:"Glúteos", equipment:"Barra" },
+      { name:"Hip thrust", muscle_group:"Glúteos", equipment:"Barra" },
+      { name:"Coice no cabo", muscle_group:"Glúteos", equipment:"Polia" },
+      { name:"Glúteo na polia", muscle_group:"Glúteos", equipment:"Polia" },
+      { name:"Agachamento sumô", muscle_group:"Glúteos", equipment:"Halter" }
+    ],
     "Posterior de coxa e glúteos": [
       { name:"Flexora unilateral", muscle_group:"Posterior de coxa", equipment:"Máquina" },
       { name:"Stiff", muscle_group:"Posterior de coxa", equipment:"Barra" },
@@ -13183,13 +13277,46 @@ function fallbackAIWorkoutExercises(focus) {
   ];
 }
 
+function buildAIExercisesFromGroupQuotas(prompt, requestedExercises = []) {
+  const quotas = extractAIRequestedGroupQuotas(prompt);
+  if (!quotas.length) return [];
+  const requestedByGroup = new Map();
+  requestedExercises.forEach(ex => {
+    const group = canonicalAIWorkoutGroup(ex.muscle_group || "");
+    const list = requestedByGroup.get(group) || [];
+    list.push({ name: ex.name, muscle_group: group, equipment: ex.equipment });
+    requestedByGroup.set(group, list);
+  });
+  const result = [];
+  quotas.forEach(({ group, count }) => {
+    const bank = fallbackAIWorkoutExercises(group) || [];
+    const chosen = [];
+    const used = new Set();
+    for (const ex of requestedByGroup.get(group) || []) {
+      if (chosen.length >= count) break;
+      if (used.has(ex.name)) continue;
+      chosen.push(ex);
+      used.add(ex.name);
+    }
+    for (const ex of bank) {
+      if (chosen.length >= count) break;
+      if (used.has(ex.name)) continue;
+      chosen.push({ ...ex, muscle_group: canonicalAIWorkoutGroup(ex.muscle_group || group) });
+      used.add(ex.name);
+    }
+    result.push(...chosen.slice(0, count));
+  });
+  return result;
+}
+
 function buildLocalAIWorkoutDraft(form) {
   const goal = inferAIWorkoutGoal(form.prompt, form.goal);
   const focus = inferAIWorkoutFocus(form.prompt);
   const code = extractAIWorkoutCode(form.prompt, focus === "Full body" ? "FULL" : "A");
   const scheme = extractAIWorkoutScheme(form.prompt, goal);
   const requested = extractAIRequestedExercises(form.prompt);
-  const rawExercises = requested.length ? requested : fallbackAIWorkoutExercises(focus);
+  const quotaExercises = buildAIExercisesFromGroupQuotas(form.prompt, requested);
+  const rawExercises = quotaExercises.length ? quotaExercises : (requested.length ? requested : fallbackAIWorkoutExercises(focus));
   const exercises = rawExercises.map((ex, index) => ({
     order: index + 1,
     name: ex.name,
@@ -13264,6 +13391,21 @@ function collectAIWorkoutSandboxForm() {
   st.limitations = String(document.getElementById("ai-workout-limitations")?.value || st.limitations || "Sem limitações informadas");
   return st;
 }
+
+const AI_WORKOUT_GROUP_ALIASES = [
+  { group: "Peito", pattern: /peito|supino|crucifixo|crossover|peck/ },
+  { group: "Costas", pattern: /costas|dorsal|puxada|remada|barra fixa|pulldown/ },
+  { group: "Ombros", pattern: /ombro|ombros|desenvolvimento|elevacao lateral|elevação lateral|face pull/ },
+  { group: "Bíceps", pattern: /biceps|bíceps|rosca/ },
+  { group: "Tríceps", pattern: /triceps|tríceps|triceps|tríceps|pulley|frances|francês|testa/ },
+  { group: "Quadríceps", pattern: /quadriceps|quadríceps|extensora|agachamento|leg press|afundo|passada|hack/ },
+  { group: "Posterior de coxa", pattern: /posterior(?: de coxa)?|flexora|stiff|terra romeno|levantamento terra/ },
+  { group: "Glúteos", pattern: /gluteos|glúteos|gluteo|glúteo|pelvica|pélvica|hip thrust|coice/ },
+  { group: "Panturrilha", pattern: /panturrilha|gemeos|gêmeos/ },
+  { group: "Abdômen/Core", pattern: /abdomen|abdômen|core|abdominal|prancha|crunch|pallof/ },
+  { group: "Mobilidade", pattern: /mobilidade|alongamento|flexibilidade/ },
+  { group: "Cardio/Aeróbio", pattern: /cardio|aerobio|aeróbio|corrida|caminhada|bicicleta|escada|eliptico|elíptico|remo/ }
+];
 
 function getAIExerciseGroupMeta(ex = {}) {
   const direct = String(ex.muscle_group || ex.cat || "");
@@ -13375,7 +13517,7 @@ function renderAIWorkoutDraftHTML(draft) {
         </div>
         <div class="wh-meta" style="margin-top:10px">
           <span class="meta-chip"><strong>${normalized.exercises.length}</strong> exercícios</span>
-          <span class="meta-chip"><strong>Revisão</strong> edite antes de salvar</span>
+          <span class="meta-chip">Ajuste nome, ordem e parâmetros antes de salvar</span>
         </div>
       </div>
       <div class="ai-manual-list">
@@ -13403,8 +13545,8 @@ function renderAIWorkoutDraftHTML(draft) {
                 </div>
               </div>
               <div class="ai-manual-actions">
-                <button class="mini-btn mini-btn-ghost" ${index === 0 ? "disabled" : ""} onclick="moveAIWorkoutDraftExercise(${index},-1)">Subir</button>
-                <button class="mini-btn mini-btn-ghost" ${index === normalized.exercises.length - 1 ? "disabled" : ""} onclick="moveAIWorkoutDraftExercise(${index},1)">Descer</button>
+                <button class="mini-btn mini-btn-ghost ai-order-btn" type="button" title="Mover para cima" aria-label="Mover para cima" ${index === 0 ? "disabled" : ""} onclick="moveAIWorkoutDraftExercise(${index},-1)">${iconSvg("chevronUp", 16)}</button>
+                <button class="mini-btn mini-btn-ghost ai-order-btn" type="button" title="Mover para baixo" aria-label="Mover para baixo" ${index === normalized.exercises.length - 1 ? "disabled" : ""} onclick="moveAIWorkoutDraftExercise(${index},1)">${iconSvg("chevronDown", 16)}</button>
               </div>
             </div>
             <div class="ai-manual-body">
@@ -13441,7 +13583,6 @@ function renderAIWorkoutDraftHTML(draft) {
 
 function renderAIWorkoutSandboxSheet() {
   const st = getAIWorkoutSandboxState();
-  const hasDraftWarning = !!(st.draft && st.error);
   openSheet(`
     <h3>Treinova IA</h3>
     <div class="ai-prompt-field">
@@ -13449,7 +13590,7 @@ function renderAIWorkoutSandboxSheet() {
         Descreva o treino
         <textarea class="input ai-prompt-textarea" id="ai-workout-prompt" spellcheck="true" placeholder="Ex.: Monte um treino D focado em posterior com flexora unilateral, stiff, levantamento terra e elevação pélvica. Quero 4 séries de 8 a 12 repetições, 90 segundos de descanso e ordem segura.">${escape(st.prompt || "")}</textarea>
       </label>
-      ${st.error ? `<div class="${hasDraftWarning ? "ai-inline-note" : "shortcut-error"}" style="margin-top:10px"><div class="title">${hasDraftWarning ? "Modo de contingência" : "Atenção"}</div><div class="sub">${escape(st.error)}</div></div>` : ""}
+      ${!st.draft && st.error ? `<div class="shortcut-error" style="margin-top:10px"><div class="title">Atenção</div><div class="sub">${escape(st.error)}</div></div>` : ""}
     </div>
     ${st.draft ? renderAIWorkoutDraftHTML(st.draft) : ""}
     ${st.handoff && st.draft ? `
@@ -13468,6 +13609,9 @@ function renderAIWorkoutSandboxSheet() {
 
 window.openAIWorkoutSandbox = function() {
   const st = getAIWorkoutSandboxState();
+  st.prompt = "";
+  st.draft = null;
+  st.usedModel = "";
   st.error = "";
   st.handoff = false;
   renderAIWorkoutSandboxSheet();
@@ -13523,11 +13667,11 @@ window.generateAIWorkoutSandboxDraft = async function() {
       if (!res.ok || !payload.ok) throw new Error(payload.error || "Falha ao gerar o treino.");
       st.draft = payload.workoutDraft || planToAIWorkoutDraft(payload.plan);
       st.usedModel = payload.usedModel || "fallback-local";
-      st.error = "A IA publicada não respondeu agora; usei o modo local de contingência para você seguir testando.";
+      st.error = "";
     } catch (_localError) {
       st.draft = buildLocalAIWorkoutDraft(st);
       st.usedModel = "sugestao-inicial";
-      st.error = "A IA não respondeu agora; gerei uma sugestão inicial para você revisar.";
+      st.error = "";
     }
   }
   st.draft = normalizeAIWorkoutDraft(st.draft);
