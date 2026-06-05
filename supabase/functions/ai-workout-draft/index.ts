@@ -286,14 +286,35 @@ function generateFallbackPlan(prompt: string, profile: ReturnType<typeof normali
 }
 
 function extractOutputText(response: any) {
-  if (typeof response?.output_text === "string") return response.output_text;
+  if (typeof response?.output_text === "string" && response.output_text.trim()) return response.output_text.trim();
+  if (response?.output_parsed && typeof response.output_parsed === "object") {
+    return JSON.stringify(response.output_parsed);
+  }
   const chunks: string[] = [];
   for (const item of response?.output || []) {
     for (const content of item?.content || []) {
-      if (content?.text) chunks.push(content.text);
+      if (typeof content?.text === "string" && content.text.trim()) {
+        chunks.push(content.text.trim());
+        continue;
+      }
+      if (typeof content?.output_text === "string" && content.output_text.trim()) {
+        chunks.push(content.output_text.trim());
+        continue;
+      }
+      if (content?.parsed && typeof content.parsed === "object") {
+        return JSON.stringify(content.parsed);
+      }
+      if (content?.json && typeof content.json === "object") {
+        return JSON.stringify(content.json);
+      }
+      if (typeof content?.value === "string" && content.value.trim()) {
+        chunks.push(content.value.trim());
+      }
     }
   }
-  return chunks.join("\n");
+  const merged = chunks.join("\n").trim();
+  if (!merged) throw new Error("OpenAI não retornou conteúdo estruturado.");
+  return merged.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
 }
 
 function sanitizePlan(plan: any, source: string, prompt: string, profile: ReturnType<typeof normalizeStudentProfile>) {
@@ -387,7 +408,18 @@ async function generateWithOpenAI(prompt: string, profile: ReturnType<typeof nor
 
   const payload = await response.json();
   const outputText = extractOutputText(payload);
-  return sanitizePlan(JSON.parse(outputText), "openai", prompt, profile);
+  let parsedPlan: any = null;
+  try {
+    parsedPlan = JSON.parse(outputText);
+  } catch (_parseError) {
+    if (payload?.output_parsed && typeof payload.output_parsed === "object") {
+      parsedPlan = payload.output_parsed;
+    }
+  }
+  if (!parsedPlan || typeof parsedPlan !== "object") {
+    throw new Error("OpenAI retornou um payload sem JSON válido.");
+  }
+  return sanitizePlan(parsedPlan, "openai", prompt, profile);
 }
 
 async function getAuthenticatedProfile(req: Request) {
@@ -434,7 +466,10 @@ serve(async (req) => {
       plan = await generateWithOpenAI(prompt, studentProfile);
     } catch (e: any) {
       console.error("[ai-workout-draft openai]", e);
-      warning = "A IA principal não respondeu agora; foi gerada uma sugestão inicial para revisão.";
+      const detail = String(e?.message || "");
+      warning = /quota|insufficient_quota|billing|429/i.test(detail)
+        ? "A IA avançada está indisponível no momento; montamos um rascunho inicial para você revisar e seguir."
+        : "A IA principal não respondeu agora; foi gerada uma sugestão inicial para revisão.";
     }
     if (!plan) plan = generateFallbackPlan(prompt, studentProfile);
 

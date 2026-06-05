@@ -328,19 +328,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .ai-manual-summary { margin:0 0 12px; padding:14px; border-radius:16px; }
 .ai-manual-list { display:grid; gap:10px; margin-top:12px; }
 .ai-manual-exercise-card { margin-bottom:0; border-color:var(--line); background:var(--bg-card); }
-.ai-manual-head { cursor:default; align-items:flex-start; }
+.ai-manual-head { cursor:default; align-items:flex-start; display:grid; grid-template-columns:34px 48px minmax(0,1fr) auto; gap:10px; }
 .ai-manual-index { width:34px; height:34px; flex:0 0 34px; display:grid; place-items:center; border-radius:12px; background:rgba(156,255,46,.10); color:var(--green); border:1px solid rgba(156,255,46,.25); font-size:11px; font-weight:900; letter-spacing:.4px; }
 .ai-manual-thumb { width:48px!important; height:48px!important; flex:0 0 48px!important; border-radius:13px; }
-.ai-manual-title { flex:1; min-width:0; display:grid; gap:8px; }
+.ai-manual-title { min-width:0; width:100%; display:grid; gap:8px; align-content:start; }
 .ai-manual-title .ai-draft-field input { font-weight:900; font-size:15px; }
 .ai-manual-meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-.ai-manual-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.ai-manual-actions { display:grid; gap:6px; justify-items:stretch; align-self:start; min-width:102px; }
 .ai-manual-actions .mini-btn { min-height:34px; padding:6px 9px; font-size:10px; }
 .ai-manual-body { padding:0 14px 14px; border-top:1px solid var(--line); }
 .ai-manual-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:14px 0 10px; }
 .ai-manual-stat { min-height:68px; border:1px solid var(--line); border-radius:14px; background:var(--bg-2); padding:9px; display:grid; align-content:center; gap:5px; color:var(--text-3); font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; }
 .ai-manual-stat input { border:0; background:transparent; padding:0; min-height:22px; color:var(--text); font-size:18px; font-weight:900; width:100%; }
 .ai-manual-note { margin-top:8px; }
+.ai-inline-note { margin-top:10px; border:1px solid rgba(255,214,10,.24); background:linear-gradient(135deg, rgba(255,214,10,.10), rgba(255,149,0,.04) 72%), var(--bg-card); border-radius:14px; padding:14px; color:var(--text-2); }
+.ai-inline-note .title { color:var(--text); font-weight:900; margin-bottom:4px; }
+.ai-inline-note .sub { font-size:13px; line-height:1.4; }
 .ai-handoff { border:1px solid rgba(46,204,113,.35); background:rgba(46,204,113,.08); color:var(--text); border-radius:16px; padding:14px; margin:12px 0; }
 .ai-handoff .title { font-weight:900; margin-bottom:4px; }
 .ai-handoff .sub { color:var(--text-2); font-size:13px; line-height:1.45; }
@@ -349,12 +352,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .ai-exercise-top { grid-template-columns:38px minmax(0,1fr); }
   .ai-exercise-actions { grid-column:1 / -1; justify-content:stretch; }
   .ai-exercise-actions .mini-btn { flex:1; }
-  .ai-manual-head { gap:10px; padding:12px; }
+  .ai-manual-head { grid-template-columns:30px 44px minmax(0,1fr); gap:10px; padding:12px; }
   .ai-manual-index { width:30px; height:30px; flex-basis:30px; }
   .ai-manual-thumb { width:44px!important; height:44px!important; flex-basis:44px!important; }
-  .ai-manual-actions { grid-column:1 / -1; width:100%; justify-content:stretch; }
-  .ai-manual-actions .mini-btn { flex:1; }
-  .ai-manual-meta,.ai-manual-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ai-manual-title { grid-column:3; }
+  .ai-manual-actions { grid-column:1 / -1; width:100%; min-width:0; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ai-manual-meta { grid-template-columns:1fr; }
+  .ai-manual-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 
 .intensity-banner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
@@ -13437,6 +13441,7 @@ function renderAIWorkoutDraftHTML(draft) {
 
 function renderAIWorkoutSandboxSheet() {
   const st = getAIWorkoutSandboxState();
+  const hasDraftWarning = !!(st.draft && st.error);
   openSheet(`
     <h3>Treinova IA</h3>
     <div class="ai-prompt-field">
@@ -13444,7 +13449,7 @@ function renderAIWorkoutSandboxSheet() {
         Descreva o treino
         <textarea class="input ai-prompt-textarea" id="ai-workout-prompt" spellcheck="true" placeholder="Ex.: Monte um treino D focado em posterior com flexora unilateral, stiff, levantamento terra e elevação pélvica. Quero 4 séries de 8 a 12 repetições, 90 segundos de descanso e ordem segura.">${escape(st.prompt || "")}</textarea>
       </label>
-      ${st.error ? `<div class="shortcut-error" style="margin-top:10px"><div class="title">Atenção</div><div class="sub">${escape(st.error)}</div></div>` : ""}
+      ${st.error ? `<div class="${hasDraftWarning ? "ai-inline-note" : "shortcut-error"}" style="margin-top:10px"><div class="title">${hasDraftWarning ? "Modo de contingência" : "Atenção"}</div><div class="sub">${escape(st.error)}</div></div>` : ""}
     </div>
     ${st.draft ? renderAIWorkoutDraftHTML(st.draft) : ""}
     ${st.handoff && st.draft ? `
