@@ -302,6 +302,61 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   border: 1px solid var(--line); color: var(--text-2); padding: 6px 10px; border-radius: 999px; }
 .meta-chip strong { color: var(--text); }
 
+.ai-workout-entry { display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
+.ai-action-btn { background:linear-gradient(135deg, rgba(156,255,46,.18), rgba(0,180,255,.12)); border-color:rgba(156,255,46,.42)!important; color:var(--green)!important; }
+.ai-flow-card { border:1px solid var(--line); border-radius:18px; background:linear-gradient(135deg, rgba(0,180,255,.08), rgba(156,255,46,.04)), var(--bg-card); padding:14px; margin:12px 0; }
+.ai-prompt-field { margin:14px 0 0; }
+.ai-prompt-textarea { min-height:210px!important; padding:16px!important; font-size:15px!important; line-height:1.5!important; font-weight:600!important; letter-spacing:0!important; text-transform:none!important; resize:vertical; }
+.ai-flow-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0; }
+.ai-flow-step { border:1px solid var(--line); border-radius:14px; padding:10px; background:var(--bg-2); }
+.ai-flow-step b { display:block; font-size:12px; color:var(--text); margin-bottom:3px; }
+.ai-flow-step span { display:block; font-size:11px; color:var(--text-3); line-height:1.35; }
+.ai-flow-step.active { border-color:rgba(156,255,46,.42); box-shadow:0 0 0 2px rgba(156,255,46,.08); }
+.ai-draft-header { display:grid; grid-template-columns:1fr 96px; gap:10px; margin:12px 0; }
+.ai-draft-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:10px 0 12px; }
+.ai-draft-field { display:grid; gap:6px; color:var(--text-3); font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; }
+.ai-draft-field input,.ai-draft-field textarea,.ai-draft-field select { width:100%; min-height:44px; border-radius:13px; }
+.ai-draft-field textarea { min-height:110px; padding:12px; resize:vertical; }
+.ai-draft-field.full { grid-column:1 / -1; }
+.ai-exercise-list { display:grid; gap:10px; margin-top:10px; }
+.ai-exercise-card { border:1px solid var(--line); border-radius:16px; background:var(--bg-2); padding:12px; }
+.ai-exercise-top { display:grid; grid-template-columns:44px minmax(0,1fr) auto; gap:10px; align-items:start; margin-bottom:10px; }
+.ai-exercise-order { width:38px; height:38px; display:grid; place-items:center; border-radius:12px; background:rgba(156,255,46,.10); color:var(--green); border:1px solid rgba(156,255,46,.25); font-weight:900; font-size:12px; }
+.ai-exercise-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.ai-exercise-actions .mini-btn { min-height:34px; padding:6px 9px; font-size:10px; }
+.ai-manual-workout-card { padding:14px; border-radius:18px; background:var(--bg-card); }
+.ai-manual-summary { margin:0 0 12px; padding:14px; border-radius:16px; }
+.ai-manual-list { display:grid; gap:10px; margin-top:12px; }
+.ai-manual-exercise-card { margin-bottom:0; border-color:var(--line); background:var(--bg-card); }
+.ai-manual-head { cursor:default; align-items:flex-start; }
+.ai-manual-index { width:34px; height:34px; flex:0 0 34px; display:grid; place-items:center; border-radius:12px; background:rgba(156,255,46,.10); color:var(--green); border:1px solid rgba(156,255,46,.25); font-size:11px; font-weight:900; letter-spacing:.4px; }
+.ai-manual-thumb { width:48px!important; height:48px!important; flex:0 0 48px!important; border-radius:13px; }
+.ai-manual-title { flex:1; min-width:0; display:grid; gap:8px; }
+.ai-manual-title .ai-draft-field input { font-weight:900; font-size:15px; }
+.ai-manual-meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.ai-manual-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.ai-manual-actions .mini-btn { min-height:34px; padding:6px 9px; font-size:10px; }
+.ai-manual-body { padding:0 14px 14px; border-top:1px solid var(--line); }
+.ai-manual-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:14px 0 10px; }
+.ai-manual-stat { min-height:68px; border:1px solid var(--line); border-radius:14px; background:var(--bg-2); padding:9px; display:grid; align-content:center; gap:5px; color:var(--text-3); font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; }
+.ai-manual-stat input { border:0; background:transparent; padding:0; min-height:22px; color:var(--text); font-size:18px; font-weight:900; width:100%; }
+.ai-manual-note { margin-top:8px; }
+.ai-handoff { border:1px solid rgba(46,204,113,.35); background:rgba(46,204,113,.08); color:var(--text); border-radius:16px; padding:14px; margin:12px 0; }
+.ai-handoff .title { font-weight:900; margin-bottom:4px; }
+.ai-handoff .sub { color:var(--text-2); font-size:13px; line-height:1.45; }
+@media (max-width: 520px) {
+  .ai-flow-steps,.ai-draft-header,.ai-draft-grid { grid-template-columns:1fr; }
+  .ai-exercise-top { grid-template-columns:38px minmax(0,1fr); }
+  .ai-exercise-actions { grid-column:1 / -1; justify-content:stretch; }
+  .ai-exercise-actions .mini-btn { flex:1; }
+  .ai-manual-head { gap:10px; padding:12px; }
+  .ai-manual-index { width:30px; height:30px; flex-basis:30px; }
+  .ai-manual-thumb { width:44px!important; height:44px!important; flex-basis:44px!important; }
+  .ai-manual-actions { grid-column:1 / -1; width:100%; justify-content:stretch; }
+  .ai-manual-actions .mini-btn { flex:1; }
+  .ai-manual-meta,.ai-manual-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
 .intensity-banner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
   margin-bottom: 12px; font-size: 13px; }
 .ib-yellow { background: var(--yellow-soft); border: 1px solid rgba(255,214,10,0.35); color: #ffe27a; }
@@ -1332,6 +1387,7 @@ const EXERCISE_LIBRARY_MODES = [
   { value: "popular", label: "Populares" }
 ];
 const EXERCISE_LIBRARY_PAGE_SIZE = 20;
+const EXERCISE_ASSET_VERSION = "20260605-specific-v2";
 const _STANDARD_EXERCISE_IMAGE_CACHE = {};
 const _MISSING_EXERCISE_IMAGE_CACHE = {};
 const EXACT_EXERCISE_IMAGE_ASSETS = {
@@ -1412,21 +1468,21 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "spinning bike intervalado": "assets/exercises/exact/spinning_bike_intervalado.webp",
     "step-up aerobio": "assets/exercises/exact/step_up_aerobio.webp",
     "chin-up supinado": "assets/exercises/exact/chin_up_supinado.webp",
-    "rosca 21": "assets/exercises/exact/rosca_21.webp",
+    "rosca 21": "assets/exercises/exact/rosca_21_com_barra_w.webp",
     "rosca 21 com barra w": "assets/exercises/exact/rosca_21_com_barra_w.webp",
     "rosca alternada com halter": "assets/exercises/exact/rosca_alternada_com_halter.webp",
-    "rosca alternada com halteres": "assets/exercises/exact/rosca_alternada_com_halteres.webp",
+    "rosca alternada com halteres": "assets/exercises/exact/rosca_alternada_com_halter.webp",
     "rosca alternada sentado": "assets/exercises/exact/rosca_alternada_sentado.webp",
     "rosca bayesian no cabo": "assets/exercises/exact/rosca_bayesian_no_cabo.webp",
     "rosca cabo barra w": "assets/exercises/exact/rosca_cabo_barra_w.webp",
-    "rosca concentrada": "assets/exercises/exact/rosca_concentrada.webp",
+    "rosca concentrada": "assets/exercises/exact/rosca_concentrada_com_halter.webp",
     "rosca concentrada com halter": "assets/exercises/exact/rosca_concentrada_com_halter.webp",
     "rosca concentrada no banco inclinado": "assets/exercises/exact/rosca_concentrada_no_banco_inclinado.webp",
     "rosca direta barra w": "assets/exercises/exact/rosca_direta_barra_w.webp",
     "rosca direta com barra": "assets/exercises/exact/rosca_direta_com_barra.webp",
     "rosca direta na polia baixa": "assets/exercises/exact/rosca_direta_na_polia_baixa.webp",
     "rosca direta no cabo": "assets/exercises/exact/rosca_direta_no_cabo.webp",
-    "rosca inclinada com halter": "assets/exercises/exact/rosca_inclinada_com_halter.webp",
+    "rosca inclinada com halter": "assets/exercises/exact/rosca_inclinada_com_halteres.webp",
     "rosca inclinada com halteres": "assets/exercises/exact/rosca_inclinada_com_halteres.webp",
     "rosca inversa": "assets/exercises/exact/rosca_inversa.webp",
     "rosca inversa com barra": "assets/exercises/exact/rosca_inversa_com_barra.webp",
@@ -1439,7 +1495,7 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "rosca no trx": "assets/exercises/exact/rosca_no_trx.webp",
     "rosca punho pronada": "assets/exercises/exact/rosca_punho_pronada.webp",
     "rosca punho supinada": "assets/exercises/exact/rosca_punho_supinada.webp",
-    "rosca scott (preacher curl)": "assets/exercises/exact/rosca_scott_preacher_curl.webp",
+    "rosca scott (preacher curl)": "assets/exercises/exact/rosca_scott_na_maquina.webp",
     "rosca scott com halter": "assets/exercises/exact/rosca_scott_com_halter.webp",
     "rosca scott na maquina": "assets/exercises/exact/rosca_scott_na_maquina.webp",
     "rosca scott unilateral": "assets/exercises/exact/rosca_scott_unilateral.webp",
@@ -1454,7 +1510,7 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "barra fixa supinada + pulldown com corda": "assets/exercises/exact/barra_fixa_supinada_e_pulldown_com_corda.webp",
     "face pull sentado": "assets/exercises/exact/face_pull_sentado.webp",
     "good morning leve para lombar": "assets/exercises/exact/good_morning_leve_para_lombar.webp",
-    "hiperextensao lombar": "assets/exercises/exact/hiperextensao_lombar.webp",
+    "hiperextensao lombar": "assets/exercises/exact/hiperextensao_lombar_no_banco.webp",
     "hiperextensao lombar no banco": "assets/exercises/exact/hiperextensao_lombar_no_banco.webp",
     "levantamento terra convencional": "assets/exercises/exact/levantamento_terra_convencional.webp",
     "meadows row": "assets/exercises/exact/meadows_row.webp",
@@ -1468,7 +1524,7 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "puxada com barra pronada": "assets/exercises/exact/puxada_com_barra_pronada.webp",
     "puxada com triangulo (pegada neutra)": "assets/exercises/exact/puxada_com_triangulo_pegada_neutra.webp",
     "puxada frontal com barra (pegada neutra)": "assets/exercises/exact/puxada_frontal_com_barra_pegada_neutra.webp",
-    "puxada frontal pegada aberta": "assets/exercises/exact/puxada_frontal_pegada_aberta.webp",
+    "puxada frontal pegada aberta": "assets/exercises/exact/pulley_frente_pegada_aberta.webp",
     "puxada frontal pegada neutra": "assets/exercises/exact/puxada_frontal_pegada_neutra.webp",
     "puxada neutra no pulley": "assets/exercises/exact/puxada_neutra_no_pulley.webp",
     "puxada supinada no pulley": "assets/exercises/exact/puxada_supinada_no_pulley.webp",
@@ -1479,7 +1535,7 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "remada baixa com triangulo": "assets/exercises/exact/remada_baixa_com_triangulo.webp",
     "remada baixa pegada neutra": "assets/exercises/exact/remada_baixa_pegada_neutra.webp",
     "remada baixa unilateral": "assets/exercises/exact/remada_baixa_unilateral.webp",
-    "remada cavalinho": "assets/exercises/exact/remada_cavalinho.webp",
+    "remada cavalinho": "assets/exercises/exact/remada_cavalinho_com_apoio_no_peito.webp",
     "remada cavalinho com apoio no peito": "assets/exercises/exact/remada_cavalinho_com_apoio_no_peito.webp",
     "remada cavalinho livre com triangulo": "assets/exercises/exact/remada_cavalinho_livre_com_triangulo.webp",
     "remada curvada com barra": "assets/exercises/exact/remada_curvada_com_barra.webp",
@@ -1489,17 +1545,17 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "remada invertida no trx": "assets/exercises/exact/remada_invertida_no_trx.webp",
     "remada maquina alta": "assets/exercises/exact/remada_maquina_alta.webp",
     "remada maquina articulada": "assets/exercises/exact/remada_maquina_articulada.webp",
-    "remada no cabo sentado": "assets/exercises/exact/remada_no_cabo_sentado.webp",
+    "remada no cabo sentado": "assets/exercises/exact/remada_baixa_com_triangulo.webp",
     "remada unilateral com halter": "assets/exercises/exact/remada_unilateral_com_halter.webp",
     "serrote com halter": "assets/exercises/exact/serrote_com_halter.webp",
     "abducao de quadril com elastico": "assets/exercises/exact/abducao_de_quadril_com_elastico.webp",
     "abducao de quadril na maquina": "assets/exercises/exact/abducao_de_quadril_na_maquina.webp",
     "abducao de quadril na polia": "assets/exercises/exact/abducao_de_quadril_na_polia.webp",
-    "abducao de quadril no cabo": "assets/exercises/exact/abducao_de_quadril_no_cabo.webp",
+    "abducao de quadril no cabo": "assets/exercises/exact/abducao_de_quadril_na_polia.webp",
     "abducao lateral deitado": "assets/exercises/exact/abducao_lateral_deitado.webp",
     "afundo reverso foco gluteos": "assets/exercises/exact/afundo_reverso_foco_gluteos.webp",
     "agachamento sumo com halter": "assets/exercises/exact/agachamento_sumo_com_halter.webp",
-    "cable hip abduction": "assets/exercises/exact/cable_hip_abduction.webp",
+    "cable hip abduction": "assets/exercises/exact/abducao_de_quadril_na_polia.webp",
     "caminhada lateral com miniband": "assets/exercises/exact/caminhada_lateral_com_miniband.webp",
     "coice no smith": "assets/exercises/exact/coice_no_smith.webp",
     "donkey kicks": "assets/exercises/exact/donkey_kicks.webp",
@@ -1513,18 +1569,18 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "gluteo no cabo (kickback)": "assets/exercises/exact/gluteo_no_cabo_kickback.webp",
     "gluteo quatro apoios com caneleira": "assets/exercises/exact/gluteo_quatro_apoios_com_caneleira.webp",
     "gluteo quatro apoios no cabo": "assets/exercises/exact/gluteo_quatro_apoios_no_cabo.webp",
-    "hip thrust": "assets/exercises/exact/hip_thrust.webp",
-    "hip thrust com barra": "assets/exercises/exact/hip_thrust_com_barra.webp",
+    "hip thrust": "assets/exercises/exact/elevacao_pelvica_com_barra.webp",
+    "hip thrust com barra": "assets/exercises/exact/elevacao_pelvica_com_barra.webp",
     "hip thrust maquina": "assets/exercises/exact/hip_thrust_maquina.webp",
     "hip thrust unilateral": "assets/exercises/exact/hip_thrust_unilateral.webp",
     "kickback maquina": "assets/exercises/exact/kickback_maquina.webp",
     "kickback no cabo extensao de quadril": "assets/exercises/exact/kickback_no_cabo_extensao_de_quadril.webp",
-    "mesa hip thrust (maquina)": "assets/exercises/exact/mesa_hip_thrust_maquina.webp",
+    "mesa hip thrust (maquina)": "assets/exercises/exact/hip_thrust_maquina.webp",
     "monster walk com miniband": "assets/exercises/exact/monster_walk_com_miniband.webp",
     "passada lateral": "assets/exercises/exact/passada_lateral.webp",
     "passada lateral com elastico": "assets/exercises/exact/passada_lateral_com_elastico.webp",
     "ponte de gluteos com miniband": "assets/exercises/exact/ponte_de_gluteos_com_miniband.webp",
-    "ponte unilateral de gluteos": "assets/exercises/exact/ponte_unilateral_de_gluteos.webp",
+    "ponte unilateral de gluteos": "assets/exercises/exact/elevacao_pelvica_unilateral.webp",
     "pull through foco gluteos": "assets/exercises/exact/pull_through_foco_gluteos.webp",
     "step-up alto foco gluteos": "assets/exercises/exact/step_up_alto_foco_gluteos.webp",
     "sumo deadlift descalco": "assets/exercises/exact/sumo_deadlift_descalco.webp",
@@ -1629,19 +1685,19 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "panturrilha na maquina horizontal": "assets/exercises/exact/panturrilha_na_maquina_horizontal.webp",
     "panturrilha no cabo": "assets/exercises/exact/panturrilha_no_cabo.webp",
     "panturrilha no hack": "assets/exercises/exact/panturrilha_no_hack.webp",
-    "panturrilha no leg horizontal": "assets/exercises/exact/panturrilha_no_leg_horizontal.webp",
-    "panturrilha no leg press": "assets/exercises/exact/panturrilha_no_leg_press.webp",
+    "panturrilha no leg horizontal": "assets/exercises/exact/panturrilha_no_leg_press_horizontal.webp",
+    "panturrilha no leg press": "assets/exercises/exact/panturrilha_no_leg_press_45_graus.webp",
     "panturrilha no leg press 45°": "assets/exercises/exact/panturrilha_no_leg_press_45_graus.webp",
     "panturrilha no leg press horizontal": "assets/exercises/exact/panturrilha_no_leg_press_horizontal.webp",
-    "panturrilha no smith": "assets/exercises/exact/panturrilha_no_smith.webp",
+    "panturrilha no smith": "assets/exercises/exact/panturrilha_em_pe_no_smith.webp",
     "panturrilha sentado": "assets/exercises/exact/panturrilha_sentado.webp",
     "panturrilha sentado unilateral": "assets/exercises/exact/panturrilha_sentado_unilateral.webp",
     "panturrilha tibial anterior": "assets/exercises/exact/panturrilha_tibial_anterior.webp",
     "panturrilha unilateral": "assets/exercises/exact/panturrilha_unilateral.webp",
     "panturrilha unilateral livre": "assets/exercises/exact/panturrilha_unilateral_livre.webp",
     "panturrilha unilateral no degrau": "assets/exercises/exact/panturrilha_unilateral_no_degrau.webp",
-    "panturrilhas no leg horizontal": "assets/exercises/exact/panturrilhas_no_leg_horizontal.webp",
-    "panturrilhas no smith": "assets/exercises/exact/panturrilhas_no_smith.webp",
+    "panturrilhas no leg horizontal": "assets/exercises/exact/panturrilha_no_leg_press_horizontal.webp",
+    "panturrilhas no smith": "assets/exercises/exact/panturrilha_em_pe_no_smith.webp",
     "pogo jumps": "assets/exercises/exact/pogo_jumps.webp",
     "saltos no step baixo": "assets/exercises/exact/saltos_no_step_baixo.webp",
     "tibialis raise na parede": "assets/exercises/exact/tibialis_raise_na_parede.webp",
@@ -1689,7 +1745,7 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "supino unilateral com halter": "assets/exercises/exact/supino_unilateral_com_halter.webp",
     "back extension foco posterior": "assets/exercises/exact/back_extension_foco_posterior.webp",
     "bom dia (good morning)": "assets/exercises/exact/bom_dia_good_morning.webp",
-    "cadeira flexora": "assets/exercises/exact/cadeira_flexora.webp",
+    "cadeira flexora": "assets/exercises/exact/flexora_sentado.webp",
     "cadeira flexora unilateral": "assets/exercises/exact/cadeira_flexora_unilateral.webp",
     "flexao nordica (nordic curl)": "assets/exercises/exact/flexao_nordica_nordic_curl.webp",
     "flexao nordica nordic curl": "assets/exercises/exact/flexao_nordica_nordic_curl.webp",
@@ -1706,8 +1762,8 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "levantamento terra com trap bar": "assets/exercises/exact/levantamento_terra_com_trap_bar.webp",
     "levantamento terra romeno": "assets/exercises/exact/levantamento_terra_romeno.webp",
     "levantamento terra sumo": "assets/exercises/exact/levantamento_terra_sumo.webp",
-    "mesa flexora": "assets/exercises/exact/mesa_flexora.webp",
-    "mesa flexora leg curl": "assets/exercises/exact/mesa_flexora_leg_curl.webp",
+    "mesa flexora": "assets/exercises/exact/flexora_deitado.webp",
+    "mesa flexora leg curl": "assets/exercises/exact/flexora_deitado.webp",
     "mesa flexora unilateral": "assets/exercises/exact/mesa_flexora_unilateral.webp",
     "nordic curl assistido": "assets/exercises/exact/nordic_curl_assistido.webp",
     "ponte de posterior no slider": "assets/exercises/exact/ponte_de_posterior_no_slider.webp",
@@ -1716,8 +1772,8 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
     "rdl com barra descalco": "assets/exercises/exact/rdl_com_barra_descalco.webp",
     "rdl com halteres": "assets/exercises/exact/rdl_com_halteres.webp",
     "rdl unilateral": "assets/exercises/exact/rdl_unilateral.webp",
-    "stiff (terra romeno)": "assets/exercises/exact/stiff_terra_romeno.webp",
-    "stiff com barra": "assets/exercises/exact/stiff_com_barra.webp",
+    "stiff (terra romeno)": "assets/exercises/exact/levantamento_terra_romeno.webp",
+    "stiff com barra": "assets/exercises/exact/levantamento_terra_romeno.webp",
     "stiff com halteres": "assets/exercises/exact/stiff_com_halteres.webp",
     "stiff unilateral com halter": "assets/exercises/exact/stiff_unilateral_com_halter.webp",
     "afundo (lunge)": "assets/exercises/exact/afundo_lunge.webp",
@@ -1796,47 +1852,47 @@ const EXACT_EXERCISE_IMAGE_ASSETS = {
 };
 
 const CANONICAL_EXERCISE_IMAGE_ALIASES = {
-  "ab wheel": "assets/exercises/exact/ab_wheel.webp",
+  "ab wheel": "assets/exercises/exact/ab_wheel_roda_abdominal.webp",
   "abdominal infra": "assets/exercises/exact/abdominal_infra.webp",
   "adutor no cabo": "assets/exercises/exact/adutor_no_cabo.webp",
   "afundo": "assets/exercises/exact/afundo.webp",
   "alongamento dinamico": "assets/exercises/exact/alongamento_dinamico.webp",
   "barra fixa": "assets/exercises/exact/barra_fixa.webp",
   "barra fixa supinada": "assets/exercises/exact/barra_fixa_supinada.webp",
-  "cadeira abdutora": "assets/exercises/exact/cadeira_abdutora.webp",
+  "cadeira abdutora": "assets/exercises/exact/abducao_de_quadril_na_maquina.webp",
   "cadeira adutora": "assets/exercises/exact/cadeira_adutora.webp",
   "caminhada": "assets/exercises/exact/caminhada.webp",
   "corda naval": "assets/exercises/exact/corda_naval.webp",
-  "corrida": "assets/exercises/exact/corrida.webp",
+  "corrida": "assets/exercises/exact/corrida_leve_ao_ar_livre.webp",
   "cossack squat": "assets/exercises/exact/cossack_squat.webp",
   "crucifixo com halteres": "assets/exercises/exact/crucifixo_com_halteres.webp",
   "crucifixo inverso": "assets/exercises/exact/crucifixo_inverso.webp",
   "elevacao de pernas": "assets/exercises/exact/elevacao_de_pernas.webp",
   "escada": "assets/exercises/exact/escada.webp",
-  "gluteo no cabo": "assets/exercises/exact/gluteo_no_cabo.webp",
-  "gluteo quatro apoios": "assets/exercises/exact/gluteo_quatro_apoios.webp",
+  "gluteo no cabo": "assets/exercises/exact/gluteo_no_cabo_kickback.webp",
+  "gluteo quatro apoios": "assets/exercises/exact/gluteo_quatro_apoios_com_caneleira.webp",
   "mergulho nas paralelas": "assets/exercises/exact/mergulho_nas_paralelas.webp",
   "mobilidade de quadril 90/90": "assets/exercises/exact/mobilidade_de_quadril_90_90.webp",
   "mobilidade toracica": "assets/exercises/exact/mobilidade_toracica.webp",
-  "panturrilha em pe": "assets/exercises/exact/panturrilha_em_pe.webp",
+  "panturrilha em pe": "assets/exercises/exact/panturrilha_em_pe_na_maquina.webp",
   "panturrilha sentada": "assets/exercises/exact/panturrilha_sentada.webp",
   "passada caminhando": "assets/exercises/exact/passada_caminhando.webp",
   "prancha": "assets/exercises/exact/prancha.webp",
   "pular corda": "assets/exercises/exact/pular_corda.webp",
-  "puxada alta na polia": "assets/exercises/exact/puxada_alta_na_polia.webp",
+  "puxada alta na polia": "assets/exercises/exact/pulley_frente_pegada_aberta.webp",
   "puxada neutra na polia": "assets/exercises/exact/puxada_neutra_na_polia.webp",
-  "remada baixa": "assets/exercises/exact/remada_baixa.webp",
+  "remada baixa": "assets/exercises/exact/remada_baixa_com_triangulo.webp",
   "rosca direta": "assets/exercises/exact/rosca_direta.webp",
   "rosca na polia": "assets/exercises/exact/rosca_na_polia.webp",
-  "rosca scott": "assets/exercises/exact/rosca_scott.webp",
-  "stiff": "assets/exercises/exact/stiff.webp",
-  "tibialis raise": "assets/exercises/exact/tibialis_raise.webp",
+    "rosca scott": "assets/exercises/exact/rosca_scott_na_maquina.webp",
+  "stiff": "assets/exercises/exact/levantamento_terra_romeno.webp",
+  "tibialis raise": "assets/exercises/exact/tibialis_raise_na_parede.webp",
   "triceps banco": "assets/exercises/exact/triceps_banco.webp",
   "triceps coice": "assets/exercises/exact/triceps_coice.webp",
-  "triceps corda": "assets/exercises/exact/triceps_corda.webp",
-  "triceps frances": "assets/exercises/exact/triceps_frances.webp",
+  "triceps corda": "assets/exercises/exact/triceps_corda_no_cabo.webp",
+  "triceps frances": "assets/exercises/exact/triceps_frances_com_barra_w.webp",
   "triceps pulley": "assets/exercises/exact/triceps_pulley.webp",
-  "triceps testa": "assets/exercises/exact/triceps_testa.webp"
+  "triceps testa": "assets/exercises/exact/triceps_testa_com_barra_skullcrusher.webp"
 };
 
 
@@ -1890,9 +1946,17 @@ function getStandardExerciseImageUrl(ex) {
   }
   return _STANDARD_EXERCISE_IMAGE_CACHE[kind];
 }
+function versionExerciseAssetUrl(url) {
+  const value = String(url || "").trim();
+  if (!value || /^(data:|blob:)/i.test(value) || /[?&]v=/.test(value)) return value;
+  if (/^\/?assets\/exercises\//.test(value)) {
+    return `${value}${value.includes("?") ? "&" : "?"}v=${EXERCISE_ASSET_VERSION}`;
+  }
+  return value;
+}
 function getExactExerciseAssetUrl(ex = {}) {
   const name = normalizeExerciseText(ex.name || "");
-  return name ? (EXACT_EXERCISE_IMAGE_ASSETS[name] || CANONICAL_EXERCISE_IMAGE_ALIASES[name] || null) : null;
+  return name ? versionExerciseAssetUrl(EXACT_EXERCISE_IMAGE_ASSETS[name] || CANONICAL_EXERCISE_IMAGE_ALIASES[name] || null) : null;
 }
 function missingExerciseImageSvg(ex = {}) {
   const label = ex && ex.name ? `Imagem específica pendente para ${ex.name}` : "Imagem específica pendente";
@@ -1923,7 +1987,7 @@ function getExerciseSpecificPrompt(ex = {}) {
 }
 function getCategoryExerciseAssetUrl(ex) {
   const kind = inferExerciseImageKind(ex || {});
-  return (STANDARD_EXERCISE_IMAGES[kind] || STANDARD_EXERCISE_IMAGES.generic).assetPath || null;
+  return versionExerciseAssetUrl((STANDARD_EXERCISE_IMAGES[kind] || STANDARD_EXERCISE_IMAGES.generic).assetPath || null);
 }
 function getStandardExerciseAssetUrl(ex) {
   const exact = getExactExerciseAssetUrl(ex || {});
@@ -12974,6 +13038,624 @@ window.deleteCustomWorkout = async function(workoutId, studentId) {
 };
 
 /* =============================================================================
+   IA — GERAR RASCUNHO DE TREINO
+   ============================================================================= */
+const AI_WORKOUT_FUNCTION_NAME = "ai-workout-draft";
+const AI_WORKOUT_LOCAL_FALLBACK_ENDPOINT = "http://127.0.0.1:4177/api/generate-workout";
+const AI_WORKOUT_DEFAULT_PROMPT = "Monte um treino D focado em posterior, com flexora unilateral, stiff, levantamento terra e elevação pélvica. Quero 4 séries de 8 a 12 repetições, 90 segundos de descanso e ordem segura para aluno iniciante.";
+
+function getAIWorkoutSandboxState() {
+  STATE.aiWorkoutSandbox = STATE.aiWorkoutSandbox || {
+    prompt: AI_WORKOUT_DEFAULT_PROMPT,
+    goal: "Hipertrofia",
+    level: "Iniciante",
+    frequency: "1x/semana",
+    limitations: "Sem limitações informadas",
+    draft: null,
+    usedModel: "",
+    handoff: false,
+    error: ""
+  };
+  return STATE.aiWorkoutSandbox;
+}
+
+function aiPlainText(text) {
+  return String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function canUseLocalAIWorkoutFallbackEndpoint() {
+  const host = String(globalThis.location?.hostname || "").toLowerCase();
+  return !host || host === "127.0.0.1" || host === "localhost";
+}
+
+function inferAIWorkoutGoal(prompt, fallback = "Hipertrofia") {
+  const text = aiPlainText(`${prompt} ${fallback}`);
+  if (/forca|max|1rm|carga/.test(text)) return "Força";
+  if (/cardio|aerobio|condicion|emagrec/.test(text)) return "Condicionamento";
+  if (/mobilidade|alongamento|flexibilidade/.test(text)) return "Mobilidade";
+  return fallback || "Hipertrofia";
+}
+
+function inferAIWorkoutFocus(prompt) {
+  const text = aiPlainText(prompt);
+  if (/posterior|flexora|stiff|terra|pelvica|gluteo/.test(text)) return "Posterior de coxa e glúteos";
+  if (/quadriceps|leg press|extensora/.test(text)) return "Quadríceps";
+  if (/costas|biceps|puxada|remada/.test(text)) return "Costas e bíceps";
+  if (/peito|ombro|triceps|supino|push/.test(text)) return "Peito, ombros e tríceps";
+  if (/full|corpo todo|geral/.test(text)) return "Full body";
+  return "Treino completo";
+}
+
+function extractAIWorkoutCode(prompt, fallback = "A") {
+  const match = aiPlainText(prompt).toUpperCase().match(/\bTREINO\s+([A-Z0-9_-]{1,12})\b/);
+  return normalizeWorkoutCodeValue(match?.[1] || fallback || "A");
+}
+
+function extractAIWorkoutScheme(prompt, goal) {
+  const text = aiPlainText(prompt);
+  const scheme = goal === "Força"
+    ? { sets: 4, reps: "4-6", rest_seconds: 150, cadence: "2-1-1" }
+    : goal === "Condicionamento"
+      ? { sets: 3, reps: "12-20", rest_seconds: 45, cadence: "controlada" }
+      : goal === "Mobilidade"
+        ? { sets: 2, reps: "8-12", rest_seconds: 30, cadence: "lenta" }
+        : { sets: 3, reps: "8-12", rest_seconds: 75, cadence: "2-0-2" };
+  const sets = text.match(/(\d{1,2})\s*(series|serie|sets|set)\b/);
+  if (sets) scheme.sets = Number(sets[1]);
+  const reps = text.match(/(\d{1,2})\s*(?:a|-|ate)\s*(\d{1,2})/);
+  if (reps) scheme.reps = `${Number(reps[1])}-${Number(reps[2])}`;
+  const rest = text.match(/(\d{2,3})\s*(segundos|seg|s)\s*(?:de\s*)?(intervalo|descanso|pausa)?/);
+  if (rest) scheme.rest_seconds = Number(rest[1]);
+  return scheme;
+}
+
+function extractAIRequestedExercises(prompt) {
+  const text = aiPlainText(prompt);
+  const matchers = [
+    { name:"Flexora unilateral", muscle_group:"Posterior de coxa", equipment:"Máquina", aliases:[/flexora unilateral/] },
+    { name:"Mesa flexora", muscle_group:"Posterior de coxa", equipment:"Máquina", aliases:[/mesa flexora/] },
+    { name:"Cadeira flexora", muscle_group:"Posterior de coxa", equipment:"Máquina", aliases:[/cadeira flexora/] },
+    { name:"Stiff", muscle_group:"Posterior de coxa", equipment:"Barra", aliases:[/\bstiff\b/] },
+    { name:"Levantamento terra", muscle_group:"Posterior de coxa", equipment:"Barra", aliases:[/levantamento terra/, /(^|\s)terra(\s|$)/] },
+    { name:"Elevação pélvica", muscle_group:"Glúteos", equipment:"Barra", aliases:[/elevacao pelvica/, /hip thrust/] },
+    { name:"Agachamento livre", muscle_group:"Quadríceps", equipment:"Barra", aliases:[/agachamento livre/] },
+    { name:"Leg press", muscle_group:"Quadríceps", equipment:"Máquina", aliases:[/leg press/] },
+    { name:"Cadeira extensora", muscle_group:"Quadríceps", equipment:"Máquina", aliases:[/cadeira extensora/] },
+    { name:"Puxada alta na polia", muscle_group:"Costas", equipment:"Polia", aliases:[/puxada alta/, /puxada na polia/] },
+    { name:"Remada baixa", muscle_group:"Costas", equipment:"Máquina", aliases:[/remada baixa/] },
+    { name:"Rosca direta", muscle_group:"Bíceps", equipment:"Barra", aliases:[/rosca direta/] },
+    { name:"Rosca martelo", muscle_group:"Bíceps", equipment:"Halteres", aliases:[/rosca martelo/] },
+    { name:"Supino reto com barra", muscle_group:"Peito", equipment:"Barra", aliases:[/supino reto/] },
+    { name:"Desenvolvimento com halteres", muscle_group:"Ombros", equipment:"Halteres", aliases:[/desenvolvimento com halteres/] }
+  ];
+  const found = [];
+  const seen = new Set();
+  matchers.forEach(ex => {
+    if (ex.aliases.some(alias => alias.test(text)) && !seen.has(ex.name)) {
+      seen.add(ex.name);
+      found.push(ex);
+    }
+  });
+  return found;
+}
+
+function fallbackAIWorkoutExercises(focus) {
+  const bank = {
+    "Posterior de coxa e glúteos": [
+      { name:"Flexora unilateral", muscle_group:"Posterior de coxa", equipment:"Máquina" },
+      { name:"Stiff", muscle_group:"Posterior de coxa", equipment:"Barra" },
+      { name:"Levantamento terra", muscle_group:"Posterior de coxa", equipment:"Barra" },
+      { name:"Elevação pélvica", muscle_group:"Glúteos", equipment:"Barra" }
+    ],
+    "Quadríceps": [
+      { name:"Agachamento livre", muscle_group:"Quadríceps", equipment:"Barra" },
+      { name:"Leg press", muscle_group:"Quadríceps", equipment:"Máquina" },
+      { name:"Cadeira extensora", muscle_group:"Quadríceps", equipment:"Máquina" },
+      { name:"Afundo", muscle_group:"Quadríceps", equipment:"Halteres" }
+    ],
+    "Costas e bíceps": [
+      { name:"Puxada alta na polia", muscle_group:"Costas", equipment:"Polia" },
+      { name:"Remada baixa", muscle_group:"Costas", equipment:"Máquina" },
+      { name:"Remada unilateral com halter", muscle_group:"Costas", equipment:"Halter" },
+      { name:"Rosca direta", muscle_group:"Bíceps", equipment:"Barra" },
+      { name:"Rosca martelo", muscle_group:"Bíceps", equipment:"Halteres" }
+    ],
+    "Peito, ombros e tríceps": [
+      { name:"Supino reto com barra", muscle_group:"Peito", equipment:"Barra" },
+      { name:"Supino inclinado com halteres", muscle_group:"Peito", equipment:"Halteres" },
+      { name:"Desenvolvimento com halteres", muscle_group:"Ombros", equipment:"Halteres" },
+      { name:"Elevação lateral", muscle_group:"Ombros", equipment:"Halteres" },
+      { name:"Tríceps corda", muscle_group:"Tríceps", equipment:"Polia" }
+    ]
+  };
+  return bank[focus] || [
+    { name:"Agachamento goblet", muscle_group:"Quadríceps", equipment:"Halter" },
+    { name:"Supino com halteres", muscle_group:"Peito", equipment:"Halteres" },
+    { name:"Remada baixa", muscle_group:"Costas", equipment:"Máquina" },
+    { name:"Prancha", muscle_group:"Abdômen/Core", equipment:"Peso corporal" }
+  ];
+}
+
+function buildLocalAIWorkoutDraft(form) {
+  const goal = inferAIWorkoutGoal(form.prompt, form.goal);
+  const focus = inferAIWorkoutFocus(form.prompt);
+  const code = extractAIWorkoutCode(form.prompt, focus === "Full body" ? "FULL" : "A");
+  const scheme = extractAIWorkoutScheme(form.prompt, goal);
+  const requested = extractAIRequestedExercises(form.prompt);
+  const rawExercises = requested.length ? requested : fallbackAIWorkoutExercises(focus);
+  const exercises = rawExercises.map((ex, index) => ({
+    order: index + 1,
+    name: ex.name,
+    muscle_group: ex.muscle_group,
+    equipment: ex.equipment,
+    sets: scheme.sets,
+    reps: scheme.reps,
+    rest_seconds: scheme.rest_seconds,
+    cadence: scheme.cadence,
+    notes: "Revisar técnica, carga inicial e adaptações do aluno antes de liberar."
+  }));
+  return {
+    workout: {
+      name: `${goal} · ${focus}`,
+      code,
+      focus,
+      periodization_type: goal,
+      level: form.level,
+      estimated_duration_min: Math.max(30, Math.round(exercises.length * (scheme.rest_seconds / 60 + 4)))
+    },
+    exercises
+  };
+}
+
+function planToAIWorkoutDraft(plan) {
+  const blocks = Array.isArray(plan?.blocks) ? plan.blocks : [];
+  const exercises = blocks.flatMap(block => Array.isArray(block.exercises) ? block.exercises : []);
+  return {
+    workout: {
+      name: String(plan?.name || "Treino gerado"),
+      code: normalizeWorkoutCodeValue(plan?.code || "A"),
+      focus: String(blocks[0]?.focus || plan?.goal || "Treino"),
+      periodization_type: String(plan?.periodization_type || plan?.goal || "Hipertrofia"),
+      level: String(plan?.level || "Não informado"),
+      estimated_duration_min: Math.round(Number(plan?.estimated_duration_min || 0))
+    },
+    exercises: exercises.map((ex, index) => ({
+      order: index + 1,
+      name: String(ex.name || `Exercício ${index + 1}`),
+      muscle_group: String(ex.muscle_group || "Não informado"),
+      equipment: String(ex.equipment || "Não informado"),
+      sets: Number(ex.sets || 3),
+      reps: String(ex.reps || "8-12"),
+      rest_seconds: Number(ex.rest_seconds || 60),
+      cadence: String(ex.cadence || ""),
+      notes: String(ex.notes || "")
+    }))
+  };
+}
+
+function normalizeAIWorkoutDraft(draft) {
+  return {
+    workout: {
+      ...draft.workout,
+      code: normalizeWorkoutCodeValue(draft.workout?.code || "A")
+    },
+    exercises: (draft.exercises || []).map((ex, index) => ({
+      ...ex,
+      order: index + 1,
+      sets: Math.max(1, Number(ex.sets || 1)),
+      rest_seconds: Math.max(0, Number(ex.rest_seconds || 0))
+    }))
+  };
+}
+
+function collectAIWorkoutSandboxForm() {
+  const st = getAIWorkoutSandboxState();
+  st.prompt = String(document.getElementById("ai-workout-prompt")?.value || st.prompt || "").trim();
+  st.goal = String(document.getElementById("ai-workout-goal")?.value || st.goal || "Hipertrofia");
+  st.level = String(document.getElementById("ai-workout-level")?.value || st.level || "Iniciante");
+  st.frequency = String(document.getElementById("ai-workout-frequency")?.value || st.frequency || "1x/semana");
+  st.limitations = String(document.getElementById("ai-workout-limitations")?.value || st.limitations || "Sem limitações informadas");
+  return st;
+}
+
+function getAIExerciseGroupMeta(ex = {}) {
+  const direct = String(ex.muscle_group || ex.cat || "");
+  const directKey = normalizeExerciseText(direct);
+  const directMeta = EXERCISE_LIBRARY_GROUPS.find(g =>
+    normalizeExerciseText(g.value) === directKey ||
+    normalizeExerciseText(g.label) === directKey ||
+    normalizeExerciseText(g.cat) === directKey
+  );
+  if (directMeta) return directMeta;
+
+  const text = normalizeExerciseText([ex.name, ex.muscle_group, ex.equipment].filter(Boolean).join(" "));
+  const aliases = [
+    [/peito|supino|crucifixo|crossover|peck/, "Peito"],
+    [/costas|puxada|remada|barra fixa|pulldown/, "Costas"],
+    [/ombro|desenvolvimento|elevacao lateral|elevação lateral|face pull/, "Ombros"],
+    [/biceps|bíceps|rosca/, "Bíceps"],
+    [/triceps|tríceps|mergulho|pulley/, "Tríceps"],
+    [/quadriceps|quadríceps|agachamento|leg press|extensora|afundo|passada|hack/, "Quadríceps"],
+    [/posterior|flexora|stiff|terra romeno|levantamento terra/, "Posterior de coxa"],
+    [/gluteo|glúteo|gluteos|glúteos|pelvica|pélvica|hip thrust|coice/, "Glúteos"],
+    [/adutor/, "Adutores"],
+    [/abdutor/, "Abdutores"],
+    [/panturrilha|gemeos|gêmeos/, "Panturrilha"],
+    [/abdomen|abdômen|abdominal|core|prancha|crunch|pallof/, "Abdômen"],
+    [/lombar|hiperextensao|hiperextensão/, "Lombar"],
+    [/trapezio|trapézio|encolhimento/, "Trapézio"],
+    [/mobilidade|alongamento|rotador|aquecimento/, "Mobilidade"],
+    [/cardio|aerobio|aeróbio|corrida|caminhada|bicicleta|escada|eliptico|elíptico|remo/, "Aeróbio"]
+  ];
+  const match = aliases.find(([pattern]) => pattern.test(text));
+  return getExerciseGroupMeta(match ? match[1] : "Peito");
+}
+
+function buildAIWorkoutExerciseRows(draft, workoutId) {
+  return (draft.exercises || []).map((ex, index) => {
+    const groupMeta = getAIExerciseGroupMeta(ex);
+    const setsOverride = Math.min(30, Math.max(1, Number(ex.sets || 1)));
+    const repsOverride = normalizeExerciseOverrideValue(ex.reps);
+    const restSeconds = Number(ex.rest_seconds || 0);
+    const details = [
+      String(ex.notes || "").trim(),
+      ex.equipment ? `Equipamento sugerido: ${String(ex.equipment).trim()}` : ""
+    ].filter(Boolean).join("\n");
+
+    return {
+      workout_id: workoutId,
+      student_id: null,
+      position: index + 1,
+      name: String(ex.name || `Exercício ${index + 1}`).trim(),
+      cat: groupMeta.cat,
+      muscle_group: groupMeta.value,
+      is_library: false,
+      sets_count: 1,
+      reps: "Seguir período",
+      sets_override: setsOverride,
+      reps_override: repsOverride || null,
+      pause: restSeconds ? formatPauseLabel(restSeconds) : "Seguir período",
+      cadence: String(ex.cadence || "").trim(),
+      method: "Séries múltiplas",
+      observations: details,
+      image_url: null,
+      video_url: null
+    };
+  });
+}
+
+function renderAIWorkoutFlowSteps(activeStep = 1) {
+  const steps = [
+    ["Briefing", "Descreva objetivo, foco e regras do treino."],
+    ["Rascunho", "IA devolve treino editável na ordem de execução."],
+    ["Salvar", "Treinador revisa e confirma antes de gravar."]
+  ];
+  return `<div class="ai-flow-steps">${steps.map((step, idx) => `
+    <div class="ai-flow-step ${activeStep === idx + 1 ? "active" : ""}">
+      <b>${idx + 1}. ${escape(step[0])}</b>
+      <span>${escape(step[1])}</span>
+    </div>
+  `).join("")}</div>`;
+}
+
+function renderAIWorkoutDraftHTML(draft) {
+  if (!draft) return "";
+  const normalized = normalizeAIWorkoutDraft(draft);
+  const w = normalized.workout || {};
+  return `
+    <div class="ai-flow-card ai-manual-workout-card">
+      <div class="section-title" style="margin:0 0 10px">Rascunho do treino</div>
+      <div class="workout-hero ai-manual-summary">
+        <div class="ai-draft-header">
+          <label class="ai-draft-field">
+            Nome do treino
+            <input class="input" value="${escape(w.name || "")}" maxlength="80" oninput="updateAIWorkoutDraftField('workout',-1,'name',this.value)" />
+          </label>
+          <label class="ai-draft-field">
+            Código
+            <input class="input" value="${escape(w.code || "")}" maxlength="${WORKOUT_CODE_MAX_LENGTH}" style="text-transform:uppercase" oninput="this.value=normalizeWorkoutCodeValue(this.value);updateAIWorkoutDraftField('workout',-1,'code',this.value)" />
+          </label>
+        </div>
+        <div class="ai-draft-grid">
+          <label class="ai-draft-field">
+            Tipo de período
+            <input class="input" value="${escape(w.periodization_type || "")}" maxlength="40" oninput="updateAIWorkoutDraftField('workout',-1,'periodization_type',this.value)" />
+          </label>
+          <label class="ai-draft-field">
+            Foco
+            <input class="input" value="${escape(w.focus || "")}" maxlength="80" oninput="updateAIWorkoutDraftField('workout',-1,'focus',this.value)" />
+          </label>
+        </div>
+        <div class="wh-meta" style="margin-top:10px">
+          <span class="meta-chip"><strong>${normalized.exercises.length}</strong> exercícios</span>
+          <span class="meta-chip"><strong>Revisão</strong> edite antes de salvar</span>
+        </div>
+      </div>
+      <div class="ai-manual-list">
+        ${normalized.exercises.map((ex, index) => {
+          const mediaEx = { ...ex, cat: ex.muscle_group, muscle_group: ex.muscle_group };
+          return `
+          <div class="exercise-card expanded ai-manual-exercise-card">
+            <div class="ex-head ai-manual-head">
+              <div class="ai-manual-index">${String(index + 1).padStart(2, "0")}</div>
+              <div class="ex-thumb ai-manual-thumb" style="overflow:hidden;">${getExThumb(mediaEx)}</div>
+              <div class="ai-manual-title">
+                <label class="ai-draft-field">
+                  Exercício
+                  <input class="input" value="${escape(ex.name || "")}" oninput="updateAIWorkoutDraftField('exercise',${index},'name',this.value)" />
+                </label>
+                <div class="ai-manual-meta">
+                  <label class="ai-draft-field">
+                    Grupo
+                    <input class="input" value="${escape(ex.muscle_group || "")}" oninput="updateAIWorkoutDraftField('exercise',${index},'muscle_group',this.value)" />
+                  </label>
+                  <label class="ai-draft-field">
+                    Equipamento
+                    <input class="input" value="${escape(ex.equipment || "")}" oninput="updateAIWorkoutDraftField('exercise',${index},'equipment',this.value)" />
+                  </label>
+                </div>
+              </div>
+              <div class="ai-manual-actions">
+                <button class="mini-btn mini-btn-ghost" ${index === 0 ? "disabled" : ""} onclick="moveAIWorkoutDraftExercise(${index},-1)">Subir</button>
+                <button class="mini-btn mini-btn-ghost" ${index === normalized.exercises.length - 1 ? "disabled" : ""} onclick="moveAIWorkoutDraftExercise(${index},1)">Descer</button>
+              </div>
+            </div>
+            <div class="ai-manual-body">
+              <div class="ai-manual-stats">
+                <label class="ai-manual-stat">
+                Séries
+                <input class="input" inputmode="numeric" value="${escape(ex.sets || "")}" oninput="updateAIWorkoutDraftField('exercise',${index},'sets',this.value)" />
+              </label>
+                <label class="ai-manual-stat">
+                Reps
+                <input class="input" value="${escape(ex.reps || "")}" oninput="updateAIWorkoutDraftField('exercise',${index},'reps',this.value)" />
+              </label>
+                <label class="ai-manual-stat">
+                Descanso (s)
+                <input class="input" inputmode="numeric" value="${escape(ex.rest_seconds || "")}" oninput="updateAIWorkoutDraftField('exercise',${index},'rest_seconds',this.value)" />
+              </label>
+                <label class="ai-manual-stat">
+                Cadência
+                <input class="input" value="${escape(ex.cadence || "")}" oninput="updateAIWorkoutDraftField('exercise',${index},'cadence',this.value)" />
+              </label>
+              </div>
+              <label class="ai-draft-field full ai-manual-note">
+                Observação
+                <input class="input" value="${escape(ex.notes || "")}" oninput="updateAIWorkoutDraftField('exercise',${index},'notes',this.value)" />
+              </label>
+            </div>
+          </div>
+        `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderAIWorkoutSandboxSheet() {
+  const st = getAIWorkoutSandboxState();
+  openSheet(`
+    <h3>Treinova IA</h3>
+    <div class="ai-prompt-field">
+      <label class="ai-draft-field full">
+        Descreva o treino
+        <textarea class="input ai-prompt-textarea" id="ai-workout-prompt" spellcheck="true" placeholder="Ex.: Monte um treino D focado em posterior com flexora unilateral, stiff, levantamento terra e elevação pélvica. Quero 4 séries de 8 a 12 repetições, 90 segundos de descanso e ordem segura.">${escape(st.prompt || "")}</textarea>
+      </label>
+      ${st.error ? `<div class="shortcut-error" style="margin-top:10px"><div class="title">Atenção</div><div class="sub">${escape(st.error)}</div></div>` : ""}
+    </div>
+    ${st.draft ? renderAIWorkoutDraftHTML(st.draft) : ""}
+    ${st.handoff && st.draft ? `
+      <div class="ai-handoff">
+        <div class="title">Treino pronto para salvar</div>
+        <div class="sub">Revise nome, código, ordem dos exercícios e ajustes antes de confirmar.</div>
+      </div>
+    ` : ""}
+    <div class="row-flex" style="gap:8px;margin-top:12px">
+      <button class="${st.draft ? "btn-ghost" : "btn-primary"}" data-ai-action="generate" onclick="generateAIWorkoutSandboxDraft()">${st.draft ? "Gerar novamente" : "Gerar treino"}</button>
+      ${st.draft ? `<button class="btn-primary" data-ai-action="save" onclick="saveAIWorkoutDraftToLibrary()" ${st.saving ? "disabled" : ""}>${st.saving ? "Salvando..." : "Salvar na biblioteca"}</button>` : ""}
+    </div>
+    <button class="btn-ghost" onclick="closeSheet()">Fechar</button>
+  `);
+}
+
+window.openAIWorkoutSandbox = function() {
+  const st = getAIWorkoutSandboxState();
+  st.error = "";
+  st.handoff = false;
+  renderAIWorkoutSandboxSheet();
+  setTimeout(() => document.getElementById("ai-workout-prompt")?.focus(), 80);
+};
+
+window.generateAIWorkoutSandboxDraft = async function() {
+  const st = collectAIWorkoutSandboxForm();
+  if ((st.prompt || "").length < 12) {
+    st.error = "Descreva melhor o treino antes de gerar.";
+    renderAIWorkoutSandboxSheet();
+    return;
+  }
+  st.error = "";
+  st.handoff = false;
+  const root = document.getElementById("sheet-content");
+  const generateBtn = root?.querySelector("[data-ai-action='generate']");
+  if (generateBtn) {
+    generateBtn.disabled = true;
+    generateBtn.textContent = "Gerando...";
+  }
+  const requestBody = {
+    prompt: st.prompt,
+    studentProfile: {
+      goal: st.goal,
+      level: st.level,
+      frequency: st.frequency,
+      limitations: st.limitations
+    }
+  };
+  try {
+    const { data: payload, error } = await withTimeout(sb.functions.invoke(AI_WORKOUT_FUNCTION_NAME, {
+      body: requestBody
+    }), 20000, "ai workout draft timeout");
+    if (error) throw error;
+    if (!payload?.ok) throw new Error(payload?.error || "Falha ao gerar o treino.");
+    st.draft = payload.workoutDraft || planToAIWorkoutDraft(payload.plan);
+    st.usedModel = payload.usedModel || "ia";
+    st.error = String(payload.warning || "").trim();
+  } catch (edgeError) {
+    try {
+      if (!canUseLocalAIWorkoutFallbackEndpoint()) throw edgeError;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
+      const res = await fetch(AI_WORKOUT_LOCAL_FALLBACK_ENDPOINT, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      const payload = await res.json();
+      if (!res.ok || !payload.ok) throw new Error(payload.error || "Falha ao gerar o treino.");
+      st.draft = payload.workoutDraft || planToAIWorkoutDraft(payload.plan);
+      st.usedModel = payload.usedModel || "fallback-local";
+      st.error = "A IA publicada não respondeu agora; usei o modo local de contingência para você seguir testando.";
+    } catch (_localError) {
+      st.draft = buildLocalAIWorkoutDraft(st);
+      st.usedModel = "sugestao-inicial";
+      st.error = "A IA não respondeu agora; gerei uma sugestão inicial para você revisar.";
+    }
+  }
+  st.draft = normalizeAIWorkoutDraft(st.draft);
+  renderAIWorkoutSandboxSheet();
+};
+
+window.saveAIWorkoutDraftToLibrary = async function() {
+  const st = getAIWorkoutSandboxState();
+  if (STATE._savingAIWorkoutDraft || st.saving) return;
+  if (!["admin", "coach"].includes(STATE.profile?.role)) {
+    showToast("Sem permissão para salvar treinos na biblioteca", "error");
+    return;
+  }
+  if (!st.draft) {
+    showToast("Gere um treino antes de salvar", "error");
+    return;
+  }
+
+  const draft = normalizeAIWorkoutDraft(st.draft);
+  const workout = draft.workout || {};
+  const code = normalizeWorkoutCodeValue(workout.code || "");
+  const name = String(workout.name || `Treino ${code}`).trim();
+  const focus = String(workout.focus || workout.periodization_type || "").trim();
+  if (!isValidWorkoutCodeValue(code)) {
+    showToast(WORKOUT_CODE_HELP_TEXT, "error");
+    st.draft.workout.code = code;
+    renderAIWorkoutSandboxSheet();
+    return;
+  }
+  if (!draft.exercises.length) {
+    showToast("Inclua ao menos um exercício no treino gerado", "error");
+    return;
+  }
+  if (STATE.workouts && STATE.workouts[code]) {
+    showToast("Já existe um treino com esse código", "error");
+    return;
+  }
+
+  STATE._savingAIWorkoutDraft = true;
+  st.saving = true;
+  renderAIWorkoutSandboxSheet();
+  try {
+    let existingQuery = sb.from("workouts")
+      .select("id")
+      .eq("code", code)
+      .is("student_id", null)
+      .limit(1);
+    existingQuery = STATE.profile?.role === "coach"
+      ? existingQuery.eq("coach_id", STATE.profile.id)
+      : existingQuery.is("coach_id", null);
+    const { data: existingRows, error: existingError } = await existingQuery;
+    if (existingError) throw existingError;
+    if (existingRows?.length) {
+      showToast("Já existe um treino com esse código", "error");
+      st.saving = false;
+      renderAIWorkoutSandboxSheet();
+      return;
+    }
+
+    const workoutPayload = {
+      code,
+      name: name || `Treino ${code}`,
+      focus,
+      student_id: null,
+      coach_id: STATE.profile?.role === "coach" ? STATE.profile.id : null,
+      is_global: STATE.profile?.role === "admin"
+    };
+    const { data: createdWorkout, error: workoutError } = await sb.from("workouts")
+      .insert(workoutPayload)
+      .select("*")
+      .single();
+    if (workoutError) throw workoutError;
+
+    const exerciseRows = buildAIWorkoutExerciseRows(draft, createdWorkout.id);
+    const { error: exerciseError } = await sb.from("exercises").insert(exerciseRows);
+    if (exerciseError) {
+      await sb.from("workouts").delete().eq("id", createdWorkout.id);
+      throw exerciseError;
+    }
+
+    st.savedWorkoutId = createdWorkout.id;
+    showToast("Treino salvo na biblioteca", "success");
+    await loadWorkouts();
+    renderAdminWorkouts();
+    openWorkoutEditor(code, createdWorkout.id);
+  } catch (e) {
+    showToast("Erro ao salvar treino: " + (e.message || "verifique permissões"), "error");
+    st.saving = false;
+    renderAIWorkoutSandboxSheet();
+  } finally {
+    STATE._savingAIWorkoutDraft = false;
+    st.saving = false;
+  }
+};
+
+window.updateAIWorkoutDraftField = function(scope, index, field, value) {
+  const st = getAIWorkoutSandboxState();
+  if (!st.draft) return;
+  if (scope === "workout") {
+    st.draft.workout = st.draft.workout || {};
+    st.draft.workout[field] = field === "estimated_duration_min" ? Number(value || 0) : value;
+  } else if (scope === "exercise" && st.draft.exercises?.[index]) {
+    st.draft.exercises[index][field] = ["sets","rest_seconds"].includes(field) ? Number(value || 0) : value;
+  }
+  st.draft = normalizeAIWorkoutDraft(st.draft);
+};
+
+window.moveAIWorkoutDraftExercise = function(index, direction) {
+  const st = getAIWorkoutSandboxState();
+  const list = st.draft?.exercises || [];
+  const next = index + direction;
+  if (next < 0 || next >= list.length) return;
+  [list[index], list[next]] = [list[next], list[index]];
+  st.draft = normalizeAIWorkoutDraft(st.draft);
+  renderAIWorkoutSandboxSheet();
+};
+
+window.previewAIWorkoutSandboxHandoff = function() {
+  const st = getAIWorkoutSandboxState();
+  if (!st.draft) return;
+  st.handoff = true;
+  renderAIWorkoutSandboxSheet();
+};
+
+window.copyAIWorkoutSandboxJSON = async function() {
+  const st = getAIWorkoutSandboxState();
+  if (!st.draft) return;
+  const payload = normalizeAIWorkoutDraft(st.draft);
+  await navigator.clipboard?.writeText(JSON.stringify(payload, null, 2));
+  showToast("Payload do rascunho copiado", "success");
+};
+
+/* =============================================================================
    RENDER — COACH: ADMIN WORKOUTS
    ============================================================================= */
 function renderAdminWorkouts() {
@@ -12987,7 +13669,10 @@ function renderAdminWorkouts() {
     ? `<button class="mini-btn mini-btn-primary" onclick="openNewPresetSheet()">Novo período</button>`
     : tab === "exercises"
       ? `<button class="mini-btn mini-btn-primary" onclick="openLibraryExerciseSheet()">Novo exercício</button>`
-      : `<button class="mini-btn mini-btn-primary" onclick="openCreateWorkoutTypeSheet()">Novo treino</button>`;
+      : `<div class="ai-workout-entry">
+          <button class="mini-btn mini-btn-ghost ai-action-btn" onclick="openAIWorkoutSandbox()">${iconSvg("bolt", 14)} Treinova IA</button>
+          <button class="mini-btn mini-btn-primary" onclick="openCreateWorkoutTypeSheet()">Novo treino</button>
+        </div>`;
   el.innerHTML = `
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Treinos</h1>
