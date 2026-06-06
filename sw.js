@@ -4,7 +4,7 @@
    - Cache-first com revalidação para assets estáticos (CDN, imagens)
    - Push notifications nativos
 */
-const VERSION = "v12";
+const VERSION = "v18-exercise-semantic-20260606";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
 const REST_TIMER_HANDLES = new Map();
