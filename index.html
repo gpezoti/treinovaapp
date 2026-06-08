@@ -12270,14 +12270,21 @@ window.applyPeriodConfig = async function(studentId) {
       targetDates.push(d.toISOString().slice(0, 10));
     }
     const overlap = Math.min(existingDays.length, targetDates.length);
-    const totalSteps = overlap * 2;
+    const totalSteps = existingDays.length + overlap;
     let doneSteps = 0;
     const tick = () => { doneSteps++; if (btn && totalSteps) setProgress(`Aplicando… ${Math.min(99, Math.round(doneSteps / totalSteps * 100))}%`); };
-    const tempBase = "2700-01-01";
-    for (let i = 0; i < overlap; i++) {
-      await updatePeriodDayDate(existingDays[i].id, addDaysISO(tempBase, i));
+    // Base temporária SEMPRE após a maior data existente: garante datas livres mesmo
+    // quando o ciclo novo é mais curto / se sobrepõe ao antigo, ou quando sobraram
+    // datas de uma tentativa anterior (índice UNIQUE student_id+date). Também conserta
+    // automaticamente um estado parcial de uma falha anterior.
+    const maxExisting = existingDays.reduce((m, d) => (d.date > m ? d.date : m), existingDays[0] ? existingDays[0].date : todayISO());
+    const tempStart = addDaysISO(maxExisting, 1);
+    // Fase 1: TODOS os dias existentes vão para datas temporárias (libera todas as datas reais).
+    for (let i = 0; i < existingDays.length; i++) {
+      await updatePeriodDayDate(existingDays[i].id, addDaysISO(tempStart, i));
       tick();
     }
+    // Fase 2: os dias preservados recebem as datas-alvo (agora livres).
     for (let i = 0; i < overlap; i++) {
       await updatePeriodDayDate(existingDays[i].id, targetDates[i]);
       tick();
