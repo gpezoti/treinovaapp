@@ -2015,6 +2015,7 @@ function hasCustomExerciseImage(ex) {
   return !!(ex && ex.image_url && !isGenericExerciseImage(ex.image_url));
 }
 function getExerciseImageUrl(ex) {
+  if (ex && ex.image_url === "") return ""; // "sem foto" explícito do treinador — não cai no fallback
   const custom = hasCustomExerciseImage(ex) ? ex.image_url : null;
   const lib = ((STATE.library || []).find(l => l.name === ex.name && hasCustomExerciseImage(l)) || {}).image_url;
   return custom || lib || getStandardExerciseAssetUrl(ex);
@@ -2022,10 +2023,11 @@ function getExerciseImageUrl(ex) {
 
 function getExerciseImageMeta(ex) {
   const item = ex || {};
+  const disabled = item.image_url === ""; // treinador escolheu "sem foto"
   const url = getExerciseImageUrl(item);
   const fallback = getMissingExerciseImageUrl(item);
   const alt = item.name ? `Imagem de ${item.name}` : "Imagem do exercício";
-  return { url, fallback, alt };
+  return { url, fallback, alt, disabled };
 }
 
 function getYouTubeVideoId(rawUrl) {
@@ -2128,7 +2130,7 @@ function renderExerciseMedia(ex = {}, options = {}) {
   const meta = getExerciseMediaMeta(ex);
   const mode = options.mode || "thumb";
   const media = options.media || (mode === "embed" || mode === "video-preview" ? "video" : "image");
-  const interactive = options.interactive !== undefined ? !!options.interactive : mode === "hero";
+  const interactive = (options.interactive !== undefined ? !!options.interactive : mode === "hero") && !(media !== "video" && meta.disabled);
   const className = [
     "exercise-media",
     `exercise-media--${mode}`,
@@ -2146,7 +2148,7 @@ function renderExerciseMedia(ex = {}, options = {}) {
   ].filter(Boolean).join(" ");
   const body = media === "video"
     ? renderExerciseMediaVideoContent(meta, { mode })
-    : renderExerciseMediaImage(meta, options);
+    : (meta.disabled ? renderExerciseMediaEmpty("Sem foto") : renderExerciseMediaImage(meta, options));
   const cue = interactive ? `<span class="exercise-media__cue" aria-hidden="true">${exerciseMediaExpandIcon()}</span>` : "";
   const videoBadge = media !== "video" && meta.videoUrl && options.showVideoBadge !== false
     ? `<span class="exercise-media__badge">${exerciseMediaVideoIcon(12)} vídeo</span>`
@@ -2456,11 +2458,35 @@ function getPrimaryPeriodizationBlock(blocks, presetCode = null) {
     || list[0]
     || null;
 }
+// Mapeia a cor real escolhida pelo treinador (input type=color, hex livre) para
+// um dos baldes visuais do design (yellow/red/white/flex). Assim a cor que o
+// professor define no preset é refletida para o aluno — antes o aluno via a cor
+// derivada só do CÓDIGO do tipo (ex.: tipo branco aparecia amarelo).
+function periodBucketFromColor(hex) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(String(hex || "").trim());
+  if (!m) return null;
+  const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+  const buckets = { yellow:[255,214,10], red:[255,59,59], white:[244,247,255], flex:[46,204,113] };
+  let best = null, bd = Infinity;
+  for (const k in buckets) { const v = buckets[k]; const d = (r-v[0])**2 + (g-v[1])**2 + (b-v[2])**2; if (d < bd) { bd = d; best = k; } }
+  return best;
+}
+// Decide o balde de cor de um dia/bloco: prioriza a cor explícita do preset,
+// só caindo no mapa por código quando não há cor escolhida (ou é o azul padrão).
+function resolvePeriodBucket(presetCode, fallbackIntensity) {
+  const preset = presetCode && typeof getPreset === "function" ? getPreset(presetCode) : null;
+  const col = preset && preset.color ? String(preset.color).trim().toLowerCase() : "";
+  if (/^#[0-9a-f]{6,8}$/.test(col) && col !== "#00b4ff") {
+    const bucket = periodBucketFromColor(col);
+    if (bucket) return bucket;
+  }
+  return legacyIntensityFromPresetCode(presetCode, fallbackIntensity);
+}
 function intensityClass(int, presetCode = null) {
-  return "intensity-" + legacyIntensityFromPresetCode(presetCode, int || "off");
+  return "intensity-" + resolvePeriodBucket(presetCode, int || "off");
 }
 function intensityPill(int, presetCode = null) {
-  const normalized = legacyIntensityFromPresetCode(presetCode, int || "off");
+  const normalized = resolvePeriodBucket(presetCode, int || "off");
   const preset = presetCode && typeof getPreset === "function" ? getPreset(presetCode) : null;
   const presetLabel = preset?.label || null;
   if (normalized === "yellow") return ["pill-yellow", presetLabel || "Hipertrofia · 12-15"];
@@ -7929,7 +7955,7 @@ function renderCoachHome(el) {
         .forEach(s => {
           const days = s.last_session_at ? Math.floor((Date.now()-new Date(s.last_session_at).getTime())/86400000) : null;
           const label = days ? `${days} dias sem treinar` : "nunca treinou";
-          alerts.push({ type:"warn", name: s.full_name || "Aluno", label, action:`openStudentSheet('${s.id}')` });
+          alerts.push({ type:"warn", name: s.full_name || "Aluno", label, action:`onStudentDetail('${s.student_id}')` });
         });
       // Inadimplentes: 1 adicional se não já listado
       STATE.students.filter(s => s.payment_status === "overdue" || s.payment_status === "pending_overdue")
@@ -11780,7 +11806,19 @@ window.openStudentPeriodSheet = async function(id) {
       <button class="mini-btn mini-btn-ghost" onclick="openApplyTemplateSheet('${id}')" title="Aplicar template salvo"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V7H4v14h4z"/><path d="M16 21V3h-4v18h4z"/><path d="M22 21V11h-4v10h4z"/></svg> Template</button>
       <button class="mini-btn mini-btn-ghost" onclick="openPeriodActionsSheet('${id}', ${grouped.length > 0 ? 'true' : 'false'})" title="Mais ações">Mais</button>
     </div>
-    ${grouped.length === 0 ? `<div class="empty"><p>Nenhuma semana ainda. Clique em "+ 1 Semana".</p></div>` : grouped.map((week, wi) => `
+    ${(days && days.length) ? `
+      <div class="card mb-8" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
+          <span style="display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:var(--brand-soft);color:var(--brand);flex:0 0 36px"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+          <div style="min-width:0">
+            <div class="text-xs muted" style="text-transform:uppercase;letter-spacing:.5px;font-size:10px">Início do ciclo</div>
+            <div class="fw-700 text-sm" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmtDateBR(days[0].date)} · ${grouped.length} semana${grouped.length === 1 ? "" : "s"}</div>
+          </div>
+        </div>
+        <button class="mini-btn mini-btn-primary" style="flex:0 0 auto" onclick="openPeriodConfig('${id}')">Alterar</button>
+      </div>
+    ` : ""}
+    ${grouped.length === 0 ? `<div class="empty"><p>Nenhuma semana ainda.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openPeriodConfig('${id}')">Definir início e semanas</button><button class="btn-ghost" style="width:auto" onclick="addPeriodWeek('${id}')">+ Semana</button></div></div>` : grouped.map((week, wi) => `
       <div class="card mb-8 period-week-card" id="period-week-${wi}">
         <div class="period-week-head">
           <div>
@@ -12221,7 +12259,8 @@ window.applyPeriodConfig = async function(studentId) {
   const numWeeks = parseInt(document.getElementById("pc-weeks").value);
   if (!startDate || !numWeeks) { showToast("Preencha os campos", "error"); return; }
   const btn = document.querySelector('#sheet-content .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = "Aplicando…"; }
+  const setProgress = (label) => { if (btn) btn.textContent = label; };
+  if (btn) { btn.disabled = true; setProgress("Aplicando…"); }
   try {
     const existingDays = await loadPeriodDaysOrdered(studentId);
     const targetDates = [];
@@ -12231,14 +12270,20 @@ window.applyPeriodConfig = async function(studentId) {
       targetDates.push(d.toISOString().slice(0, 10));
     }
     const overlap = Math.min(existingDays.length, targetDates.length);
+    const totalSteps = overlap * 2;
+    let doneSteps = 0;
+    const tick = () => { doneSteps++; if (btn && totalSteps) setProgress(`Aplicando… ${Math.min(99, Math.round(doneSteps / totalSteps * 100))}%`); };
     const tempBase = "2700-01-01";
     for (let i = 0; i < overlap; i++) {
       await updatePeriodDayDate(existingDays[i].id, addDaysISO(tempBase, i));
+      tick();
     }
     for (let i = 0; i < overlap; i++) {
       await updatePeriodDayDate(existingDays[i].id, targetDates[i]);
+      tick();
     }
     if (targetDates.length > existingDays.length) {
+      setProgress("Criando semanas…");
       const rows = targetDates.slice(existingDays.length).map(date => ({
         student_id: studentId,
         date,
@@ -14663,6 +14708,54 @@ window.deleteWorkoutType = async function(workoutId, code, name) {
 
 // Bug #21/#22 fix: aceita workoutId explícito para workouts de aluno
 // (STATE.workouts[code] retorna o global quando o coach edita treino de aluno)
+function renderWorkoutEditorExerciseListHTML(w, code, workoutId) {
+  const list = w.exercises || [];
+  if (list.length === 0) {
+    return `<div class="empty" style="padding:20px 0"><h3>Treino vazio</h3><p>Adicione o primeiro exercício para montar a sequência do aluno.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openExercisePicker('${code}', null, '${workoutId||w.id||''}')">Adicionar exercício</button></div></div>`;
+  }
+  const showEdge = list.length >= 4;
+  const toTop = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14"/><path d="m6 13 6-6 6 6"/></svg>`;
+  const toBottom = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 11 6 6 6-6"/><path d="M5 20h14"/></svg>`;
+  return list.map((ex, i) => {
+    const next = list[i+1];
+    const linkedNext = next && ex.superset_group && next.superset_group === ex.superset_group;
+    const linkedPrev = i > 0 && ex.superset_group && list[i-1].superset_group === ex.superset_group;
+    const groupSize = ex.superset_group ? list.filter(e => e.superset_group === ex.superset_group).length : 0;
+    const manualCfg = [
+      Number(ex.sets_override) ? `${Number(ex.sets_override)} séries` : "",
+      normalizeExerciseOverrideValue(ex.reps_override) ? `${escape(normalizeExerciseOverrideValue(ex.reps_override))} reps` : ""
+    ].filter(Boolean).join(" · ");
+    const supersetBadge = ex.superset_group
+      ? `<span class="today-pill" style="background:rgba(0,180,255,.10);color:var(--brand);border:1px solid rgba(0,180,255,.30);font-size:9px;padding:2px 6px;margin-right:6px">${groupSize === 2 ? "BI-SET" : groupSize === 3 ? "TRI-SET" : `SUPER ${groupSize}x`}</span>`
+      : "";
+    const atTop = i === 0, atBottom = i === list.length - 1;
+    const dis = 'disabled style="opacity:.4;cursor:not-allowed"';
+    return `
+      <div class="card mb-8" style="${linkedPrev ? 'margin-top:-6px;border-top-left-radius:4px;border-top-right-radius:4px;' : ''}${linkedNext ? 'margin-bottom:0;border-bottom-left-radius:4px;border-bottom-right-radius:4px;' : ''}${ex.superset_group ? 'border-left:3px solid var(--brand);' : ''}">
+        <div class="row-flex" style="margin-bottom:8px;">
+          <div class="ex-thumb" style="width:36px; height:36px; flex:0 0 36px; overflow:hidden;">${getExThumb(ex)}</div>
+          <div style="flex:1; min-width:0;">
+            <div class="fw-700 text-sm">${supersetBadge}${i+1}. ${escape(ex.name)}</div>
+            <div class="text-xs muted">${escape(ex.muscle_group || ex.cat || "")}${ex.cadence ? " · cad. " + escape(ex.cadence) : ""} · ${manualCfg ? `ajuste: ${manualCfg}` : "segue o tipo de treino"}</div>
+          </div>
+          <div style="display:inline-flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;flex:0 0 auto;max-width:58%">
+            ${showEdge ? `<button class="mini-btn mini-btn-ghost" ${atTop ? dis : ''} title="Mover para o topo" aria-label="Mover para o topo" onclick="moveExerciseToEdge('${ex.id}','${code}','${workoutId||''}','top')">${toTop}</button>` : ''}
+            <button class="mini-btn mini-btn-ghost" ${atTop ? dis : ''} title="Subir" aria-label="Subir" onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',-1)">↑</button>
+            <button class="mini-btn mini-btn-ghost" ${atBottom ? dis : ''} title="Descer" aria-label="Descer" onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',1)">↓</button>
+            ${showEdge ? `<button class="mini-btn mini-btn-ghost" ${atBottom ? dis : ''} title="Mover para o fim" aria-label="Mover para o fim" onclick="moveExerciseToEdge('${ex.id}','${code}','${workoutId||''}','bottom')">${toBottom}</button>` : ''}
+            <button class="mini-btn mini-btn-ghost" onclick="editExercise('${ex.id}')">Editar</button>
+            <button class="mini-btn mini-btn-danger" onclick="removeExerciseFromWorkout('${ex.id}','${code}','${workoutId||''}')">×</button>
+          </div>
+        </div>
+        ${next ? `
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)">
+            <button class="mini-btn ${linkedNext ? 'mini-btn-primary' : 'mini-btn-ghost'}" style="font-size:11px;padding:4px 10px;min-height:28px" onclick="toggleSupersetWithNext('${ex.id}','${next.id}','${code}','${workoutId||''}')">
+              ${linkedNext ? `${iconSvg("copy", 13)} Vinculado · clique para desvincular` : '+ Vincular com o próximo (bi/tri-set)'}
+            </button>
+          </div>` : ''}
+      </div>`;
+  }).join("");
+}
 window.openWorkoutEditor = async function(code, workoutId) {
   openSheet(`<h3>Carregando treino...</h3><div class="loading"><div class="spinner"></div></div>`);
   let w = null;
@@ -14684,72 +14777,64 @@ window.openWorkoutEditor = async function(code, workoutId) {
   const html = `
     <h3>Editar ${escape(w.name)}</h3>
     <p>${escape(w.focus || "")}</p>
-    ${(w.exercises || []).length === 0 ? `<div class="empty" style="padding:20px 0"><h3>Treino vazio</h3><p>Adicione o primeiro exercício para montar a sequência do aluno.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openExercisePicker('${code}', null, '${workoutId||w.id||''}')">Adicionar exercício</button></div></div>` : ""}
-    ${(w.exercises || []).map((ex, i) => {
-      const list = w.exercises || [];
-      const next = list[i+1];
-      const linkedNext = next && ex.superset_group && next.superset_group === ex.superset_group;
-      const linkedPrev = i > 0 && ex.superset_group && list[i-1].superset_group === ex.superset_group;
-      const groupSize = ex.superset_group ? list.filter(e => e.superset_group === ex.superset_group).length : 0;
-      const manualCfg = [
-        Number(ex.sets_override) ? `${Number(ex.sets_override)} séries` : "",
-        normalizeExerciseOverrideValue(ex.reps_override) ? `${escape(normalizeExerciseOverrideValue(ex.reps_override))} reps` : ""
-      ].filter(Boolean).join(" · ");
-      const supersetBadge = ex.superset_group
-        ? `<span class="today-pill" style="background:rgba(0,180,255,.10);color:var(--brand);border:1px solid rgba(0,180,255,.30);font-size:9px;padding:2px 6px;margin-right:6px">${groupSize === 2 ? "BI-SET" : groupSize === 3 ? "TRI-SET" : `SUPER ${groupSize}x`}</span>`
-        : "";
-      return `
-      <div class="card mb-8" style="${linkedPrev ? 'margin-top:-6px;border-top-left-radius:4px;border-top-right-radius:4px;' : ''}${linkedNext ? 'margin-bottom:0;border-bottom-left-radius:4px;border-bottom-right-radius:4px;' : ''}${ex.superset_group ? 'border-left:3px solid var(--brand);' : ''}">
-        <div class="row-flex" style="margin-bottom:8px;">
-          <div class="ex-thumb" style="width:36px; height:36px; flex:0 0 36px; overflow:hidden;">${getExThumb(ex)}</div>
-          <div style="flex:1; min-width:0;">
-            <div class="fw-700 text-sm">${supersetBadge}${i+1}. ${escape(ex.name)}</div>
-            <div class="text-xs muted">${escape(ex.muscle_group || ex.cat || "")}${ex.cadence ? " · cad. " + escape(ex.cadence) : ""} · ${manualCfg ? `ajuste: ${manualCfg}` : "segue o tipo de treino"}</div>
-          </div>
-          <button class="mini-btn mini-btn-ghost" ${i === 0 ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''} onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',-1)">↑</button>
-          <button class="mini-btn mini-btn-ghost" ${i === list.length - 1 ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''} onclick="moveExerciseInWorkout('${ex.id}','${code}','${workoutId||''}',1)">↓</button>
-          <button class="mini-btn mini-btn-ghost" onclick="editExercise('${ex.id}')">Editar</button>
-          <button class="mini-btn mini-btn-danger" onclick="removeExerciseFromWorkout('${ex.id}','${code}','${workoutId||''}')">×</button>
-        </div>
-        ${next ? `
-          <div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)">
-            <button class="mini-btn ${linkedNext ? 'mini-btn-primary' : 'mini-btn-ghost'}" style="font-size:11px;padding:4px 10px;min-height:28px" onclick="toggleSupersetWithNext('${ex.id}','${next.id}','${code}','${workoutId||''}')">
-              ${linkedNext ? `${iconSvg("copy", 13)} Vinculado · clique para desvincular` : '+ Vincular com o próximo (bi/tri-set)'}
-            </button>
-          </div>` : ''}
-      </div>`;
-    }).join("")}
+    <div id="we-ex-list">${renderWorkoutEditorExerciseListHTML(w, code, workoutId)}</div>
     <button class="btn-primary" onclick="openExercisePicker('${code}', null, '${workoutId||w.id||''}')" style="margin-top:8px">+ Adicionar exercício</button>
     <div style="margin-top:14px"><button class="btn-ghost" onclick="closeSheet()">Fechar</button></div>
   `;
   openSheet(html);
 };
 
-window.moveExerciseInWorkout = async function(exId, code, workoutId, dir) {
-  const wId = workoutId || (STATE._editingWorkout && STATE._editingWorkout.id) || (STATE.workouts[code] && STATE.workouts[code].id);
-  if (!wId || STATE._movingExercise) return;
-  STATE._movingExercise = true;
-  try {
-    const { data: exercises, error } = await sb.from("exercises").select("id, position").eq("workout_id", wId).order("position");
-    if (error) throw error;
-    const idx = (exercises || []).findIndex(e => e.id === exId);
-    const nextIdx = idx + dir;
-    if (idx < 0 || nextIdx < 0 || nextIdx >= (exercises || []).length) return;
-    const a = exercises[idx];
-    const b = exercises[nextIdx];
-    await Promise.all([
-      sb.from("exercises").update({ position: b.position }).eq("id", a.id),
-      sb.from("exercises").update({ position: a.position }).eq("id", b.id)
-    ]);
-    await loadWorkouts();
-    await openWorkoutEditor(code, workoutId || "");
-  } catch(e) {
-    console.warn("[moveExerciseInWorkout]", e);
-    showToast("Erro ao reordenar exercício", "error");
-  } finally {
-    STATE._movingExercise = false;
-  }
+window.moveExerciseInWorkout = function(exId, code, workoutId, dir) {
+  return reorderEditingExercise(exId, code, workoutId, (idx) => idx + dir);
 };
+window.moveExerciseToEdge = function(exId, code, workoutId, edge) {
+  return reorderEditingExercise(exId, code, workoutId, (idx, len) => edge === "top" ? 0 : len - 1);
+};
+// Reorder OTIMISTA: atualiza a lista na hora (sem reabrir a sheet nem perder o
+// scroll) e persiste a nova ordem no banco em segundo plano, de forma serializada.
+// Renumera 0..n, então corrige positions NULL/duplicadas (treinos legados).
+function reorderEditingExercise(exId, code, workoutId, targetFn) {
+  const W = STATE._editingWorkout;
+  if (!W || !Array.isArray(W.exercises)) return;
+  const list = W.exercises;
+  const idx = list.findIndex(e => e.id === exId);
+  if (idx < 0) return;
+  const target = Math.max(0, Math.min(list.length - 1, targetFn(idx, list.length)));
+  if (target === idx) return;
+  const [moved] = list.splice(idx, 1);
+  list.splice(target, 0, moved);
+  list.forEach((e, i) => { e.position = i; });
+  const wId = (W && W.id) || workoutId || (code && STATE.workouts[code] && STATE.workouts[code].id);
+  if (code && STATE.workouts[code] && STATE.workouts[code].id === wId) {
+    STATE.workouts[code].exercises = list.slice();
+  }
+  rerenderWorkoutEditorList(code, workoutId);
+  persistEditingExerciseOrder(wId, list, code, workoutId);
+}
+function rerenderWorkoutEditorList(code, workoutId) {
+  const W = STATE._editingWorkout;
+  const cont = document.getElementById("we-ex-list");
+  if (W && cont) cont.innerHTML = renderWorkoutEditorExerciseListHTML(W, code, workoutId);
+}
+function persistEditingExerciseOrder(wId, exercises, code, workoutId) {
+  if (!wId) return Promise.resolve();
+  const snapshot = (exercises || []).map((e, i) => ({ id: e.id, position: i }));
+  STATE._exPersistChain = (STATE._exPersistChain || Promise.resolve()).then(async () => {
+    try {
+      const results = await Promise.all(
+        snapshot.map(s => sb.from("exercises").update({ position: s.position }).eq("id", s.id))
+      );
+      const failed = results.find(r => r && r.error);
+      if (failed) throw failed.error;
+    } catch (e) {
+      console.warn("[persistEditingExerciseOrder]", e);
+      showToast("Não consegui salvar a nova ordem. Recarregando…", "error");
+      await loadWorkouts();
+      await openWorkoutEditor(code, workoutId || "");
+    }
+  });
+  return STATE._exPersistChain;
+}
 
 window.removeExerciseFromWorkout = async function(exId, code, workoutId) {
   if (!await showConfirm({ title: "Remover exercício?", msg: "Este exercício será removido do treino.", confirm: "Remover", danger: true })) return;
@@ -15280,7 +15365,11 @@ window.editExercise = async function(exId) {
           <button class="btn-ghost" style="flex:1; width:auto;" onclick="onExerciseImageUpload('${exId}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Alterar imagem</button>
           ${hasCustomExerciseImage(ex) ? `<button class="mini-btn mini-btn-danger" onclick="clearExerciseMedia('${exId}','image')">×</button>` : ''}
         </div>
-        <p class="text-xs muted">${hasCustomExerciseImage(ex) ? "Imagem personalizada deste exercício." : "Usando imagem padrão contextual. Suba uma foto para substituir."} Comprimida para 1024px JPEG antes do upload.</p>
+        <label class="row-flex" style="gap:8px;margin:4px 0 6px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="ex-no-photo" ${ex.image_url === "" ? "checked" : ""} onchange="setExercisePhotoDisabled('${exId}', this.checked)" />
+          <span class="text-sm">Sem foto — ocultar imagem deste exercício</span>
+        </label>
+        <p class="text-xs muted">${ex.image_url === "" ? "Este exercício está <b>sem foto</b>. Desmarque para voltar à imagem padrão contextual." : hasCustomExerciseImage(ex) ? "Imagem personalizada deste exercício." : "Usando imagem padrão contextual. Suba uma foto para substituir, ou marque 'Sem foto'."} Comprimida para 1024px JPEG antes do upload.</p>
       </div>
       <div class="form-group">
         <label class="form-label">Vídeo do exercício</label>
@@ -15362,6 +15451,15 @@ window.clearExerciseMedia = async function(exId, kind) {
   const { error } = await sb.from("exercises").update(patch).eq("id", exId);
   if (error) { showToast("Erro: " + error.message, "error"); return; }
   showToast("Removido", "success");
+  await loadWorkouts();
+  window.editExercise(exId);
+};
+
+window.setExercisePhotoDisabled = async function(exId, disabled) {
+  // "" = sem foto explícito (não usa fallback) · null = volta à imagem padrão contextual
+  const { error } = await sb.from("exercises").update({ image_url: disabled ? "" : null }).eq("id", exId);
+  if (error) { showToast("Erro: " + error.message, "error"); return; }
+  showToast(disabled ? "Exercício ficará sem foto" : "Imagem padrão reativada", "success");
   await loadWorkouts();
   window.editExercise(exId);
 };
