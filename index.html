@@ -14820,15 +14820,27 @@ function persistEditingExerciseOrder(wId, exercises, code, workoutId) {
   if (!wId) return Promise.resolve();
   const snapshot = (exercises || []).map((e, i) => ({ id: e.id, position: i }));
   STATE._exPersistChain = (STATE._exPersistChain || Promise.resolve()).then(async () => {
+    if (!snapshot.length) return;
     try {
-      const results = await Promise.all(
+      // Renumeração em DUAS FASES: o banco tem um índice UNIQUE(workout_id, position),
+      // então gravar as posições finais direto colide (duas linhas com a mesma position
+      // por um instante). Primeiro movemos todos para um range temporário que não
+      // sobrepõe as posições reais, depois gravamos a ordem final. (Mesmo padrão que a
+      // periodização usa com datas temporárias.)
+      const TEMP = 1000;
+      const r1 = await Promise.all(
+        snapshot.map((s, i) => sb.from("exercises").update({ position: TEMP + i }).eq("id", s.id))
+      );
+      const f1 = r1.find(r => r && r.error);
+      if (f1) throw f1.error;
+      const r2 = await Promise.all(
         snapshot.map(s => sb.from("exercises").update({ position: s.position }).eq("id", s.id))
       );
-      const failed = results.find(r => r && r.error);
-      if (failed) throw failed.error;
+      const f2 = r2.find(r => r && r.error);
+      if (f2) throw f2.error;
     } catch (e) {
       console.warn("[persistEditingExerciseOrder]", e);
-      showToast("Não consegui salvar a nova ordem. Recarregando…", "error");
+      showToast("Não consegui salvar a ordem (" + (e?.message || e?.code || "erro") + "). Recarregando…", "error");
       await loadWorkouts();
       await openWorkoutEditor(code, workoutId || "");
     }
