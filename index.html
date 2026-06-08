@@ -3236,7 +3236,18 @@ async function submitCoachTrialSignup() {
     const { data, error: fnError } = await withTimeout(sb.functions.invoke("platform-signup", {
       body: payload
     }), 25000, "platform-signup timeout");
-    if (fnError) throw fnError;
+    if (fnError) {
+      // A supabase-js só expõe "Edge Function returned a non-2xx status code" em
+      // fnError.message; a mensagem real do servidor está em fnError.context (Response).
+      let apiMsg = "";
+      const status = fnError.context && fnError.context.status;
+      try {
+        const body = fnError.context && typeof fnError.context.json === "function" ? await fnError.context.json() : null;
+        apiMsg = (body && (body.error || body.message)) || "";
+      } catch (_) {}
+      if (!apiMsg && status === 409) apiMsg = "Este e-mail, CPF ou telefone já está cadastrado. Tente fazer login.";
+      throw new Error(apiMsg || "Não foi possível criar seu acesso. Verifique os dados e tente novamente.");
+    }
     if (!data?.ok) throw new Error(data?.error || "Cadastro não confirmado.");
     const { error: loginError } = await sb.auth.signInWithPassword({
       email: payload.email,
