@@ -4396,7 +4396,7 @@ async function toggleSetDone(exercise, position, setIdx) {
   } else {
     showToast("Série desmarcada");
   }
-  renderWorkout();
+  if (!syncWorkoutProgressDom()) renderWorkout();
 }
 
 function onSerieCompleted(exercise, log, setIdx, totalSets, pauseSec, nextLabel, isLast) {
@@ -9425,6 +9425,8 @@ async function renderWorkout() {
 
   const [pillCls, pillTxt] = intensityPill(intensity, STATE.selectedPresetCode);
   const scheme = getCurrentTrainingScheme(intensity);
+  // Faixa de intensidade respeita a cor escolhida pelo treinador no preset (não só o código).
+  const bannerBucket = resolvePeriodBucket(STATE.selectedPresetCode, intensity);
 
   // Stats
   const totalTarget = W.exercises.reduce((s,e) => s + getExerciseTargetSets(e, scheme, getExerciseSetLogs(e.position)), 0);
@@ -9466,7 +9468,7 @@ async function renderWorkout() {
       </div>
     </div>
 
-    <div class="intensity-banner ib-${intensity === 'red' ? 'red' : (intensity === 'white' ? 'white' : (intensity === 'flex' ? 'green' : 'yellow'))}">
+    <div class="intensity-banner ib-${bannerBucket === 'red' ? 'red' : (bannerBucket === 'white' ? 'white' : (bannerBucket === 'flex' ? 'green' : 'yellow'))}">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
 	      <div><b>${scheme.label}</b>${scheme.sets ? ` · <b>${scheme.sets}</b> séries` : ""}${scheme.reps !== "—" ? ` · <b>${scheme.reps}</b> reps` : ""}${scheme.pause !== "—" ? ` · pausa <b>${scheme.pause}</b>` : ""}</div>
     </div>
@@ -9713,9 +9715,69 @@ function renderExerciseList(W, intensity, completed) {
   bindWorkoutSetChecks();
 }
 
+// Atualiza progresso (linhas de série, número do card, barra do topo e barra fixa)
+// SEM reconstruir a tela. Retorna false quando não dá p/ atualizar no lugar
+// (ou no marco de conclusão, que muda o botão "concluir") -> caller faz renderWorkout().
+function syncWorkoutProgressDom() {
+  if (STATE.view !== "workout") return false;
+  const listEl = document.getElementById("exercise-list");
+  if (!listEl) return false;
+  const W = resolveWorkoutRef(STATE.selectedWorkout, STATE.selectedWorkoutId);
+  if (!W || !W.exercises || !W.exercises.length) return false;
+  if (STATE.currentSession && STATE.currentSession.status === "completed") return false;
+  const CHECK = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+  const CIRCLE = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>`;
+  const scheme = getCurrentTrainingScheme(STATE.selectedIntensity);
+  let totalTarget = 0, doneCount = 0;
+  const rows = [];
+  for (const ex of W.exercises) {
+    const exLogs = getExerciseSetLogs(ex.position);
+    const target = getExerciseTargetSets(ex, scheme, exLogs);
+    const doneN = exLogs.filter(s => s.done).length;
+    totalTarget += target; doneCount += doneN;
+    rows.push({ ex, target, doneN, exLogs });
+  }
+  // Marco de conclusão troca o botão deslizar p/ verde -> deixa o render completo cuidar.
+  if (totalTarget > 0 && doneCount >= totalTarget) return false;
+  for (const { ex, target, doneN, exLogs } of rows) {
+    const card = listEl.querySelector('.exercise-card[data-pos="' + ex.position + '"]');
+    if (!card) continue;
+    const exAllDone = target > 0 && doneN >= target;
+    card.classList.toggle("done", exAllDone);
+    const num = card.querySelector(".ex-progress-num");
+    if (num) { num.textContent = doneN + "/" + target; num.classList.toggle("complete", exAllDone); }
+    card.querySelectorAll(".set-row").forEach((row, i) => {
+      const log = exLogs.find(l => l.set_number === i + 1);
+      const isDone = !!(log && log.done);
+      row.classList.toggle("done", isDone);
+      const btn = row.querySelector(".set-check");
+      const flag = isDone ? "1" : "0";
+      if (btn && btn.dataset._d !== flag) { btn.innerHTML = isDone ? CHECK : CIRCLE; btn.dataset._d = flag; }
+    });
+  }
+  const pct = totalTarget > 0 ? Math.min(100, Math.round(doneCount / totalTarget * 100)) : 0;
+  const wp = document.querySelector(".wp-progress");
+  if (wp && wp.firstElementChild && wp.lastElementChild) {
+    const span = wp.firstElementChild.firstElementChild;
+    if (span) span.textContent = pct + "% · " + doneCount + "/" + totalTarget + " séries";
+    const bar = wp.lastElementChild.firstElementChild;
+    if (bar) bar.style.width = pct + "%";
+  }
+  const fb = document.getElementById("workout-fixed-bar");
+  if (fb) {
+    const lbl = fb.querySelector(".wfb-label"); if (lbl) lbl.textContent = doneCount + " de " + totalTarget + " séries";
+    const fill = fb.querySelector(".wfb-fill"); if (fill) fill.style.width = pct + "%";
+    const p = fb.querySelector(".wfb-pct"); if (p) p.textContent = pct + "% concluído";
+    const hint = fb.querySelector(".wfb-hint"); if (hint) hint.textContent = doneCount > 0 ? "Progresso salvo" : "Pode concluir a qualquer hora";
+  }
+  return true;
+}
 function bindWorkoutSetChecks() {
   document.querySelectorAll("#exercise-list .set-check:not([disabled])").forEach(btn => {
     btn.onclick = () => {
+      // garante que carga/reps digitada seja salva (onchange) antes de marcar a série
+      const active = document.activeElement;
+      if (active && active !== btn && typeof active.blur === "function") active.blur();
       const pos = parseInt(btn.dataset.pos || btn.closest("[data-pos]")?.dataset.pos || "", 10);
       const idx = parseInt(btn.dataset.idx || "", 10);
       if (!isNaN(pos) && !isNaN(idx)) window.onToggleSet(pos, idx);
@@ -9830,7 +9892,13 @@ window.openExerciseVideo = function(url, name) {
 
 window.toggleExercise = function(pos) {
   STATE.expandedEx = STATE.expandedEx === pos ? null : pos;
-  renderWorkout();
+  // Expandir/recolher é só CSS (o .ex-body já está no DOM) — toggle de classe,
+  // sem reconstruir a tela (evita flicker/perda de scroll na atividade central).
+  const list = document.getElementById("exercise-list");
+  if (!list) { renderWorkout(); return; }
+  list.querySelectorAll(".exercise-card").forEach(c => {
+    c.classList.toggle("expanded", parseInt(c.dataset.pos, 10) === STATE.expandedEx);
+  });
   if (STATE.expandedEx === pos) {
     setTimeout(() => {
       const card = document.querySelector(`.exercise-card[data-pos="${pos}"]`);
