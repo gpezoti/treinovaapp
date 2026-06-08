@@ -17289,19 +17289,19 @@ window.deleteComment = deleteComment;
 
 /* ---------- RANKING ---------- */
 async function loadWeeklyRanking() {
-  const { data, error } = await sb.from("v_weekly_ranking").select("*").limit(50);
-  if (error) { console.warn(error); STATE.ranking = []; return; }
-  // Filtra: aluno só vê sua própria rede; coach vê só seus alunos; admin vê tudo
-  let rows = data || [];
+  // [ESCALA+BUG] Filtra por coach NO SERVIDOR (antes: pegava o top-50 GLOBAL e
+  // filtrava no cliente -> coach via ranking incompleto e o app trafegava dados
+  // de toda a plataforma). Agora traz o top-50 do grupo correto.
+  let q = sb.from("v_weekly_ranking").select("*");
   const role = STATE.profile && STATE.profile.role;
   if (role === "coach") {
-    rows = rows.filter(r => r.coach_id === STATE.profile.id);
-  } else if (role === "student") {
-    // só os que tenham mesmo coach que o aluno
-    const myCoach = STATE.profile.coach_id;
-    if (myCoach) rows = rows.filter(r => r.coach_id === myCoach);
+    q = q.eq("coach_id", STATE.profile.id);
+  } else if (role === "student" && STATE.profile.coach_id) {
+    q = q.eq("coach_id", STATE.profile.coach_id);
   }
-  STATE.ranking = rows;
+  const { data, error } = await q.order("sessions_count", { ascending: false }).limit(50);
+  if (error) { console.warn(error); STATE.ranking = []; return; }
+  STATE.ranking = data || [];
 }
 
 async function renderRanking() {
