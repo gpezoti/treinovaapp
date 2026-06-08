@@ -2601,7 +2601,7 @@ function feedReactionEmojiHTML(key, size = 18) {
 function avatarEmoji(p) { return profileInitials(p) || "U"; }
 function avatarHTML(p) {
   const fallback = profileInitials(p) || "U";
-  if (p && p.avatar_url) return `<img src="${escape(p.avatar_url)}" alt="" data-fallback="${escape(fallback)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.parentElement.textContent=this.dataset.fallback||'U';this.remove();" />`;
+  if (p && p.avatar_url) return `<img src="${escape(p.avatar_url)}" alt="" loading="lazy" decoding="async" data-fallback="${escape(fallback)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.parentElement.textContent=this.dataset.fallback||'U';this.remove();" />`;
   return escape(fallback);
 }
 function userFacingErrorMessage(msg) {
@@ -10986,7 +10986,7 @@ window.onAvatarUpload = function() {
     try {
       validateImageFile(file);
       previewUrl = URL.createObjectURL(file);
-      if (avatarEl) avatarEl.innerHTML = `<img src="${previewUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;opacity:.72" />`;
+      if (avatarEl) avatarEl.innerHTML = `<img src="${previewUrl}" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;opacity:.72" />`;
     } catch (e) {
       if (btn) { btn.disabled = false; btn.textContent = btn.dataset.oldText || "Alterar foto"; }
       showToast("Erro: " + e.message, "error");
@@ -17327,7 +17327,7 @@ async function renderRanking() {
             const me = r.user_id === STATE.profile.id;
             return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);${me?'background:var(--brand-soft)':''}">
               <div style="width:30px;text-align:center;font-size:18px">${medal}</div>
-              <div style="width:36px;height:36px;border-radius:50%;background:var(--bg-2);display:flex;align-items:center;justify-content:center;overflow:hidden">${r.avatar_url?`<img src="${r.avatar_url}" style="width:100%;height:100%;object-fit:cover">`:escape(profileInitials({ full_name: r.name }) || "U")}</div>
+              <div style="width:36px;height:36px;border-radius:50%;background:var(--bg-2);display:flex;align-items:center;justify-content:center;overflow:hidden">${r.avatar_url?`<img src="${r.avatar_url}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">`:escape(profileInitials({ full_name: r.name }) || "U")}</div>
               <div style="flex:1">
                 <div style="font-size:14px;font-weight:700;color:var(--text)">${escapeHtml(r.name||'')}${me?' <span style=\"color:var(--brand);font-size:11px\">(você)</span>':''}</div>
                 <div style="font-size:11px;color:var(--text-3)">${r.days_trained} dia${r.days_trained>1?'s':''} · ${r.sessions_count} sessões</div>
@@ -17911,7 +17911,7 @@ async function openChatThread(otherUserId) {
       const mine = m.from_user === me;
       return `<div style="display:flex;flex-direction:column;align-items:${mine?'flex-end':'flex-start'}">
         <div class="ct-msg ${mine?'ct-mine':'ct-them'}">
-          ${m._imageSrc ? `<img src="${escapeAttr(m._imageSrc)}" style="max-width:100%;border-radius:8px;margin-bottom:4px">` : ''}
+          ${m._imageSrc ? `<img src="${escapeAttr(m._imageSrc)}" loading="lazy" decoding="async" style="max-width:100%;border-radius:8px;margin-bottom:4px">` : ''}
           ${escapeHtml(m.content||'').replace(/\n/g,'<br>')}
         </div>
         <div class="ct-time">${timeAgo(m.created_at)}</div>
