@@ -12,6 +12,8 @@
 <meta name="application-name" content="Treinova" />
 <meta name="description" content="Treinova — seu app, seu treino, sua marca." />
 <title>Treinova</title>
+<link rel="preconnect" href="https://mjftgknutxxgxhwlmsln.supabase.co" crossorigin />
+<link rel="dns-prefetch" href="https://mjftgknutxxgxhwlmsln.supabase.co" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" id="favicon" href="/assets/favicon.ico?v=20260505" />
 <link rel="shortcut icon" href="/assets/favicon.ico?v=20260505" />
@@ -5063,34 +5065,68 @@ function setupPullToRefresh() {
 /* =============================================================================
    REALTIME
    ============================================================================= */
+// [ESCALA] Gating + debounce do realtime: antes, QUALQUER post/UPDATE de perfil
+// de QUALQUER usuário recarregava feed/alunos em TODOS os clientes (broadcast storm).
+function isRelevantFeedPost(post) {
+  const me = STATE.profile;
+  if (!me || !post) return true;                 // na dúvida, preserva comportamento
+  const author = post.student_id;
+  if (!author || author === me.id) return true;  // meu próprio post
+  if (me.role === "admin") return true;
+  if (me.role === "coach") {
+    if (post.coach_id && post.coach_id === me.id) return true;
+    return (STATE.students || []).some(s => s.student_id === author || s.id === author);
+  }
+  if (me.coach_id && (post.coach_id === me.coach_id || author === me.coach_id)) return true;
+  const following = (STATE.follows && STATE.follows.following) || [];
+  if (!following.length) return true;            // sem info de follows -> não arrisca perder update
+  return following.some(f => f && (f.following_id || f.id) === author);
+}
+function scheduleFeedRefresh(post) {
+  if (post) STATE._feedRtLastPost = post;
+  clearTimeout(STATE._feedRtTimer);
+  STATE._feedRtTimer = setTimeout(async () => {
+    const triggerPost = STATE._feedRtLastPost; STATE._feedRtLastPost = null;
+    await loadFeed();
+    if (STATE.view === "feed") {
+      renderFeed();
+    } else {
+      STATE.feedUnread = (STATE.feedUnread || 0) + 1;
+      updateFeedBadge();
+      const author = triggerPost && triggerPost.student_id;
+      const isCoachPost = author && STATE.students && STATE.students.some(s => (s.id === author || s.student_id === author) && s.role === 'coach');
+      const postAuthor = author && STATE.feed && STATE.feed.find(p => p.id === triggerPost.id);
+      if ((postAuthor && postAuthor.student && postAuthor.student.role === 'coach') || isCoachPost) {
+        showToast('Novo post do treinador no Feed', 'info');
+      }
+    }
+  }, 1000);
+}
+function scheduleStudentsRefresh() {
+  clearTimeout(STATE._studentsRtTimer);
+  STATE._studentsRtTimer = setTimeout(async () => {
+    if (STATE.view !== "students") return;
+    await loadStudents();
+    renderStudents();
+  }, 800);
+}
 function setupRealtime() {
   cleanupRealtime();
   const ch = sb.channel("public-feed")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "feed_posts" }, async (payload) => {
-      await loadFeed();
-      if (STATE.view === "feed") {
-        renderFeed();
-      } else {
-        // Usuário está em outra aba — incrementa badge
-        STATE.feedUnread = (STATE.feedUnread || 0) + 1;
-        updateFeedBadge();
-        // Toast especial para posts de coach (avisos)
-        const isCoachPost = payload.new && payload.new.student_id &&
-          STATE.students && STATE.students.some(s => s.id === payload.new.student_id && s.role === 'coach');
-        // Fallback: checar role na lista de feed já carregada
-        const postAuthor = STATE.feed && STATE.feed.find(p => p.id === payload.new?.id);
-        if ((postAuthor && postAuthor.student?.role === 'coach') || isCoachPost) {
-          showToast('Novo post do treinador no Feed', 'info');
-        }
-      }
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "feed_posts" }, (payload) => {
+      // [ESCALA] só recarrega se o post for relevante p/ este usuário, com debounce
+      if (!isRelevantFeedPost(payload.new)) return;
+      scheduleFeedRefresh(payload.new);
     })
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, async (payload) => {
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload) => {
       if (STATE.profile && payload.new && payload.new.id === STATE.profile.id) {
         STATE.profile = payload.new;
         if (STATE.view === "profile" || STATE.view === "home") renderCurrentView();
       }
-      if (STATE.profile.role === "coach" && STATE.view === "students") {
-        await loadStudents(); renderStudents();
+      // [ESCALA] só recarrega a lista se o perfil alterado for de um aluno DESTE coach
+      if (STATE.profile.role === "coach" && STATE.view === "students"
+          && payload.new && payload.new.coach_id === STATE.profile.id) {
+        scheduleStudentsRefresh();
       }
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "app_branding" }, (payload) => {
@@ -15985,9 +16021,12 @@ const PUSH_VAPID_KEY_STORAGE = "treinova_push_vapid_public_key";
 /* ---------- postLoginInit: chamado depois do postSignIn ---------- */
 async function postLoginInit() {
   // SW já registrado no boot() — não duplicar aqui
-  await loadCommentsCounts();
-  await loadChatThreads();
-  await loadWeeklyRanking();
+  // [ESCALA] loaders independentes em paralelo (antes: 3 round-trips em série)
+  await Promise.all([
+    loadCommentsCounts().catch(e => console.warn("[init commentsCounts]", e)),
+    loadChatThreads().catch(e => console.warn("[init chatThreads]", e)),
+    loadWeeklyRanking().catch(e => console.warn("[init weeklyRanking]", e))
+  ]);
 
   // [M-04] Restaurar timer se o aluno voltou ao app após ligação/troca de app
   restoreTimerIfActive();
