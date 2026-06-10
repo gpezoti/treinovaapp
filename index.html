@@ -1396,7 +1396,7 @@ const EXERCISE_LIBRARY_MODES = [
   { value: "popular", label: "Populares" }
 ];
 const EXERCISE_LIBRARY_PAGE_SIZE = 20;
-const EXERCISE_ASSET_VERSION = "20260606-semantic-v8";
+const EXERCISE_ASSET_VERSION = "20260610-img-coherence-v2";
 const _STANDARD_EXERCISE_IMAGE_CACHE = {};
 const _MISSING_EXERCISE_IMAGE_CACHE = {};
 const EXACT_EXERCISE_IMAGE_ASSETS = {
@@ -1998,7 +1998,40 @@ function getCategoryExerciseAssetUrl(ex) {
   const kind = inferExerciseImageKind(ex || {});
   return versionExerciseAssetUrl((STANDARD_EXERCISE_IMAGES[kind] || STANDARD_EXERCISE_IMAGES.generic).assetPath || null);
 }
+// [AUDITORIA DE IMAGENS] Variantes cuja foto exata NAO corresponde ao nome
+// (ex.: "com barra" mostrando halteres, "em pe" mostrando sentado, mobilidade
+// mostrando peso, remada/encolhimento reusando uma foto generica). Ate gerar a
+// foto correta, caem no SVG estilizado neutro em vez de exibir a imagem errada.
+const INCOHERENT_EXERCISE_IMAGES = new Set([
+  // [AUDITORIA 10/06/2026] Exercicios cujo ARQUIVO de imagem mapeado no app NAO
+  // corresponde ao nome (verificado 1 a 1 contra o arquivo real que cada exercicio
+  // usa). Ate gerar a foto correta, caem no SVG estilizado neutro em vez da foto errada.
+  "desenvolvimento com barra","desenvolvimento militar com barra","desenvolvimento militar em pe",
+  "elevacao frontal com barra","elevacao frontal no cabo","elevacao lateral no cabo",
+  "cars de ombro","remada alta com barra","remada alta no cabo",
+  "remada invertida na barra","remada maquina alta","pullover maquina",
+  "encolhimento com barra","agachamento frontal","agachamento caixa",
+  "cadeira flexora unilateral","mesa flexora unilateral","flexora no cabo",
+  "deep squat com rotacao","deep squat passivo","goblet squat com calcanhar elevado",
+  "pigeon pose","pigeon pose abertura de quadril","extensao de quadril no banco romano",
+  "mobilidade de adutores frog","mobilidade de adutores frog no solo","glute ham raise",
+  "abertura de quadril 90 90","abducao lateral deitado","caminhada",
+  "corda naval","hip circles","meadows row",
+  "pogo jumps","push press","rack pull",
+  "rotacao externa com elastico","rotacao interna com elastico","rotacao toracica no solo",
+  "saltos no step baixo","thread the needle","cars de quadril",
+  "alongamento borboleta","alongamento de quadriceps","alongamento de isquiotibiais",
+  "alongamento dorsal no banco","alongamento peitoral na parede","alongamento piriforme deitado",
+  "frog stretch","scorpion stretch","adductor rockback",
+  "mobilidade cervical controlada","mobilidade de punho","mobilidade de tornozelo",
+  "mobilidade de tornozelo joelho na parede","mobilidade toracica em quatro apoios","hamstring walkout",
+  "nordic curl assistido","ponte de posterior no slider","pull over com halter",
+  "wall sit"
+]);
 function getStandardExerciseAssetUrl(ex) {
+  if (ex && INCOHERENT_EXERCISE_IMAGES.has(normalizeExerciseText(ex.name))) {
+    return getStandardExerciseImageUrl(ex);
+  }
   const exact = getExactExerciseAssetUrl(ex || {});
   if (exact) return exact;
   // Sem asset exato, usa foto realista por categoria/movimento inferido.
