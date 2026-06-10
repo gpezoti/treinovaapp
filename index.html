@@ -7979,11 +7979,11 @@ function renderCoachHome(el) {
 	    </div>
 	    ${platformTrialBannerHTML()}
 	    <div class="insight-strip" style="margin-bottom:10px">
-      <button class="insight-card ${totalSessions7d > 0 ? 'is-success' : ''}" onclick="navTo('students')">
+      <button class="insight-card ${totalSessions7d > 0 ? 'is-success' : ''}" onclick="setStudentTab('active'); navTo('students')">
         <div class="insight-value">${totalSessions7d}</div>
         <div class="insight-label">treinos / sem.</div>
       </button>
-      <button class="insight-card ${inactive > 0 ? 'is-warn' : ''}" onclick="navTo('students')">
+      <button class="insight-card ${inactive > 0 ? 'is-warn' : ''}" onclick="setStudentTab('inactive'); navTo('students')">
         <div class="insight-value">${inactive}</div>
         <div class="insight-label">sem treino 7d</div>
       </button>
@@ -11173,14 +11173,13 @@ function renderStudents() {
     <div class="row-flex" style="justify-content:space-between; margin-bottom:6px;">
       <h1 class="view-title" style="margin:0">Alunos</h1>
       <div class="mobile-action-row">
-        <button class="mini-btn" onclick="toggleStudentSelectAll()" title="Selecionar todos"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+        <button class="mini-btn mini-btn-ghost" onclick="toggleStudentSelectAll()" title="${_studentSelected.size > 0 ? 'Limpar selecao' : 'Selecionar todos'}">${_studentSelected.size > 0 ? 'Limpar' : 'Selecionar'}</button>
         ${canManageStudents ? `<button class="mini-btn mini-btn-primary" onclick="openNewStudentSheet()">Novo aluno</button>` : ""}
       </div>
     </div>
     <p class="view-subtitle" style="margin-bottom:10px">${canManageStudents ? "Gerencie alunos, treinos, pagamentos e acompanhamento em um só lugar." : "Visão geral dos alunos cadastrados na plataforma."}</p>
     ${canManageStudents ? `<div class="teacher-toolbar">
       <button class="mini-btn mini-btn-ghost" onclick="openShareLinkSheet()">Compartilhar link</button>
-      <button class="mini-btn mini-btn-ghost" onclick="setStudentTab('overdue')">Ver inadimplentes</button>
     </div>` : ""}
     <div class="insight-strip">
       <button class="insight-card" onclick="setStudentTab('active')">
@@ -13030,8 +13029,6 @@ window.onStudentDetail = async function(id) {
     <div class="student-action-group">
       <div class="section-title">Treino e acompanhamento</div>
       <div class="sheet-action-grid">
-        <button class="btn-ghost" onclick="openStudentPeriodSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Periodização</button>
-        <button class="btn-ghost" onclick="openStudentWorkoutsSheet('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11M6.5 17.5h11"/><path d="M3 8.5V15.5a1 1 0 0 0 1 1h1V7.5H4a1 1 0 0 0-1 1z"/><path d="M21 8.5a1 1 0 0 0-1-1h-1v9h1a1 1 0 0 0 1-1v-7z"/><path d="M6.5 7.5v9a1 1 0 0 0 1 1h1v-11h-1a1 1 0 0 0-1 1z"/><path d="M17.5 7.5a1 1 0 0 0-1-1h-1v11h1a1 1 0 0 0 1-1v-9z"/></svg> Treinos personalizados</button>
         <button class="btn-ghost" onclick="openStudentProgressPhotos('${id}','${studentNameSafe}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Fotos de progresso</button>
         <button class="btn-ghost" onclick="exportStudentPDF('${id}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Relatório (PDF)</button>
       </div>
@@ -13045,11 +13042,6 @@ window.onStudentDetail = async function(id) {
         <button class="btn-ghost" onclick="openStudentTempPasswordSheet('${id}','${studentNameSafe}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 16v2"/></svg> Senha temporária</button>
         ${!isAdmin && prof.status === 'approved' ? `<button class="btn-ghost" onclick="onBlock('${id}')" style="color:var(--orange); border-color:var(--orange-soft);">Bloquear acesso</button>` : ''}
       </div>
-    </div>
-
-    <div class="student-action-group">
-      <div class="section-title">Financeiro</div>
-      <button class="btn-ghost" onclick="openPaymentSheet('${id}','${studentNameSafe}')">Abrir cobranças do aluno</button>
     </div>
 
     <div class="student-action-group">
