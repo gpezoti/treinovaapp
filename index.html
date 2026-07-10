@@ -1343,6 +1343,14 @@ const STANDARD_EXERCISE_IMAGES = {
 const REALISTIC_EXERCISE_VISUAL_DIRECTION = "ultra realistic fitness training image, realistic human proportions and anatomy, instructional-grade exercise form, minimal gym environment only when equipment is needed, clean white or soft gray background, centered composition, consistent professional softbox lighting, soft shadows, high detail, no text, no watermark, no logo, not stock-photo generic";
 const AI_EXERCISE_PROMPT_STYLE = REALISTIC_EXERCISE_VISUAL_DIRECTION;
 const EXERCISE_IMAGE_RULES = [
+  ["mobility", /mobilidade|alongamento|abertura de quadril|90\s*90|frog\s*stretch|pigeon\s*pose|scorpion\s*stretch|thread\s*the\s*needle|adductor\s*rockback|cars?\s*de|rotacao|rotação|hip\s*circles|cervical|punho|toracica|torácica/],
+  ["hipthrust", /abducao lateral deitado|abdução lateral deitado/],
+  ["deadlift", /flexora|mesa\s*flexora|nordic|hamstring|glute\s*ham|rack\s*pull/],
+  ["hipthrust", /extensao de quadril|extensão de quadril|ponte de posterior/],
+  ["pulldown", /pull\s*over|pullover/],
+  ["shoulder", /push\s*press/],
+  ["calf", /pogo\s*jumps|saltos?\s*no\s*step/],
+  ["squat", /wall\s*sit/],
   ["legpress", /leg\s*press|hack|horizontal/],
   ["hipthrust", /hip\s*thrust|elevacao pelvica|ponte|coice|gluteo/],
   ["deadlift", /terra|stiff|levantamento|deadlift|romeno/],
@@ -2014,11 +2022,11 @@ function getCategoryExerciseAssetUrl(ex) {
 // [AUDITORIA DE IMAGENS] Variantes cuja foto exata NAO corresponde ao nome
 // (ex.: "com barra" mostrando halteres, "em pe" mostrando sentado, mobilidade
 // mostrando peso, remada/encolhimento reusando uma foto generica). Ate gerar a
-// foto correta, caem no SVG estilizado neutro em vez de exibir a imagem errada.
+// foto 100% especifica, caem para uma foto realista local por categoria/movimento.
 const INCOHERENT_EXERCISE_IMAGES = new Set([
   // [AUDITORIA 10/06/2026] Exercicios cujo ARQUIVO de imagem mapeado no app NAO
   // corresponde ao nome (verificado 1 a 1 contra o arquivo real que cada exercicio
-  // usa). Ate gerar a foto correta, caem no SVG estilizado neutro em vez da foto errada.
+  // usa). Ate gerar a foto correta, caem para fallback realista em vez da foto errada.
   "desenvolvimento com barra","desenvolvimento militar com barra","desenvolvimento militar em pe",
   "elevacao frontal com barra","elevacao frontal no cabo","elevacao lateral no cabo",
   "cars de ombro","remada alta com barra","remada alta no cabo",
@@ -2041,9 +2049,24 @@ const INCOHERENT_EXERCISE_IMAGES = new Set([
   "nordic curl assistido","ponte de posterior no slider","pull over com halter",
   "wall sit"
 ]);
+const INCOHERENT_EXERCISE_IMAGE_REPLACEMENTS = {
+  "cadeira flexora unilateral": "assets/exercises/exact/flexora_unilateral_em_pe.webp",
+  "mesa flexora unilateral": "assets/exercises/exact/flexora_deitado.webp",
+  "flexora no cabo": "assets/exercises/exact/flexora_unilateral_em_pe.webp",
+  "nordic curl assistido": "assets/exercises/exact/flexao_nordica_nordic_curl.webp",
+  "corda naval": "assets/exercises/exact/battle_rope_waves.webp",
+  "caminhada": "assets/exercises/exact/caminhada_ao_ar_livre.webp",
+  "pular corda": "assets/exercises/exact/corda_jump_rope.webp",
+  "hamstring walkout": "assets/exercises/exact/hamstring_curl_na_bola_suica.webp",
+  "ponte de posterior no slider": "assets/exercises/exact/ponte_de_gluteos_com_miniband.webp",
+  "pull over com halter": "assets/exercises/exact/pulldown_bracos_retos.webp"
+};
 function getStandardExerciseAssetUrl(ex) {
-  if (ex && INCOHERENT_EXERCISE_IMAGES.has(normalizeExerciseText(ex.name))) {
-    return getStandardExerciseImageUrl(ex);
+  const normalizedName = normalizeExerciseText(ex && ex.name);
+  if (ex && INCOHERENT_EXERCISE_IMAGES.has(normalizedName)) {
+    const replacement = INCOHERENT_EXERCISE_IMAGE_REPLACEMENTS[normalizedName];
+    if (replacement) return versionExerciseAssetUrl(replacement);
+    return getCategoryExerciseAssetUrl(ex || {}) || getStandardExerciseImageUrl(ex);
   }
   const exact = getExactExerciseAssetUrl(ex || {});
   if (exact) return exact;
@@ -3933,6 +3956,14 @@ function findKnownSessionForWorkout(date, workoutCode, workoutId = null) {
   return pickBestWorkoutSession(rows, workoutId);
 }
 
+function sessionMatchesWorkoutTarget(session, date, workoutCode, workoutId = null) {
+  if (!session) return false;
+  if (String(session.date || "") !== String(date || "")) return false;
+  if (String(session.workout_code || "") !== String(workoutCode || "")) return false;
+  if (workoutId && String(session.workout_id || "") !== String(workoutId)) return false;
+  return true;
+}
+
 async function loadKnownWorkoutSessions(date = todayISO()) {
   if (!STATE.profile || !["student", "coach"].includes(STATE.profile.role)) {
     STATE.todaySessions = [];
@@ -5501,8 +5532,8 @@ async function handleAppResume(reason = "resume") {
       try {
         const date = STATE.selectedDate || todayISO();
         const code = STATE.selectedWorkout;
-        if (code && (!STATE.currentSession || STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code)) {
-          await withTimeout(loadOrCreateSession(date, code, STATE.selectedIntensity), 10000, "resume workout session timeout");
+        if (code && !sessionMatchesWorkoutTarget(STATE.currentSession, date, code, STATE.selectedWorkoutId)) {
+          await withTimeout(loadOrCreateSession(date, code, STATE.selectedIntensity, STATE.selectedWorkoutId), 10000, "resume workout session timeout");
         }
         if (code && (!STATE.workouts || !STATE.workouts[code])) {
           await withTimeout(loadWorkouts(), 10000, "resume workouts timeout");
@@ -6566,6 +6597,7 @@ function pinSheetFooter(root) {
 window.pinSheetFooter = pinSheetFooter;
 
 function closeSheet() {
+  const opts = (arguments[0] && typeof arguments[0] === "object") ? arguments[0] : {};
   const sheet = document.getElementById("sheet");
   if (!sheet || !sheet.classList.contains("active")) return;
   sheet.classList.remove("active");
@@ -6574,10 +6606,18 @@ function closeSheet() {
   // Se o estado da sheet está no histórico, volta para limpá-lo
   if (_sheetInHistory) {
     _sheetInHistory = false;
-    try { history.back(); } catch(e){}
+    if (opts.skipHistoryBack) {
+      try { history.replaceState({ treinova: "app" }, ""); } catch(e){}
+    } else {
+      try { history.back(); } catch(e){}
+    }
   }
 }
 window.closeSheet = closeSheet;
+function closeSheetForAction() {
+  closeSheet({ skipHistoryBack: true });
+}
+window.closeSheetForAction = closeSheetForAction;
 
 document.getElementById("sheet")?.addEventListener("click", (ev) => {
   const root = document.getElementById("sheet-content");
@@ -7829,7 +7869,7 @@ function renderHome() {
           const isToday = d.date === today;
           const w = workoutPretty(d.workout_code);
           const wTxt = w === "FLEX" ? "Flex" : (w === "OFF" ? "—" : w);
-          return `<div class="day-pill ${intensityClass(d.intensity, d.preset_code)} ${isToday ? "is-today" : ""}" onclick="onDayClick('${d.date}')">
+          return `<div class="day-pill ${intensityClass(d.intensity, d.preset_code)} ${isToday ? "is-today" : ""}" onclick="onDayClick(${jsArg(d.date)})">
             <span class="dp-day">${WEEKDAY_LABELS[dt.getDay()]}</span>
             <span class="dp-num">${dt.getDate()}</span>
             <span class="dp-w">${wTxt}</span>
@@ -7962,8 +8002,8 @@ window.onDayClick = function(iso) {
         <p style="color:var(--text-2);font-size:13px;margin:0 0 16px">${wName} · ${dayLabel}</p>
         <p style="color:var(--text-2);font-size:13px;line-height:1.5;margin:0 0 20px">Sem problema — você ainda pode registrar este treino. Acontece com todo mundo!</p>
       </div>
-      <button class="btn-primary" onclick="closeSheet();${info.preset_code ? `openWorkoutWithPreset('${iso}','${wCode}','${info.preset_code}','${info.workout_id || ""}')` : `openWorkout('${iso}','${wCode}','${info.intensity}','${info.workout_id || ""}')`}" style="margin-bottom:10px">
-        ▶ Fazer este treino agora
+      <button class="btn-primary" onclick="openAgendaWorkoutFromSheet(${jsArg(iso)},${jsArg(wCode)},${jsArg(info.preset_code || "")},${jsArg(info.intensity || "")},${jsArg(info.workout_id || "")})" style="margin-bottom:10px">
+        Fazer este treino agora
       </button>
       <button class="btn-ghost" onclick="closeSheet();navTo('chat')" style="margin-bottom:8px">
         ${iconSvg("message", 16)} Avisar o treinador
@@ -8017,7 +8057,7 @@ function openAgendaBlockDirect(iso, block, dayInfo = null) {
         <p style="color:var(--text-2);font-size:13px;margin:0 0 16px">${escape(display.title)} · ${dayLabel}</p>
         <p style="color:var(--text-2);font-size:13px;line-height:1.5;margin:0 0 20px">Você ainda pode registrar este treino e manter seu histórico atualizado.</p>
       </div>
-      <button class="btn-primary" onclick="closeSheet();${presetCode ? `openWorkoutWithPreset(${jsArg(iso)},${jsArg(workoutCode)},${jsArg(presetCode)},${jsArg(workoutId || "")})` : `openWorkout(${jsArg(iso)},${jsArg(workoutCode)},${jsArg(info.intensity)},${jsArg(workoutId || "")})`}" style="margin-bottom:10px">
+      <button class="btn-primary" onclick="openAgendaWorkoutFromSheet(${jsArg(iso)},${jsArg(workoutCode)},${jsArg(presetCode || "")},${jsArg(info.intensity || "")},${jsArg(workoutId || "")})" style="margin-bottom:10px">
         Fazer este treino agora
       </button>
       <button class="btn-ghost" onclick="closeSheet()">Fechar</button>
@@ -8037,6 +8077,20 @@ window.openAgendaBlock = function(iso, index = 0) {
   if (!info) return;
   const blocks = getPeriodizationDayBlocks(info);
   openAgendaBlockDirect(iso, blocks[index] || blocks[0] || info, info);
+};
+
+window.openAgendaBlockFromSheet = function(iso, index = 0) {
+  closeSheetForAction();
+  openAgendaBlock(iso, index);
+};
+
+window.openAgendaWorkoutFromSheet = function(iso, workoutCode, presetCode = "", intensity = "", workoutId = "") {
+  closeSheetForAction();
+  if (presetCode) {
+    openWorkoutWithPreset(iso, workoutCode, presetCode, workoutId || null);
+  } else {
+    openWorkout(iso, workoutCode, intensity, workoutId || null);
+  }
 };
 
 window.openAgendaDay = function(iso) {
@@ -8066,7 +8120,7 @@ window.openAgendaDay = function(iso) {
           ? "Abrir cardio"
           : (isDone ? "Ver registro" : (iso < todayISO() ? "Fazer agora" : "Abrir"));
         return `
-          <button type="button" class="btn-ghost" onclick="closeSheet();openAgendaBlock(${jsArg(iso)},${idx})" style="text-align:left;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <button type="button" class="btn-ghost" onclick="openAgendaBlockFromSheet(${jsArg(iso)},${idx})" style="text-align:left;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
             <span style="min-width:0">
               <span style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.7px;font-weight:900;color:${display.color}">${escape(display.short)}</span>
               <span style="display:block;font-size:15px;font-weight:900;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escape(display.title)}</span>
@@ -8088,6 +8142,10 @@ window.openWorkout = function(iso, code, intensity, workoutId = null) {
   STATE.selectedPresetCode = resolvePresetForWorkoutDate(iso, code, workoutId);
   STATE.selectedIntensity = legacyIntensityFromPresetCode(STATE.selectedPresetCode, intensity || "yellow");
   STATE.expandedEx = null;
+  if (STATE.currentSession && !sessionMatchesWorkoutTarget(STATE.currentSession, iso, code, workoutId || null)) {
+    STATE.currentSession = null;
+    STATE.setLogs = [];
+  }
   navTo("workout");
 };
 
@@ -9569,7 +9627,7 @@ function renderCalendar() {
               </div>`
             : `<span class="dp-w">${isDone ? "✓" : (blockSummary[0]?.short || wTxt)}</span>`;
           const extraCls = isDone ? "is-done" : isLate ? "is-late" : isPending ? "is-pending" : "";
-          return `<div class="day-pill ${intensityClass(d.intensity, d.preset_code)} ${isToday ? "is-today" : ""} ${extraCls}" title="${escape(title)}" onclick="openAgendaDay('${d.date}')">
+          return `<div class="day-pill ${intensityClass(d.intensity, d.preset_code)} ${isToday ? "is-today" : ""} ${extraCls}" title="${escape(title)}" onclick="openAgendaDay(${jsArg(d.date)})">
             <span class="dp-day">${WEEKDAY_LABELS[dt.getDay()]}</span>
             <span class="dp-num">${dt.getDate()}</span>
             ${blockHtml}
@@ -9750,8 +9808,8 @@ async function renderWorkout() {
     && (!restResume.workoutCode || restResume.workoutCode === code)
     && (!restResume.date || restResume.date === date);
 
-  // Se sessão salva é de outro treino/data, descartar
-  if (STATE.currentSession && (STATE.currentSession.date !== date || STATE.currentSession.workout_code !== code)) {
+  // Se sessão salva é de outro treino/data/modelo, descartar antes de abrir a agenda.
+  if (STATE.currentSession && !sessionMatchesWorkoutTarget(STATE.currentSession, date, code, STATE.selectedWorkoutId)) {
     STATE.currentSession = null;
     STATE.setLogs = [];
   }
@@ -14692,6 +14750,7 @@ function renderLibraryExerciseRow(ex) {
   const favorite = isFavoriteExercise(ex);
   const usageCount = getExerciseUsageCount(ex);
   const isPopular = getPopularLibraryExerciseIds().has(ex.id);
+  const canManage = canManageLibraryExercise(ex);
   return `<div class="card mb-8 library-exercise-card">
     <div class="library-exercise-row">
       <div class="ex-thumb" style="width:58px;height:58px;flex:0 0 58px;overflow:hidden;">${getExThumb(ex)}</div>
@@ -14702,8 +14761,8 @@ function renderLibraryExerciseRow(ex) {
       </div>
       <div class="library-exercise-actions">
         <button class="mini-btn ${favorite ? "mini-btn-primary" : "mini-btn-ghost"}" title="${favorite ? "Remover dos favoritos" : "Favoritar exercício"}" aria-label="${favorite ? "Remover dos favoritos" : "Favoritar exercício"}" onclick="toggleLibraryExerciseFavorite('${ex.id}', event)">${favorite ? "★" : "☆"}</button>
-        <button class="mini-btn mini-btn-ghost" onclick="openLibraryExerciseSheet('${ex.id}')">Editar</button>
-        <button class="mini-btn mini-btn-danger" title="Excluir exercício" aria-label="Excluir exercício" onclick="deleteLibraryExercise('${ex.id}','${escapeAttr(ex.name || "exercício")}')">×</button>
+        ${canManage ? `<button class="mini-btn mini-btn-ghost" onclick="openLibraryExerciseSheet('${ex.id}')">Editar</button>
+        <button class="mini-btn mini-btn-danger" title="Excluir exercício" aria-label="Excluir exercício" onclick="deleteLibraryExercise('${ex.id}','${escapeAttr(ex.name || "exercício")}')">×</button>` : `<span class="text-xs muted" title="Exercício global disponível para todos os treinadores">Global</span>`}
       </div>
     </div>
   </div>`;
@@ -14802,6 +14861,34 @@ function getExerciseDraftMedia(key) {
   return STATE[key];
 }
 
+function exerciseLibraryOwnerId() {
+  return STATE.profile?.role === "coach" ? STATE.profile.id : null;
+}
+
+function canManageLibraryExercise(ex) {
+  if (!ex || STATE.profile?.role === "admin") return !!ex;
+  return STATE.profile?.role === "coach"
+    && !!ex.owner_coach_id
+    && ex.owner_coach_id === STATE.profile.id;
+}
+
+function exerciseMediaPathPrefix(savedId) {
+  const owner = STATE.profile?.id || "anonymous";
+  return `${owner}/${savedId}`;
+}
+
+async function findDuplicateLibraryExercise(name, excludeId = "") {
+  const canonical = exerciseCanonicalName(name || "");
+  if (!canonical) return null;
+  const { data, error } = await sb
+    .from("exercises")
+    .select("id,name,owner_coach_id")
+    .eq("is_library", true)
+    .limit(1000);
+  if (error) throw error;
+  return (data || []).find(item => item.id !== excludeId && exerciseCanonicalName(item.name || "") === canonical) || null;
+}
+
 function exerciseDraftImageHTML(key, fallbackEx) {
   const draft = getExerciseDraftMedia(key);
   const src = draft.imagePreview || draft.imageUrl;
@@ -14865,8 +14952,9 @@ async function uploadExerciseDraftMedia(savedId, key, currentVideoUrl = "") {
   if (!savedId) throw new Error("Exercício não retornou ID para salvar mídia.");
   const draft = getExerciseDraftMedia(key);
   const patch = {};
-  if (draft.imageFile) patch.image_url = await uploadImage("exercises", savedId, draft.imageFile, 1024);
-  if (draft.videoFile) patch.video_url = await uploadVideoFile("exercises", savedId, draft.videoFile);
+  const mediaPrefix = exerciseMediaPathPrefix(savedId);
+  if (draft.imageFile) patch.image_url = await uploadImage("exercises", mediaPrefix, draft.imageFile, 1024);
+  if (draft.videoFile) patch.video_url = await uploadVideoFile("exercises", mediaPrefix, draft.videoFile);
   else if (currentVideoUrl !== undefined) patch.video_url = currentVideoUrl || null;
   if (Object.keys(patch).length) {
     const { error } = await sb.from("exercises").update(patch).eq("id", savedId);
@@ -14879,6 +14967,10 @@ window.openLibraryExerciseSheet = function(exId = "") {
   const ex = exId
     ? ((STATE.exerciseLibraryPageItems || []).find(item => item.id === exId) || (STATE.library || []).find(item => item.id === exId))
     : null;
+  if (ex && !canManageLibraryExercise(ex)) {
+    showToast("Este exercício global pode ser usado nos treinos, mas não pode ser alterado.", "error");
+    return;
+  }
   const groupMeta = getExerciseGroupMeta(ex?.muscle_group || ex?.cat || "Peito");
   const previewEx = ex || { name: "Novo exercício", cat: groupMeta.cat, muscle_group: groupMeta.value };
   resetExerciseDraftMedia("_libraryExerciseDraftMedia", ex || {});
@@ -14910,7 +15002,7 @@ window.openLibraryExerciseSheet = function(exId = "") {
     <div class="form-group"><label class="form-label">Cadência padrão opcional</label><input class="input" id="lib-ex-cadence" value="${escape(ex?.cadence || "")}" placeholder="Ex.: 2-0-2" /></div>
     <div class="form-group"><label class="form-label">Método</label><input class="input" id="lib-ex-method" value="${escape(ex?.method || "Séries múltiplas")}" placeholder="Séries múltiplas" /></div>
     <div class="form-group"><label class="form-label">Observações técnicas</label><textarea class="input textarea" id="lib-ex-obs" placeholder="Cuidados de execução, amplitude, ajustes...">${escape(ex?.observations || "")}</textarea></div>
-    <button class="btn-primary" onclick="saveLibraryExercise('${exId || ""}')">${ex ? "Salvar exercício" : "Criar exercício"}</button>
+    <button class="btn-primary" id="lib-ex-save-btn" onclick="saveLibraryExercise('${exId || ""}')">${ex ? "Salvar exercício" : "Criar exercício"}</button>
     <button class="btn-ghost" onclick="closeSheet();renderAdminWorkouts()" style="margin-top:8px">Cancelar</button>
   `);
   setTimeout(() => document.getElementById("lib-ex-name")?.focus(), 60);
@@ -14928,6 +15020,8 @@ window.saveLibraryExercise = async function(exId = "") {
     showToast("Sem permissão para gerenciar exercícios", "error");
     return;
   }
+  if (STATE._savingLibraryExercise) return;
+  const btn = document.getElementById("lib-ex-save-btn");
   const name = String(document.getElementById("lib-ex-name")?.value || "").trim();
   const group = document.getElementById("lib-ex-group")?.value || "Peito";
   const meta = getExerciseGroupMeta(group);
@@ -14943,6 +15037,10 @@ window.saveLibraryExercise = async function(exId = "") {
   const currentEx = exId
     ? ((STATE.exerciseLibraryPageItems || []).find(item => item.id === exId) || (STATE.library || []).find(item => item.id === exId))
     : null;
+  if (currentEx && !canManageLibraryExercise(currentEx)) {
+    showToast("Este exercício global não pode ser alterado pelo treinador.", "error");
+    return;
+  }
   const payload = {
     workout_id: null,
     student_id: null,
@@ -14958,17 +15056,17 @@ window.saveLibraryExercise = async function(exId = "") {
     method: String(document.getElementById("lib-ex-method")?.value || "").trim() || "Séries múltiplas",
     observations: String(document.getElementById("lib-ex-obs")?.value || "").trim(),
     image_url: currentEx?.image_url || null,
-    video_url: videoUrl || null
+    video_url: videoUrl || null,
+    owner_coach_id: currentEx?.owner_coach_id || exerciseLibraryOwnerId()
   };
+  STATE._savingLibraryExercise = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.dataset.oldText = btn.textContent;
+    btn.textContent = exId ? "Salvando..." : "Criando...";
+  }
   try {
-    const { data: duplicateRows, error: duplicateError } = await sb
-      .from("exercises")
-      .select("id,name")
-      .eq("is_library", true)
-      .ilike("name", name)
-      .limit(5);
-    if (duplicateError) throw duplicateError;
-    const duplicate = (duplicateRows || []).find(e => e.id !== exId && normalizeExerciseText(e.name) === normalizeExerciseText(name));
+    const duplicate = await findDuplicateLibraryExercise(name, exId);
     if (duplicate) { showToast("Já existe exercício com esse nome na biblioteca", "error"); return; }
     const q = exId
       ? sb.from("exercises").update(payload).eq("id", exId).eq("is_library", true).select("id").single()
@@ -14976,21 +15074,39 @@ window.saveLibraryExercise = async function(exId = "") {
     const { data: saved, error } = await q;
     if (error) throw error;
     const savedId = saved?.id || exId;
-    await uploadExerciseDraftMedia(savedId, "_libraryExerciseDraftMedia", videoUrl);
-    showToast(exId ? "Exercício salvo" : "Exercício criado", "success");
+    let mediaWarning = "";
+    try {
+      await uploadExerciseDraftMedia(savedId, "_libraryExerciseDraftMedia", videoUrl);
+    } catch (mediaError) {
+      console.warn("[saveLibraryExercise] media upload:", mediaError);
+      mediaWarning = "A mídia não foi enviada; edite o exercício para tentar novamente.";
+    }
     STATE.library = [];
     STATE.exerciseLibraryLoadedAt = 0;
     await loadExerciseLibraryPage({ reset: true });
     closeSheet();
     renderAdminWorkouts();
+    showToast(mediaWarning || (exId ? "Exercício salvo" : "Exercício criado"), mediaWarning ? null : "success");
   } catch (e) {
     showToast("Erro: " + (e.message || "não foi possível salvar"), "error");
+  } finally {
+    STATE._savingLibraryExercise = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.oldText || (exId ? "Salvar exercício" : "Criar exercício");
+    }
   }
 };
 
 window.deleteLibraryExercise = async function(exId, name) {
   if (!["admin", "coach"].includes(STATE.profile?.role)) {
     showToast("Sem permissão para excluir exercícios", "error");
+    return;
+  }
+  const ex = (STATE.exerciseLibraryPageItems || []).find(item => item.id === exId)
+    || (STATE.library || []).find(item => item.id === exId);
+  if (!canManageLibraryExercise(ex)) {
+    showToast("Este exercício global não pode ser excluído pelo treinador.", "error");
     return;
   }
   const ok = await showConfirm({
@@ -15422,7 +15538,7 @@ function buildExerciseLibraryPageQuery() {
   const mode = STATE.exerciseLibraryMode || "all";
   let q = sb
     .from("exercises")
-    .select("id,name,cat,muscle_group,method,observations,image_url,video_url,cadence")
+    .select("id,name,cat,muscle_group,method,observations,image_url,video_url,cadence,owner_coach_id")
     .eq("is_library", true)
     .order("muscle_group")
     .order("name");
@@ -15819,20 +15935,37 @@ window.submitNewExercise = async function() {
       position: nextPos, is_library: false
     }).select("id").single();
     if (e1) throw e1;
-    const mediaPatch = await uploadExerciseDraftMedia(createdEx?.id, "_newExerciseDraftMedia", videoUrl);
+    let mediaPatch = {};
+    let warning = "";
+    try {
+      mediaPatch = await uploadExerciseDraftMedia(createdEx?.id, "_newExerciseDraftMedia", videoUrl);
+    } catch (mediaError) {
+      console.warn("[submitNewExercise] media upload:", mediaError);
+      warning = "Exercício adicionado, mas a mídia não foi enviada.";
+    }
     const reusableData = { ...data, ...mediaPatch };
     // Salva também na biblioteca?
     if (get("ne-add-library").checked) {
-      const { error: libErr } = await sb.from("exercises").insert({
-        ...reusableData, workout_id: null, student_id: null, position: 0, is_library: true
-      });
-      if (libErr) {
-        console.warn("[submitNewExercise] library insert:", libErr);
-        showToast("Exercício adicionado ao treino. Biblioteca não salvou por permissão.", "error");
+      const duplicate = await findDuplicateLibraryExercise(name);
+      if (!duplicate) {
+        const { error: libErr } = await sb.from("exercises").insert({
+          ...reusableData,
+          workout_id: null,
+          student_id: null,
+          position: 0,
+          is_library: true,
+          owner_coach_id: exerciseLibraryOwnerId()
+        });
+        if (libErr) {
+          console.warn("[submitNewExercise] library insert:", libErr);
+          warning = warning || "Exercício adicionado ao treino, mas não foi salvo na biblioteca.";
+        }
       }
-      await loadExerciseLibrary();
+      STATE.library = [];
+      STATE.exerciseLibraryLoadedAt = 0;
+      await loadExerciseLibrary(true);
     }
-    showToast("Exercício adicionado", "success");
+    showToast(warning || "Exercício adicionado", warning ? null : "success");
     await loadWorkouts();
     window.openWorkoutEditor(ctx.workoutCode, ctx.workoutId || "");
   } catch(e) {
@@ -15923,7 +16056,7 @@ window.onExerciseImageUpload = function(exId) {
   pickImageFile(async (file) => {
     showToast("Enviando imagem...");
     try {
-      const url = await uploadImage("exercises", exId, file, 1024);
+      const url = await uploadImage("exercises", exerciseMediaPathPrefix(exId), file, 1024);
       const { error } = await sb.from("exercises").update({ image_url: url }).eq("id", exId);
       if (error) throw error;
       showToast("Imagem salva", "success");
@@ -15940,7 +16073,7 @@ window.onExerciseVideoUpload = function(exId) {
   pickVideoFile(async (file) => {
     showToast("Enviando vídeo...");
     try {
-      const url = await uploadVideoFile("exercises", exId, file);
+      const url = await uploadVideoFile("exercises", exerciseMediaPathPrefix(exId), file);
       const { error } = await sb.from("exercises").update({ video_url: url }).eq("id", exId);
       if (error) throw error;
       showToast("Vídeo salvo", "success");
@@ -19990,6 +20123,10 @@ window.openWorkoutWithPreset = function(date, code, presetCode, workoutId = null
   STATE.selectedWorkoutId = workoutId || null;
   STATE.selectedIntensity = legacyIntensityFromPresetCode(presetCode, 'yellow');
   STATE.expandedEx = null;
+  if (STATE.currentSession && !sessionMatchesWorkoutTarget(STATE.currentSession, date, code, workoutId || null)) {
+    STATE.currentSession = null;
+    STATE.setLogs = [];
+  }
   navTo("workout");
 };
 
