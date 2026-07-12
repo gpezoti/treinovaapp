@@ -464,7 +464,7 @@
   {
     "name": "Rosca 21",
     "asset": "rosca_21",
-    "assetPath": "assets/exercises/exact/rosca_21.webp",
+    "assetPath": "assets/exercises/exact/rosca_21_com_barra_w.webp",
     "prompt": "Ultra realistic fitness image of a person performing Rosca 21, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -482,7 +482,7 @@
   {
     "name": "Rosca alternada com halteres",
     "asset": "rosca_alternada_com_halteres",
-    "assetPath": "assets/exercises/exact/rosca_alternada_com_halteres.webp",
+    "assetPath": "assets/exercises/exact/rosca_alternada_com_halter.webp",
     "prompt": "Ultra realistic fitness image of a person performing Rosca alternada com halteres, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -506,7 +506,7 @@
   {
     "name": "Rosca Concentrada",
     "asset": "rosca_concentrada",
-    "assetPath": "assets/exercises/exact/rosca_concentrada.webp",
+    "assetPath": "assets/exercises/exact/rosca_concentrada_com_halter.webp",
     "prompt": "Ultra realistic fitness image of a person performing Rosca Concentrada, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -548,7 +548,7 @@
   {
     "name": "Rosca Inclinada com Halter",
     "asset": "rosca_inclinada_com_halter",
-    "assetPath": "assets/exercises/exact/rosca_inclinada_com_halter.webp",
+    "assetPath": "assets/exercises/exact/rosca_inclinada_com_halteres.webp",
     "prompt": "Ultra realistic fitness image of a person performing Rosca Inclinada com Halter, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -626,7 +626,7 @@
   {
     "name": "Rosca Scott (Preacher Curl)",
     "asset": "rosca_scott_preacher_curl",
-    "assetPath": "assets/exercises/exact/rosca_scott_preacher_curl.webp",
+    "assetPath": "assets/exercises/exact/rosca_scott_na_maquina.webp",
     "prompt": "Ultra realistic fitness image of a person performing Rosca Scott (Preacher Curl), correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -716,7 +716,7 @@
   {
     "name": "Hiperextensão Lombar",
     "asset": "hiperextensao_lombar",
-    "assetPath": "assets/exercises/exact/hiperextensao_lombar.webp",
+    "assetPath": "assets/exercises/exact/hiperextensao_lombar_no_banco.webp",
     "prompt": "Ultra realistic fitness image of a person performing Hiperextensão Lombar, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -800,7 +800,7 @@
   {
     "name": "Puxada frontal pegada aberta",
     "asset": "puxada_frontal_pegada_aberta",
-    "assetPath": "assets/exercises/exact/puxada_frontal_pegada_aberta.webp",
+    "assetPath": "assets/exercises/exact/pulley_frente_pegada_aberta.webp",
     "prompt": "Ultra realistic fitness image of a person performing Puxada frontal pegada aberta, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -866,7 +866,7 @@
   {
     "name": "Remada Cavalinho",
     "asset": "remada_cavalinho",
-    "assetPath": "assets/exercises/exact/remada_cavalinho.webp",
+    "assetPath": "assets/exercises/exact/remada_cavalinho_com_apoio_no_peito.webp",
     "prompt": "Ultra realistic fitness image of a person performing Remada Cavalinho, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -926,7 +926,7 @@
   {
     "name": "Remada no Cabo Sentado",
     "asset": "remada_no_cabo_sentado",
-    "assetPath": "assets/exercises/exact/remada_no_cabo_sentado.webp",
+    "assetPath": "assets/exercises/exact/remada_baixa_com_triangulo.webp",
     "prompt": "Ultra realistic fitness image of a person performing Remada no Cabo Sentado, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -962,7 +962,7 @@
   {
     "name": "Abdução de quadril no cabo",
     "asset": "abducao_de_quadril_no_cabo",
-    "assetPath": "assets/exercises/exact/abducao_de_quadril_no_cabo.webp",
+    "assetPath": "assets/exercises/exact/abducao_de_quadril_na_polia.webp",
     "prompt": "Ultra realistic fitness image of a person performing Abdução de quadril no cabo, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -986,7 +986,7 @@
   {
     "name": "Cable hip abduction",
     "asset": "cable_hip_abduction",
-    "assetPath": "assets/exercises/exact/cable_hip_abduction.webp",
+    "assetPath": "assets/exercises/exact/abducao_de_quadril_na_polia.webp",
     "prompt": "Ultra realistic fitness image of a person performing Cable hip abduction, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -1070,13 +1070,13 @@
   {
     "name": "Hip Thrust",
     "asset": "hip_thrust",
-    "assetPath": "assets/exercises/exact/hip_thrust.webp",
+    "assetPath": "assets/exercises/exact/elevacao_pelvica_com_barra.webp",
     "prompt": "Ultra realistic fitness image of a person performing Hip Thrust, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
     "name": "Hip thrust com barra",
     "asset": "hip_thrust_com_barra",
-    "assetPath": "assets/exercises/exact/hip_thrust_com_barra.webp",
+    "assetPath": "assets/exercises/exact/elevacao_pelvica_com_barra.webp",
     "prompt": "Ultra realistic fitness image of a person performing Hip thrust com barra, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -1106,7 +1106,7 @@
   {
     "name": "Mesa Hip Thrust (máquina)",
     "asset": "mesa_hip_thrust_maquina",
-    "assetPath": "assets/exercises/exact/mesa_hip_thrust_maquina.webp",
+    "assetPath": "assets/exercises/exact/hip_thrust_maquina.webp",
     "prompt": "Ultra realistic fitness image of a person performing Mesa Hip Thrust (máquina), correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -1136,7 +1136,7 @@
   {
     "name": "Ponte unilateral de glúteos",
     "asset": "ponte_unilateral_de_gluteos",
-    "assetPath": "assets/exercises/exact/ponte_unilateral_de_gluteos.webp",
+    "assetPath": "assets/exercises/exact/elevacao_pelvica_unilateral.webp",
     "prompt": "Ultra realistic fitness image of a person performing Ponte unilateral de glúteos, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -1766,13 +1766,13 @@
   {
     "name": "Panturrilha no leg horizontal",
     "asset": "panturrilha_no_leg_horizontal",
-    "assetPath": "assets/exercises/exact/panturrilha_no_leg_horizontal.webp",
+    "assetPath": "assets/exercises/exact/panturrilha_no_leg_press_horizontal.webp",
     "prompt": "Ultra realistic fitness image of a person performing Panturrilha no leg horizontal, correct form, lower-leg exercise exactly matching the name, ankle position and calf engagement clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
     "name": "Panturrilha no leg press",
     "asset": "panturrilha_no_leg_press",
-    "assetPath": "assets/exercises/exact/panturrilha_no_leg_press.webp",
+    "assetPath": "assets/exercises/exact/panturrilha_no_leg_press_45_graus.webp",
     "prompt": "Ultra realistic fitness image of a person performing Panturrilha no leg press, correct form, lower-leg exercise exactly matching the name, ankle position and calf engagement clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -1790,7 +1790,7 @@
   {
     "name": "Panturrilha no Smith",
     "asset": "panturrilha_no_smith",
-    "assetPath": "assets/exercises/exact/panturrilha_no_smith.webp",
+    "assetPath": "assets/exercises/exact/panturrilha_em_pe_no_smith.webp",
     "prompt": "Ultra realistic fitness image of a person performing Panturrilha no Smith, correct form, lower-leg exercise exactly matching the name, ankle position and calf engagement clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -1832,13 +1832,13 @@
   {
     "name": "Panturrilhas no leg horizontal",
     "asset": "panturrilhas_no_leg_horizontal",
-    "assetPath": "assets/exercises/exact/panturrilhas_no_leg_horizontal.webp",
+    "assetPath": "assets/exercises/exact/panturrilha_no_leg_press_horizontal.webp",
     "prompt": "Ultra realistic fitness image of a person performing Panturrilhas no leg horizontal, correct form, lower-leg exercise exactly matching the name, ankle position and calf engagement clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
     "name": "Panturrilhas no Smith",
     "asset": "panturrilhas_no_smith",
-    "assetPath": "assets/exercises/exact/panturrilhas_no_smith.webp",
+    "assetPath": "assets/exercises/exact/panturrilha_em_pe_no_smith.webp",
     "prompt": "Ultra realistic fitness image of a person performing Panturrilhas no Smith, correct form, lower-leg exercise exactly matching the name, ankle position and calf engagement clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -2126,7 +2126,7 @@
   {
     "name": "Cadeira flexora",
     "asset": "cadeira_flexora",
-    "assetPath": "assets/exercises/exact/cadeira_flexora.webp",
+    "assetPath": "assets/exercises/exact/flexora_sentado.webp",
     "prompt": "Ultra realistic fitness image of a person performing Cadeira flexora, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -2228,13 +2228,13 @@
   {
     "name": "Mesa flexora",
     "asset": "mesa_flexora",
-    "assetPath": "assets/exercises/exact/mesa_flexora.webp",
+    "assetPath": "assets/exercises/exact/flexora_deitado.webp",
     "prompt": "Ultra realistic fitness image of a person performing Mesa flexora, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
     "name": "Mesa flexora leg curl",
     "asset": "mesa_flexora_leg_curl",
-    "assetPath": "assets/exercises/exact/mesa_flexora_leg_curl.webp",
+    "assetPath": "assets/exercises/exact/flexora_deitado.webp",
     "prompt": "Ultra realistic fitness image of a person performing Mesa flexora leg curl, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
@@ -2288,13 +2288,13 @@
   {
     "name": "Stiff (Terra Romeno)",
     "asset": "stiff_terra_romeno",
-    "assetPath": "assets/exercises/exact/stiff_terra_romeno.webp",
+    "assetPath": "assets/exercises/exact/levantamento_terra_romeno.webp",
     "prompt": "Ultra realistic fitness image of a person performing Stiff (Terra Romeno), correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {
     "name": "Stiff com barra",
     "asset": "stiff_com_barra",
-    "assetPath": "assets/exercises/exact/stiff_com_barra.webp",
+    "assetPath": "assets/exercises/exact/levantamento_terra_romeno.webp",
     "prompt": "Ultra realistic fitness image of a person performing Stiff com barra, correct form, equipment and variation exactly matching the exercise name, main working muscles and joint alignment clearly visible, minimal gym environment, clean white or soft gray background, soft shadows, professional lighting, 3/4 or side view chosen to clearly show the movement, instructional style, highly detailed, no text, no watermark, no logo."
   },
   {

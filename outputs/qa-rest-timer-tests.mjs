@@ -173,7 +173,7 @@ const checks = [
   },
   {
     name: "service worker aceita notificacao local",
-    pass: /const VERSION = "v\d+"/.test(sw) &&
+    pass: /const VERSION = "v\d+(?:-[^"]+)?"/.test(sw) &&
       sw.includes('type === "SHOW_NOTIFICATION"') &&
       sw.includes('type === "SCHEDULE_REST_TIMER"') &&
       sw.includes('type === "CANCEL_REST_TIMER"') &&

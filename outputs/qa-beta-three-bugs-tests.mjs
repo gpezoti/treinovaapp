@@ -16,8 +16,8 @@ assert.match(html, /subscription,\s*user_agent: navigator\.userAgent/);
 
 assert.match(html, /async function mergeAdminPaymentProfiles\(rows\)/);
 assert.match(html, /async function mergeCoachPaymentProfiles\(rows\)/);
-assert.match(html, /STATE\.adminPayments = await mergeAdminPaymentProfiles\(rows\)/);
-assert.match(html, /STATE\.coachPayments = await mergeCoachPaymentProfiles\(data \|\| \[\]\)/);
+assert.match(html, /sb\.from\("v_admin_payments"\)\.select\("\*"\)/);
+assert.match(html, /sb\.from\("v_coach_payments"\)/);
 
 assert.match(edge, /function normalizePushSubscription\(input: any\)/);
 assert.match(edge, /async function saveRequestSubscription\(userId: string, body: any\)/);

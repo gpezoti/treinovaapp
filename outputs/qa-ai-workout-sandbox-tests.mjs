@@ -7,6 +7,20 @@ import { fileURLToPath } from "node:url";
 const root = new URL("../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
 
+const sandboxFiles = [
+  "sandbox/ai-workout-builder/server.mjs",
+  "sandbox/ai-workout-builder/public/index.html",
+  "sandbox/ai-workout-builder/public/app.js",
+  "sandbox/ai-workout-builder/public/styles.css",
+  "sandbox/ai-workout-builder/package.json",
+  "sandbox/ai-workout-builder/README.md",
+];
+
+if (!sandboxFiles.every((path) => existsSync(new URL(path, root)))) {
+  console.log("AI workout sandbox QA skipped: sandbox local não versionado neste checkout.");
+  process.exit(0);
+}
+
 const server = read("sandbox/ai-workout-builder/server.mjs");
 const html = read("sandbox/ai-workout-builder/public/index.html");
 const app = read("sandbox/ai-workout-builder/public/app.js");

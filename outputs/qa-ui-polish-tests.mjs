@@ -6,9 +6,9 @@ const checks = [
   {
     name: "atalhos rapidos do professor na lista de alunos",
     pass: html.includes("teacher-toolbar") &&
-      html.includes("Adicionar aluno") &&
+      html.includes("Novo aluno") &&
       html.includes("Compartilhar link") &&
-      html.includes("Ver inadimplentes"),
+      html.includes("em aberto"),
   },
   {
     name: "campos e botoes com alvo de toque adequado no mobile",

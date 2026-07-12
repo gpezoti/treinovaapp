@@ -683,6 +683,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .auth-card { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 20px; }
 .auth-choice { display: grid; gap: 10px; margin-top: 14px; }
 .auth-choice-note { font-size: 12px; color: var(--text-3); line-height: 1.45; text-align: center; }
+.auth-footer { margin-top: auto; padding: 28px 0 4px; text-align: center; font-size: 11px; color: var(--text-3); }
 .signup-benefits { display: grid; gap: 7px; margin: 10px 0 14px; }
 .signup-benefit { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 12px; line-height: 1.35; }
 .signup-benefit svg { color: var(--green); flex: 0 0 auto; }
@@ -827,6 +828,8 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
 .period-week-title { font-size:12px; font-weight:800; color:var(--text-2); text-transform:uppercase; letter-spacing:.7px; }
 .period-week-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
 .period-week-actions .mini-btn { min-height:30px; padding:5px 9px; font-size:10px; }
+.period-week-actions .period-week-move { flex:0 0 34px; width:34px; min-width:34px; padding:0; display:grid;place-items:center; }
+.period-week-actions .period-week-move svg { width:15px; height:15px; }
 .period-week-card.is-busy { opacity:.68; pointer-events:none; border-color:var(--brand); }
 .period-day-editor-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; position:sticky; top:-20px; z-index:2; background:var(--bg-2); padding:10px 0; }
 .preset-chip-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
@@ -876,6 +879,7 @@ button[disabled], .mini-btn[disabled] { opacity: .52 !important; cursor: not-all
   .period-week-head { align-items:flex-start; flex-direction:column; }
   .period-week-actions { width:100%; justify-content:flex-start; }
   .period-week-actions .mini-btn { flex:1 1 auto; min-width:92px; }
+  .period-week-actions .period-week-move { flex:0 0 34px; min-width:34px; }
   .library-exercise-card { padding:10px; }
   .library-exercise-row { grid-template-columns:54px minmax(0,1fr); gap:9px; align-items:start; }
   .library-exercise-row .ex-thumb { width:54px !important; height:54px !important; flex-basis:54px !important; }
@@ -1130,14 +1134,14 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
       <button type="button" class="btn-ghost" style="margin-top:10px" onclick="showAuthForm()">← Já tenho conta</button>
     </div>
   </div>
-  <div class="auth-choice" style="text-align:center; margin-top:20px; padding:0 4px;">
+  <div class="auth-choice" id="auth-choice" style="text-align:center; margin-top:20px; padding:0 4px;">
     <button type="button" class="btn-ghost" onclick="showSignupPanel()">Sou treinador e quero testar grátis</button>
     <p class="auth-choice-note" style="margin:0;">
       Novo por aqui? Seu treinador já criou seu acesso.<br>
       Use o e-mail e senha que ele cadastrou para você.
     </p>
   </div>
-  <div style="position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:11px;color:var(--text-3)">
+  <div class="auth-footer">
     <a href="#" onclick="event.preventDefault();openLegalModal('terms')" style="color:var(--text-3);text-decoration:none;margin:0 8px">Termos de Uso</a>
     ·
     <a href="#" onclick="event.preventDefault();openLegalModal('privacy')" style="color:var(--text-3);text-decoration:none;margin:0 8px">Privacidade</a>
@@ -3328,6 +3332,8 @@ function showSignupError(msg) {
 function showSignupPanel() {
   document.getElementById("auth-form").style.display = "none";
   document.getElementById("forgot-panel").style.display = "none";
+  const choice = document.getElementById("auth-choice");
+  if (choice) choice.style.display = "none";
   const panel = document.getElementById("signup-panel");
   if (panel) panel.style.display = "block";
   const error = document.getElementById("signup-error");
@@ -3442,6 +3448,8 @@ function showForgotPanel() {
   document.getElementById("auth-form").style.display = "none";
   document.getElementById("forgot-panel").style.display = "block";
   document.getElementById("signup-panel").style.display = "none";
+  const choice = document.getElementById("auth-choice");
+  if (choice) choice.style.display = "none";
   document.getElementById("auth-error").style.display = "none";
   setForgotPanelMessage(null);
   const fe = document.getElementById("forgot-email");
@@ -3453,6 +3461,8 @@ function showAuthForm() {
   document.getElementById("forgot-panel").style.display = "none";
   document.getElementById("signup-panel").style.display = "none";
   document.getElementById("auth-form").style.display = "block";
+  const choice = document.getElementById("auth-choice");
+  if (choice) choice.style.display = "grid";
 }
 
 let _forgotPasswordCooldownTimer = null;
@@ -3898,7 +3908,9 @@ function getActiveWorkoutSessionForHome() {
     const rememberedRow = activeRows.find(s => String(s.id) === String(remembered.id));
     if (rememberedRow) candidate = rememberedRow;
   }
-  if (!candidate && STATE.currentSession?.status === "in_progress") candidate = STATE.currentSession;
+  if (!candidate && STATE.currentSession?.status === "in_progress") {
+    candidate = activeRows.find(s => String(s.id) === String(STATE.currentSession.id)) || null;
+  }
   if (!candidate) candidate = activeRows[0] || null;
   if (candidate && latestCompleted && sessionCompletedTime(latestCompleted) > sessionRecencyTime(candidate)) {
     return null;
@@ -3944,7 +3956,6 @@ function pickBestWorkoutSession(rows = [], workoutId = null) {
   const list = sortWorkoutSessionsByRecency(candidates.length ? candidates : rows);
   return list.find(s => s.status === "in_progress")
     || list.find(s => s.status === "completed")
-    || list[0]
     || null;
 }
 
@@ -4001,9 +4012,13 @@ async function loadKnownWorkoutSessions(date = todayISO()) {
   [...(dayRes.data || []), ...(activeRes.data || []), ...(completedRes.data || [])].forEach(s => { if (s?.id) byId[s.id] = s; });
   STATE.todaySessions = sortWorkoutSessionsByRecency(Object.values(byId));
   const active = getActiveWorkoutSessionForHome();
-  if (active && (!STATE.currentSession || STATE.currentSession.status === "completed")) {
+  if (active) {
+    const changed = !STATE.currentSession
+      || STATE.currentSession.status !== "in_progress"
+      || String(STATE.currentSession.id) !== String(active.id);
     setCurrentWorkoutSession(active, { remember: true });
-    await loadSetLogs();
+    if (changed) await loadSetLogs();
+    await abandonOtherInProgressSessions(active);
   }
   return STATE.todaySessions;
 }
@@ -4058,11 +4073,30 @@ async function loadOrCreateSession(date, workoutCode, intensity, workoutId = nul
   if (existing) {
     setCurrentWorkoutSession(existing, { remember: existing.status === "in_progress" });
   } else {
+    // Uma conta deve ter apenas um treino ativo, inclusive entre abas/dispositivos.
+    // Libera a sessao anterior antes do insert para respeitar o indice parcial do banco.
+    await abandonInProgressSessionsForDate(null);
     const { data, error } = await sb.from("sessions").insert({
       student_id: STATE.profile.id, date, workout_code: workoutCode,
       workout_id: w ? w.id : null, intensity, status: "in_progress"
     }).select().single();
     if (error) {
+      if (String(error.code || "") === "23505") {
+        const { data: concurrent } = await sb.from("sessions")
+          .select("*")
+          .eq("student_id", STATE.profile.id)
+          .eq("status", "in_progress")
+          .order("started_at", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (concurrent) {
+          setCurrentWorkoutSession(concurrent, { remember: true });
+          showToast("O treino ativo em outra aba foi retomado.", "success");
+          await loadSetLogs();
+          return STATE.currentSession;
+        }
+      }
       console.error("[workout] Falha ao iniciar sessão", error);
       throw error;
     }
@@ -10001,9 +10035,11 @@ async function startWorkoutSession(date, code, intensity, workoutId = null) {
   } catch (e) {
     console.error("[workout] Não foi possível iniciar treino", e);
     const msg = String(e?.message || e || "");
-    const friendly = msg.includes("is_payment_ok") || msg.includes("permission denied")
-      ? "Permissão de treino corrigida no banco. Atualize o app e tente novamente."
-      : "Não foi possível iniciar o treino. Atualize o app e tente novamente.";
+    const friendly = /is_payment_ok|permission denied|unauthorized|forbidden/i.test(msg)
+      ? "Você não tem permissão para iniciar este treino. Atualize o app ou fale com seu treinador."
+      : /timeout|network|fetch|load failed/i.test(msg)
+        ? "Sua conexão oscilou. Confira a internet e toque em Iniciar treino novamente."
+        : "Não foi possível iniciar o treino agora. Toque em Iniciar treino novamente.";
     showToast(friendly, "error");
     await renderWorkout();
   }
@@ -12125,11 +12161,31 @@ window.getPreset = getPreset;
 // Carrega blocos de um conjunto de dias
 async function loadBlocksForDays(dayIds) {
   if (!dayIds || !dayIds.length) return {};
-  const { data } = await sb.from("periodization_blocks")
+  const { data, error } = await sb.from("periodization_blocks")
     .select("*").in("day_id", dayIds).order("position");
+  if (error) throw error;
   const map = {};
   (data || []).forEach(b => { (map[b.day_id] = map[b.day_id] || []).push(b); });
   return map;
+}
+
+function canEditPeriodization() {
+  if (["coach", "admin"].includes(STATE.profile?.role)) return true;
+  showToast("A periodização é definida pelo seu treinador.", "error");
+  return false;
+}
+
+function renderPeriodizationLoadError(studentId = null) {
+  return `
+    <h3>Periodização</h3>
+    <div class="empty">
+      <h3>Não foi possível carregar o ciclo</h3>
+      <p>Confira sua conexão e tente novamente. Nenhuma alteração foi feita.</p>
+      <div class="empty-actions">
+        <button class="btn-primary" style="width:auto" onclick="${studentId ? `openStudentPeriodSheet('${studentId}')` : 'location.reload()'}">Tentar novamente</button>
+        <button class="btn-ghost" style="width:auto" onclick="closeSheet()">Fechar</button>
+      </div>
+    </div>`;
 }
 
 function summarizePeriodDayBlocks(blocks = []) {
@@ -12343,23 +12399,36 @@ window.openStudentPeriodSheet = async function(id) {
   openSheet(`<h3>Periodização</h3><div class="loading"><div class="spinner"></div></div>`);
   if (!_PRESETS.length) await loadPresets();
   const isSelfPeriod = STATE.profile && id === STATE.profile.id;
-  const { data: days } = await sb.from("periodization_days")
+  const canEdit = ["coach", "admin"].includes(STATE.profile?.role);
+  const { data: days, error: daysError } = await sb.from("periodization_days")
     .select("*").eq("student_id", id).order("date");
+  if (daysError) {
+    console.error("[openStudentPeriodSheet]", daysError);
+    openSheet(renderPeriodizationLoadError(id));
+    return;
+  }
   STATE._periodDaysByStudent = STATE._periodDaysByStudent || {};
   STATE._periodDaysByStudent[id] = days || [];
   const dayIds = (days||[]).map(d => d.id);
-  const blocksByDay = await loadBlocksForDays(dayIds);
+  let blocksByDay = {};
+  try {
+    blocksByDay = await loadBlocksForDays(dayIds);
+  } catch (error) {
+    console.error("[openStudentPeriodSheet] blocks", error);
+    openSheet(renderPeriodizationLoadError(id));
+    return;
+  }
   const grouped = [];
   for (let i = 0; i < (days||[]).length; i += 7) grouped.push((days||[]).slice(i, i+7));
 
   const html = `
     <h3>${isSelfPeriod ? "Minha periodização" : "Periodização do aluno"}</h3>
-    <p style="font-size:13px;color:var(--text-2);margin:0 0 10px">Toque em um dia para editar os blocos. Você pode ter <b>vários blocos por dia</b> (ex: aeróbio + hipertrofia).</p>
-    <div class="period-toolbar">
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 10px">${canEdit ? 'Toque em um dia para editar os blocos. Você pode ter <b>vários blocos por dia</b> (ex: aeróbio + hipertrofia).' : 'Toque em um dia para ver os blocos programados pelo seu treinador. Você pode ter <b>vários blocos por dia</b> (ex: aeróbio + hipertrofia).'}</p>
+    ${canEdit ? `<div class="period-toolbar">
       <button class="mini-btn mini-btn-primary" onclick="addPeriodWeek('${id}')">+ Semana</button>
       <button class="mini-btn mini-btn-ghost" onclick="openApplyTemplateSheet('${id}')" title="Aplicar template salvo"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V7H4v14h4z"/><path d="M16 21V3h-4v18h4z"/><path d="M22 21V11h-4v10h4z"/></svg> Template</button>
       <button class="mini-btn mini-btn-ghost" onclick="openPeriodActionsSheet('${id}', ${grouped.length > 0 ? 'true' : 'false'})" title="Mais ações">Mais</button>
-    </div>
+    </div>` : ''}
     ${(days && days.length) ? `
       <div class="card mb-8" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px">
         <div style="display:flex;align-items:center;gap:10px;min-width:0">
@@ -12369,10 +12438,10 @@ window.openStudentPeriodSheet = async function(id) {
             <div class="fw-700 text-sm" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmtDateBR(days[0].date)} · ${grouped.length} semana${grouped.length === 1 ? "" : "s"}</div>
           </div>
         </div>
-        <button class="mini-btn mini-btn-primary" style="flex:0 0 auto" onclick="openPeriodConfig('${id}')">Alterar</button>
+        ${canEdit ? `<button class="mini-btn mini-btn-primary" style="flex:0 0 auto" onclick="openPeriodConfig('${id}')">Alterar</button>` : ''}
       </div>
     ` : ""}
-    ${grouped.length === 0 ? `<div class="empty"><p>Nenhuma semana ainda.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openPeriodConfig('${id}')">Definir início e semanas</button><button class="btn-ghost" style="width:auto" onclick="addPeriodWeek('${id}')">+ Semana</button></div></div>` : grouped.map((week, wi) => `
+    ${grouped.length === 0 ? `<div class="empty"><p>${canEdit ? 'Nenhuma semana ainda.' : 'Seu treinador ainda não configurou uma periodização.'}</p>${canEdit ? `<div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="openPeriodConfig('${id}')">Definir início e semanas</button><button class="btn-ghost" style="width:auto" onclick="addPeriodWeek('${id}')">+ Semana</button></div>` : ''}</div>` : grouped.map((week, wi) => `
       <div class="card mb-8 period-week-card" id="period-week-${wi}">
         <div class="period-week-head">
           <div>
@@ -12380,13 +12449,13 @@ window.openStudentPeriodSheet = async function(id) {
             <div class="text-xs muted">${fmtDateBR(week[0]?.date)}${week[6]?.date ? ` a ${fmtDateBR(week[6].date)}` : ""}</div>
             <div class="text-xs muted">${week.filter(day => (blocksByDay[day.id] || []).length > 0).length} de ${week.length} dias configurados</div>
           </div>
-          <div class="period-week-actions">
-            <button class="mini-btn mini-btn-ghost" onclick="movePeriodWeek('${id}',${wi},-1)" ${wi === 0 ? 'disabled' : ''}>↑ Subir</button>
-            <button class="mini-btn mini-btn-ghost" onclick="movePeriodWeek('${id}',${wi},1)" ${wi === grouped.length - 1 ? 'disabled' : ''}>↓ Descer</button>
+          ${canEdit ? `<div class="period-week-actions">
+            <button class="mini-btn mini-btn-ghost period-week-move" aria-label="Mover semana para cima" title="Mover semana para cima" onclick="movePeriodWeek('${id}',${wi},-1)" ${wi === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></button>
+            <button class="mini-btn mini-btn-ghost period-week-move" aria-label="Mover semana para baixo" title="Mover semana para baixo" onclick="movePeriodWeek('${id}',${wi},1)" ${wi === grouped.length - 1 ? 'disabled' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
             <button class="mini-btn mini-btn-ghost" onclick="openRepeatPeriodWeekSheet('${id}',${wi})" ${wi >= grouped.length - 1 ? 'disabled' : ''}>Repetir</button>
             <button class="mini-btn mini-btn-primary" onclick="duplicatePeriodWeek('${id}',${wi})">Duplicar</button>
             <button class="mini-btn mini-btn-danger" onclick="removePeriodWeekAt('${id}',${wi})">Remover</button>
-          </div>
+          </div>` : ''}
         </div>
         <div class="week-grid">
           ${week.map(d => {
@@ -12412,6 +12481,7 @@ window.openStudentPeriodSheet = async function(id) {
 };
 
 window.openPeriodActionsSheet = function(studentId, hasWeeks) {
+  if (!canEditPeriodization()) return;
   openSheet(`
     <h3>Ações da periodização</h3>
     <p>Use estas opções para organizar o ciclo completo sem poluir a grade principal.</p>
@@ -12436,12 +12506,14 @@ window.openPeriodActionsSheet = function(studentId, hasWeeks) {
 };
 
 window.addPeriodWeek = async function(studentId) {
+  if (!canEditPeriodization()) return;
   const { error } = await sb.rpc("add_periodization_week", { p_student_id: studentId });
   if (error) { showToast("Erro: "+error.message, "error"); return; }
   showToast("Semana adicionada", "success");
   openStudentPeriodSheet(studentId);
 };
 window.removePeriodWeek = async function(studentId) {
+  if (!canEditPeriodization()) return;
   if (!await showConfirm({ title: "Remover última semana?", msg: "A última semana da periodização será apagada.", confirm: "Remover", danger: true })) return;
   const { error } = await sb.rpc("remove_periodization_week", { p_student_id: studentId });
   if (error) { showToast("Erro: "+error.message, "error"); return; }
@@ -12450,10 +12522,7 @@ window.removePeriodWeek = async function(studentId) {
 };
 
 function canManagePeriodWeeks() {
-  if (STATE.profile?.role !== "coach") {
-    showToast("Apenas treinador pode organizar a periodização.", "error");
-    return false;
-  }
+  if (!canEditPeriodization()) return false;
   if (STATE._periodWeekAction) return false;
   return true;
 }
@@ -12771,6 +12840,7 @@ window.removePeriodWeekAt = async function(studentId, weekIndex) {
 };
 
 window.reseedPeriod = async function(id) {
+  if (!canEditPeriodization()) return;
   if (!await showConfirm({ title: "Recriar periodização?", msg: "Os blocos atuais serão substituídos. O histórico de treinos é preservado.", confirm: "Recriar", danger: true })) return;
   const { error } = await sb.rpc("seed_periodization_for_student", { p_student: id });
   if (error) { showToast("Erro: "+error.message, "error"); return; }
@@ -12779,6 +12849,7 @@ window.reseedPeriod = async function(id) {
 };
 
 window.openPeriodConfig = function(studentId) {
+  if (!canEditPeriodization()) return;
   const today = todayISO();
   // Pega data de início e número de semanas atuais
   const days = STATE.periodization && STATE.periodization.length > 0 ? STATE.periodization : [];
@@ -12809,6 +12880,7 @@ window.openPeriodConfig = function(studentId) {
 };
 
 window.applyPeriodConfig = async function(studentId) {
+  if (!canEditPeriodization()) return;
   const startDate = document.getElementById("pc-start").value;
   const numWeeks = parseInt(document.getElementById("pc-weeks").value);
   if (!startDate || !numWeeks) { showToast("Preencha os campos", "error"); return; }
@@ -12871,6 +12943,7 @@ window.applyPeriodConfig = async function(studentId) {
 
 window.editPeriodDay = async function(dayId, studentId) {
   if (!_PRESETS.length) await loadPresets();
+  const canEdit = ["coach", "admin"].includes(STATE.profile?.role);
   const periodWorkoutOptions = await loadPeriodWorkoutOptions(studentId);
   STATE._periodWorkoutOptions = STATE._periodWorkoutOptions || {};
   STATE._periodWorkoutOptions[studentId] = periodWorkoutOptions;
@@ -12879,8 +12952,12 @@ window.editPeriodDay = async function(dayId, studentId) {
   if (sheetEl) _periodScrollTop = sheetEl.scrollTop;
   _editingStudentId = studentId;
 
-  const { data: d } = await sb.from("periodization_days").select("*").eq("id", dayId).single();
-  if (!d) return;
+  const { data: d, error: dayError } = await sb.from("periodization_days").select("*").eq("id", dayId).single();
+  if (dayError || !d) {
+    console.error("[editPeriodDay]", dayError);
+    showToast("Não foi possível abrir este dia. Tente novamente.", "error");
+    return;
+  }
   const cachedDays = STATE._periodDaysByStudent?.[studentId];
   const periodDays = cachedDays && cachedDays.length
     ? cachedDays
@@ -12888,8 +12965,13 @@ window.editPeriodDay = async function(dayId, studentId) {
   const dayIndex = periodDays.findIndex(day => day.id === dayId);
   const prevDay = dayIndex > 0 ? periodDays[dayIndex - 1] : null;
   const nextDay = dayIndex >= 0 && dayIndex < periodDays.length - 1 ? periodDays[dayIndex + 1] : null;
-  const { data: blocks } = await sb.from("periodization_blocks")
+  const { data: blocks, error: blocksError } = await sb.from("periodization_blocks")
     .select("*").eq("day_id", dayId).order("position");
+  if (blocksError) {
+    console.error("[editPeriodDay] blocks", blocksError);
+    openSheet(renderPeriodizationLoadError(studentId));
+    return;
+  }
   const dt = new Date(d.date+"T00:00:00");
   const sheetContent = document.getElementById("sheet-content");
 
@@ -12898,7 +12980,7 @@ window.editPeriodDay = async function(dayId, studentId) {
       <button class="mini-btn" onclick="backToPeriodSheet('${studentId}')" style="padding:6px 12px">← Voltar</button>
       <div>
         <div style="font-weight:700;font-size:15px">${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}/${MONTH_SHORT[dt.getMonth()]}</div>
-        <div style="font-size:11px;color:var(--text-3)">Alterações salvas automaticamente</div>
+        <div style="font-size:11px;color:var(--text-3)">${canEdit ? 'Alterações salvas automaticamente' : 'Programação definida pelo seu treinador'}</div>
       </div>
       <div style="margin-left:auto;display:flex;gap:6px">
         <button class="mini-btn mini-btn-ghost" style="padding:6px 10px" ${prevDay ? `onclick="editPeriodDay('${prevDay.id}','${studentId}')"` : 'disabled'}>← Dia</button>
@@ -12906,28 +12988,30 @@ window.editPeriodDay = async function(dayId, studentId) {
       </div>
     </div>
     <div id="blocks-list">
-      ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId, (blocks||[]).length, periodWorkoutOptions)).join("") || '<div style="padding:14px;text-align:center;color:var(--text-3);font-size:13px">Nenhum bloco. Adicione abaixo.</div>'}
+      ${(blocks||[]).map((b, idx) => renderBlockItem(b, idx, dayId, studentId, (blocks||[]).length, periodWorkoutOptions, canEdit)).join("") || `<div style="padding:14px;text-align:center;color:var(--text-3);font-size:13px">${canEdit ? 'Nenhum bloco. Adicione abaixo.' : 'Nenhum bloco programado para este dia.'}</div>`}
     </div>
-    ${["coach", "admin"].includes(STATE.profile?.role) ? `
+    ${canEdit ? `
       <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">Ações em massa</div>
       <button class="mini-btn mini-btn-ghost" style="width:100%;justify-content:center;min-height:38px" onclick="applyDayToSameWeekday('${dayId}','${studentId}')">Aplicar este dia em toda ${WEEKDAY_FULL[dt.getDay()]}</button>
     ` : ""}
-    <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">+ Adicionar bloco</div>
-    <div class="preset-chip-grid">
-      ${_PRESETS.filter(p => p.active !== false).map(p => `
-        <button class="mini-btn" style="background:${p.color}22;color:${p.color};border:1px solid ${p.color}55;font-size:11px" onclick="addBlockToDay('${dayId}','${studentId}','${p.code}',${p.is_workout})">${p.label}</button>
-      `).join("")}
-    </div>
+    ${canEdit ? `
+      <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">+ Adicionar bloco</div>
+      <div class="preset-chip-grid">
+        ${_PRESETS.filter(p => p.active !== false).map(p => `
+          <button class="mini-btn" style="background:${p.color}22;color:${p.color};border:1px solid ${p.color}55;font-size:11px" onclick="addBlockToDay('${dayId}','${studentId}','${p.code}',${p.is_workout})">${p.label}</button>
+        `).join("")}
+      </div>` : ''}
   `;
   sheetContent.innerHTML = '<div class="sheet-handle"></div>' + html;
 };
 
 const AERO_MODALITIES = ['Corrida','Caminhada','Bike','Elíptico','Natação','Remo','Pular corda','Outro'];
 
-window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0, periodWorkoutOptions = null) {
+window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0, periodWorkoutOptions = null, canEditOverride = null) {
   const preset = getPreset(b.preset_code) || { label: b.preset_code, color: '#9aa6c0', is_workout: !!b.workout_code };
   const isWorkout = preset.is_workout || !!b.workout_code;
   const isAero = b.preset_code === 'aero' || preset.label?.toLowerCase().includes('aero');
+  const canEdit = canEditOverride == null ? ["coach", "admin"].includes(STATE.profile?.role) : !!canEditOverride;
   const workoutPresets = (_PRESETS || []).filter(p => p.active !== false && p.is_workout);
   const workoutMap = periodWorkoutOptions || STATE._periodWorkoutOptions?.[studentId] || STATE.workouts || {};
   const selectedWorkout = b.workout_id
@@ -12936,48 +13020,54 @@ window.renderBlockItem = function(b, idx, dayId, studentId, totalBlocks = 0, per
   const codes = Object.keys(workoutMap || {})
     .filter(c => c && c !== 'FLEX')
     .sort((a,b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+  const selectedWorkoutLabel = selectedWorkout?.name || (b.workout_code ? `Treino ${b.workout_code}` : "Treino não selecionado");
+  const blockActions = canEdit ? `
+    <div style="display:flex;gap:6px">
+      ${idx > 0 ? `<button class="mini-btn mini-btn-ghost" title="Mover bloco para cima" aria-label="Mover bloco para cima" style="padding:2px 8px;font-size:11px" onclick="moveBlock('${b.id}','${dayId}','${studentId}',-1)">↑</button>` : ''}
+      ${idx < totalBlocks - 1 ? `<button class="mini-btn mini-btn-ghost" title="Mover bloco para baixo" aria-label="Mover bloco para baixo" style="padding:2px 8px;font-size:11px" onclick="moveBlock('${b.id}','${dayId}','${studentId}',1)">↓</button>` : ''}
+      <button class="mini-btn mini-btn-ghost" title="Excluir bloco" aria-label="Excluir bloco" style="padding:2px 8px;font-size:11px;color:var(--red)" onclick="deleteBlock('${b.id}','${dayId}','${studentId}')">×</button>
+    </div>` : '';
+  const typeControls = canEdit && workoutPresets.length > 1 ? `
+    <div style="margin-bottom:8px">
+      <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Tipo do bloco</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        ${workoutPresets.map(p => `
+          <button class="mini-btn ${b.preset_code===p.code?'mini-btn-primary':'mini-btn-ghost'}"
+            style="padding:5px 10px;font-size:11px;${b.preset_code===p.code?`background:${p.color}22;color:${p.color};border-color:${p.color}66`:''}"
+            onclick="setBlockPreset('${b.id}','${dayId}','${studentId}','${p.code}')">${escape(p.label)}</button>
+        `).join("")}
+      </div>
+    </div>` : '';
+  const workoutControls = canEdit ? `
+    <div style="display:flex;gap:5px;flex-wrap:wrap">
+      ${codes.map(c => `
+        <button class="mini-btn ${(selectedWorkout?.id && workoutMap[c]?.id === selectedWorkout.id) || (!selectedWorkout?.id && b.workout_code===c)?'mini-btn-primary':'mini-btn-ghost'}"
+          title="${escape(workoutMap[c]?.name || `Treino ${c}`)}"
+          style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${c}','${workoutMap[c]?.id || ""}')">${c}</button>
+      `).join("")}
+      <button class="mini-btn ${!b.workout_code?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','','')">—</button>
+    </div>` : `<div style="font-size:12px;color:var(--text-2);margin-top:2px"><b>Treino:</b> ${escape(selectedWorkoutLabel)}</div>`;
+  const aeroControls = canEdit ? `
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Modalidade aeróbia</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap">
+      ${AERO_MODALITIES.map(m => `
+        <button class="mini-btn ${b.workout_code===m?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 10px;font-size:11px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${m}')">${m}</button>
+      `).join("")}
+    </div>
+    ${b.workout_code ? `<div style="font-size:11px;color:var(--brand);margin-top:6px">✓ ${b.workout_code}</div>` : `<div style="font-size:11px;color:var(--text-3);margin-top:6px">Selecione a modalidade acima</div>`}`
+    : `<div style="font-size:12px;color:var(--text-2)"><b>Modalidade:</b> ${escape(b.workout_code || 'Não definida')}</div>`;
   return `
     <div style="background:var(--bg-card);border:1px solid var(--line);border-left:4px solid ${preset.color};border-radius:10px;padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-weight:700;font-size:13px;color:${preset.color}">${preset.label}</div>
-        <div style="display:flex;gap:6px">
-          ${idx > 0 ? `<button class="mini-btn mini-btn-ghost" style="padding:2px 8px;font-size:11px" onclick="moveBlock('${b.id}','${dayId}','${studentId}',-1)">↑</button>` : ''}
-          ${idx < totalBlocks - 1 ? `<button class="mini-btn mini-btn-ghost" style="padding:2px 8px;font-size:11px" onclick="moveBlock('${b.id}','${dayId}','${studentId}',1)">↓</button>` : ''}
-          <button class="mini-btn mini-btn-ghost" style="padding:2px 8px;font-size:11px;color:var(--red)" onclick="deleteBlock('${b.id}','${dayId}','${studentId}')">×</button>
-        </div>
+        ${blockActions}
       </div>
       ${isWorkout && !isAero ? `
-        ${workoutPresets.length > 1 ? `
-          <div style="margin-bottom:8px">
-            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Tipo do bloco</div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap">
-              ${workoutPresets.map(p => `
-                <button class="mini-btn ${b.preset_code===p.code?'mini-btn-primary':'mini-btn-ghost'}"
-                  style="padding:5px 10px;font-size:11px;${b.preset_code===p.code?`background:${p.color}22;color:${p.color};border-color:${p.color}66`:''}"
-                  onclick="setBlockPreset('${b.id}','${dayId}','${studentId}','${p.code}')">${escape(p.label)}</button>
-              `).join("")}
-            </div>
-          </div>
-        ` : ''}
-        <div style="display:flex;gap:5px;flex-wrap:wrap">
-          ${codes.map(c => `
-            <button class="mini-btn ${(selectedWorkout?.id && workoutMap[c]?.id === selectedWorkout.id) || (!selectedWorkout?.id && b.workout_code===c)?'mini-btn-primary':'mini-btn-ghost'}"
-              title="${escape(workoutMap[c]?.name || `Treino ${c}`)}"
-              style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${c}','${workoutMap[c]?.id || ""}')">${c}</button>
-          `).join("")}
-          <button class="mini-btn ${!b.workout_code?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 11px;font-size:12px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','','')">—</button>
-        </div>
-        ${selectedWorkout ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">Treino: ${escape(selectedWorkout.name || `Treino ${b.workout_code}`)}</div>` : ''}
-	        ${preset.rep_min || preset.pause_seconds || preset.sets_count ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${preset.sets_count || 3} séries · ${preset.rep_min || "—"}-${preset.rep_max || "—"} reps · pausa ${formatPauseLabel(preset.pause_seconds || 0)}</div>` : ''}
-      ` : isAero ? `
-        <div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Modalidade aeróbia</div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap">
-          ${AERO_MODALITIES.map(m => `
-            <button class="mini-btn ${b.workout_code===m?'mini-btn-primary':'mini-btn-ghost'}" style="padding:5px 10px;font-size:11px" onclick="setBlockWorkout('${b.id}','${dayId}','${studentId}','${m}')">${m}</button>
-          `).join("")}
-        </div>
-        ${b.workout_code ? `<div style="font-size:11px;color:var(--brand);margin-top:6px">✓ ${b.workout_code}</div>` : `<div style="font-size:11px;color:var(--text-3);margin-top:6px">Selecione a modalidade acima</div>`}
-      ` : `<div style="font-size:11px;color:var(--text-3)">${preset.label}</div>`}
+        ${typeControls}
+        ${workoutControls}
+        ${selectedWorkout && canEdit ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">Treino: ${escape(selectedWorkout.name || `Treino ${b.workout_code}`)}</div>` : ''}
+        ${preset.rep_min || preset.pause_seconds || preset.sets_count ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${preset.sets_count || 3} séries · ${preset.rep_min || "—"}-${preset.rep_max || "—"} reps · pausa ${formatPauseLabel(preset.pause_seconds || 0)}</div>` : ''}
+      ` : isAero ? aeroControls : `<div style="font-size:11px;color:var(--text-3)">${preset.label}</div>`}
     </div>`;
 };
 
@@ -12991,6 +13081,7 @@ window.backToPeriodSheet = async function(studentId) {
 };
 
 window.addBlockToDay = async function(dayId, studentId, presetCode, isWorkout) {
+  if (!canEditPeriodization()) return;
   const { data: existing } = await sb.from("periodization_blocks").select("position").eq("day_id", dayId).order("position", { ascending: false }).limit(1);
   const pos = existing && existing.length ? (existing[0].position + 1) : 0;
   const insert = { day_id: dayId, position: pos, preset_code: presetCode };
@@ -13007,12 +13098,14 @@ window.addBlockToDay = async function(dayId, studentId, presetCode, isWorkout) {
 };
 
 window.deleteBlock = async function(blockId, dayId, studentId) {
+  if (!canEditPeriodization()) return;
   await sb.from("periodization_blocks").delete().eq("id", blockId);
   await syncDayLegacy(dayId);
   editPeriodDay(dayId, studentId);
 };
 
 window.moveBlock = async function(blockId, dayId, studentId, dir) {
+  if (!canEditPeriodization()) return;
   const { data: blocks } = await sb.from("periodization_blocks").select("id, position").eq("day_id", dayId).order("position");
   if (!blocks) return;
   const idx = blocks.findIndex(b => b.id === blockId);
@@ -13026,12 +13119,14 @@ window.moveBlock = async function(blockId, dayId, studentId, dir) {
 };
 
 window.setBlockWorkout = async function(blockId, dayId, studentId, workout, workoutId = null) {
+  if (!canEditPeriodization()) return;
   await sb.from("periodization_blocks").update({ workout_code: workout || null, workout_id: workoutId || null }).eq("id", blockId);
   await syncDayLegacy(dayId);
   editPeriodDay(dayId, studentId);
 };
 
 window.setBlockPreset = async function(blockId, dayId, studentId, presetCode) {
+  if (!canEditPeriodization()) return;
   const nextPreset = getPreset(presetCode);
   if (!nextPreset || nextPreset.active === false || !nextPreset.is_workout) {
     showToast("Selecione um tipo de treino válido", "error");
@@ -13068,6 +13163,7 @@ window.syncDayLegacy = syncDayLegacy;
 
 window.setPeriodField = async function(dayId, field, value, studentId) {
   // legacy support — não usar mais, mas mantido pra não quebrar caso algum código antigo chame
+  if (!canEditPeriodization()) return;
   const patch = {}; patch[field] = value;
   await sb.from("periodization_days").update(patch).eq("id", dayId);
   editPeriodDay(dayId, studentId);
