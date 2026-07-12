@@ -1,0 +1,4 @@
+-- Historical migration baseline: 20260503163536 wave2_index_cleanup_and_fk_indexes.
+-- This version was already applied in the production Supabase project before
+-- the repository received the complete migration history. It is intentionally
+-- a no-op so preview branches can reconcile the existing production history.

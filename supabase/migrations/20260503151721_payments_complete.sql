@@ -1,0 +1,4 @@
+-- Historical migration baseline: 20260503151721 payments_complete.
+-- This version was already applied in the production Supabase project before
+-- the repository received the complete migration history. It is intentionally
+-- a no-op so preview branches can reconcile the existing production history.

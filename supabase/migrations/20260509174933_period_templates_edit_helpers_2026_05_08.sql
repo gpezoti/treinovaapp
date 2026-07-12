@@ -1,0 +1,4 @@
+-- Historical migration baseline: 20260509174933 period_templates_edit_helpers_2026_05_08.
+-- This version was already applied in the production Supabase project before
+-- the repository received the complete migration history. It is intentionally
+-- a no-op so preview branches can reconcile the existing production history.

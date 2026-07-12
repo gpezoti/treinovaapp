@@ -1,0 +1,4 @@
+-- Historical migration baseline: 20260509113634 fix_workouts_coach_manage_scope_2026_05_08.
+-- This version was already applied in the production Supabase project before
+-- the repository received the complete migration history. It is intentionally
+-- a no-op so preview branches can reconcile the existing production history.
