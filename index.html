@@ -5684,6 +5684,8 @@ function resetTimerState() {
     focusExercisePosition: null,
     pushScheduled: false,
     pushScheduling: false,
+    pushScheduleToken: null,
+    pushFireAt: null,
     notified: false
   };
 }
@@ -5745,6 +5747,8 @@ function readPersistedTimer() {
         pausedRemaining: Number.isFinite(Number(state.pausedRemaining)) ? Number(state.pausedRemaining) : null,
         pushScheduled: state.pushScheduled === true,
         pushScheduling: state.pushScheduling === true,
+        pushScheduleToken: state.pushScheduleToken ? String(state.pushScheduleToken) : null,
+        pushFireAt: state.pushFireAt ? String(state.pushFireAt) : null,
         notified: state.notified === true
       };
     }
@@ -5762,6 +5766,8 @@ function readPersistedTimer() {
       pausedRemaining: null,
       pushScheduled: false,
       pushScheduling: false,
+      pushScheduleToken: null,
+      pushFireAt: null,
       notified: false
     };
   } catch(e) {
@@ -5792,6 +5798,8 @@ function persistTimerState(extra = {}) {
         : null,
       pushScheduled: STATE.timer.pushScheduled === true,
       pushScheduling: STATE.timer.pushScheduling === true,
+      pushScheduleToken: STATE.timer.pushScheduleToken || null,
+      pushFireAt: STATE.timer.pushFireAt || null,
       notified: STATE.timer.notified === true,
       ...extra
     };
@@ -5826,6 +5834,8 @@ function hydrateTimerFromPersisted(state, onDone) {
   STATE.timer.pausedRemaining = state.pausedRemaining || null;
   STATE.timer.label = state.label || "Próxima série";
   STATE.timer.exerciseName = state.exerciseName || STATE.timer.label;
+  STATE.timer.pushScheduleToken = state.pushScheduleToken || null;
+  STATE.timer.pushFireAt = state.pushFireAt || null;
   STATE.timer.focusExercisePosition = Number.isFinite(Number(state.focusExercisePosition))
     ? Number(state.focusExercisePosition)
     : null;
@@ -5982,14 +5992,28 @@ function rememberRestPushStatus(status, detail = "") {
     }));
   } catch(e) {}
 }
-async function verifyRestTimerPushJob(timerId) {
+function createRestTimerScheduleToken() {
+  try {
+    if (crypto?.randomUUID) return crypto.randomUUID();
+  } catch(e) {}
+  return `rest-push-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+function isCurrentRestTimerSchedule(timerId, scheduleToken) {
+  return Boolean(
+    STATE.timer?.id === timerId &&
+    STATE.timer?.pushScheduleToken === scheduleToken &&
+    (STATE.timer.running || STATE.timer.paused)
+  );
+}
+async function verifyRestTimerPushJob(timerId, scheduleToken = null) {
   try {
     if (!timerId) return false;
-    const { data, error } = await sb.from("rest_timer_push_jobs")
+    let query = sb.from("rest_timer_push_jobs")
       .select("id,status,fire_at")
       .eq("timer_id", timerId)
-      .eq("status", "scheduled")
-      .maybeSingle();
+      .eq("status", "scheduled");
+    if (scheduleToken) query = query.eq("schedule_token", scheduleToken);
+    const { data, error } = await query.maybeSingle();
     if (error) throw error;
     return Boolean(data);
   } catch(e) {
@@ -5997,12 +6021,14 @@ async function verifyRestTimerPushJob(timerId) {
     return false;
   }
 }
-async function upsertRestTimerPushJobDirect(timerId, seconds, exerciseName) {
+async function upsertRestTimerPushJobDirect(timerId, seconds, exerciseName, scheduleToken, subscription) {
   if (!sb || !STATE.user?.id || !timerId) return false;
   const fireAt = buildRestPushFireAt(seconds);
   const { error } = await sb.from("rest_timer_push_jobs").upsert({
     user_id: STATE.user.id,
     timer_id: timerId,
+    schedule_token: scheduleToken || null,
+    target_endpoint: subscription?.endpoint || null,
     exercise_name: exerciseName || "Próxima série",
     fire_at: fireAt,
     status: "scheduled",
@@ -6026,6 +6052,13 @@ function buildRestPushFireAt(seconds) {
 async function scheduleServerRestPush(seconds, exerciseName) {
   try {
     if (!sb || !STATE.user || !STATE.timer?.id) return false;
+    const timerId = STATE.timer.id;
+    const previousScheduleToken = STATE.timer.pushScheduleToken;
+    const scheduleToken = createRestTimerScheduleToken();
+    if (previousScheduleToken) cancelServerRestPush(timerId, previousScheduleToken);
+    const fireAt = buildRestPushFireAt(seconds);
+    STATE.timer.pushScheduleToken = scheduleToken;
+    STATE.timer.pushFireAt = fireAt;
     STATE.timer.pushScheduling = true;
     STATE.timer.pushScheduled = false;
     persistTimerState();
@@ -6039,12 +6072,16 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       if (document.visibilityState === "hidden") scheduleBackgroundRestNotification();
       return false;
     }
-    const fireAt = buildRestPushFireAt(seconds);
     const subscription = await getCurrentPushSubscriptionPayload();
+    if (!isCurrentRestTimerSchedule(timerId, scheduleToken)) return false;
+    if (!subscription?.endpoint) {
+      throw new Error("A assinatura Web Push deste aparelho não pôde ser confirmada.");
+    }
     const { error } = await sb.functions.invoke("rest-timer-push", {
       body: {
         action: "schedule",
-        timer_id: STATE.timer.id,
+        timer_id: timerId,
+        schedule_token: scheduleToken,
         fire_at: fireAt,
         exercise_name: exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série",
         url: buildRestTimerWorkoutUrl(),
@@ -6052,11 +6089,13 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       }
     });
     if (error) console.warn("[rest timer server schedule invoke]", error);
-    let verified = await verifyRestTimerPushJob(STATE.timer.id);
+    if (!isCurrentRestTimerSchedule(timerId, scheduleToken)) return false;
+    let verified = await verifyRestTimerPushJob(timerId, scheduleToken);
     if (!verified) {
-      await upsertRestTimerPushJobDirect(STATE.timer.id, seconds, exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série");
-      verified = await verifyRestTimerPushJob(STATE.timer.id);
+      await upsertRestTimerPushJobDirect(timerId, seconds, exerciseName || STATE.timer.exerciseName || STATE.timer.label || "Próxima série", scheduleToken, subscription);
+      verified = await verifyRestTimerPushJob(timerId, scheduleToken);
     }
+    if (!isCurrentRestTimerSchedule(timerId, scheduleToken)) return false;
     STATE.timer.pushScheduling = false;
     STATE.timer.pushScheduled = verified;
     persistTimerState();
@@ -6075,12 +6114,13 @@ async function scheduleServerRestPush(seconds, exerciseName) {
     return false;
   }
 }
-async function cancelServerRestPush(timerId) {
+async function cancelServerRestPush(timerId, scheduleToken = null) {
   try {
     const id = timerId || STATE.timer?.id || readPersistedTimer()?.id;
+    const token = scheduleToken || (id === STATE.timer?.id ? STATE.timer?.pushScheduleToken : null) || readPersistedTimer()?.pushScheduleToken || null;
     if (!sb || !STATE.user || !id) return;
     await sb.functions.invoke("rest-timer-push", {
-      body: { action: "cancel", timer_id: id }
+      body: { action: "cancel", timer_id: id, ...(token ? { schedule_token: token } : {}) }
     });
   } catch(e) {
     console.warn("[rest timer server cancel]", e);
@@ -6097,7 +6137,7 @@ async function rescheduleServerRestPushFromTimer(reason = "adjust") {
           status: "running"
         });
     if (remaining <= 0) {
-      cancelServerRestPush(STATE.timer.id);
+      cancelServerRestPush(STATE.timer.id, STATE.timer.pushScheduleToken);
       return false;
     }
     const ok = await scheduleServerRestPush(remaining, STATE.timer.exerciseName || STATE.timer.label || "Próxima série");
@@ -6136,6 +6176,7 @@ function reconcileTimerAfterLifecycle(reason = "resume") {
       STATE.timer.status = "finished";
       _releaseWakeLock();
       cancelBackgroundRestNotification();
+      cancelServerRestPush(saved.id, saved.pushScheduleToken);
       markPersistedTimerNotified(saved);
       rememberLastFinishedRestTimerContext(saved);
       clearPersistedTimer();
@@ -6205,6 +6246,8 @@ async function startTimer(sec, label, onDone, options = {}) {
   STATE.timer.exerciseName = exerciseName;
   STATE.timer.pushScheduled = false;
   STATE.timer.pushScheduling = false;
+  STATE.timer.pushScheduleToken = null;
+  STATE.timer.pushFireAt = null;
   STATE.timer.notified = false;
   STATE.timer.onDone = onDone || null;
   STATE.timer.focusExercisePosition = Number.isFinite(Number(options.focusExercisePosition))
@@ -6308,6 +6351,7 @@ function finishTimer() {
   STATE.timer.notified = true;
   _releaseWakeLock();
   cancelBackgroundRestNotification();
+  cancelServerRestPush(STATE.timer.id, STATE.timer.pushScheduleToken);
   rememberLastFinishedRestTimerContext({
     id: STATE.timer.id,
     startTimestamp: STATE.timer.startTimestamp || STATE.timer.startedAt,
@@ -6360,11 +6404,12 @@ function finishTimer() {
 }
 function cancelTimer() {
   const timerId = STATE.timer?.id;
+  const scheduleToken = STATE.timer?.pushScheduleToken;
   if (STATE.timer.raf) clearTimeout(STATE.timer.raf);
   resetTimerState();
   _releaseWakeLock();
   cancelBackgroundRestNotification();
-  cancelServerRestPush(timerId);
+  cancelServerRestPush(timerId, scheduleToken);
   clearPersistedTimer();
 }
 function closeTimer() {
@@ -6398,7 +6443,7 @@ function adjustTimer(delta) {
     STATE.timer.pushScheduled = false;
     STATE.timer.pushScheduling = false;
     persistTimerState();
-    cancelServerRestPush(STATE.timer.id);
+    cancelServerRestPush(STATE.timer.id, STATE.timer.pushScheduleToken);
   } else {
     rescheduleServerRestPushFromTimer("adjust");
   }
@@ -6421,7 +6466,7 @@ function pauseToggle() {
     STATE.timer.pushScheduling = false;
     persistTimerState();
     setTimerIcon(true);
-    cancelServerRestPush(STATE.timer.id);
+    cancelServerRestPush(STATE.timer.id, STATE.timer.pushScheduleToken);
   } else {
     const elapsedBeforePause = STATE.timer.secondsTotal - (STATE.timer.pausedRemaining || STATE.timer.secondsLeft || 0);
     const newStart = Date.now() - elapsedBeforePause * 1000;

@@ -38,7 +38,7 @@ const checks = [
     pass: html.includes("async function rescheduleServerRestPushFromTimer") &&
       html.includes('rescheduleServerRestPushFromTimer("adjust")') &&
       html.includes('rescheduleServerRestPushFromTimer("resume")') &&
-      html.includes("cancelServerRestPush(STATE.timer.id)") &&
+      html.includes("cancelServerRestPush(STATE.timer.id, STATE.timer.pushScheduleToken)") &&
       html.indexOf('rescheduleServerRestPushFromTimer("adjust")') > html.indexOf("function adjustTimer(delta)") &&
       html.indexOf('rescheduleServerRestPushFromTimer("resume")') > html.indexOf("function pauseToggle()"),
   },
@@ -81,10 +81,12 @@ const checks = [
       sw.includes("timerId"),
   },
   {
-    name: "timer preserva push remoto ao finalizar localmente",
+    name: "timer invalida o job remoto ao finalizar ou cancelar localmente",
     pass: html.includes("function isAppForegroundActive()") &&
       !html.includes('if (isAppForegroundActive()) cancelServerRestPush(STATE.timer.id);') &&
-      html.includes("cancelServerRestPush(timerId);"),
+      html.includes("cancelServerRestPush(STATE.timer.id, STATE.timer.pushScheduleToken);") &&
+      html.includes("cancelServerRestPush(timerId, scheduleToken);") &&
+      html.includes("cancelServerRestPush(saved.id, saved.pushScheduleToken);"),
   },
   {
     name: "modal de notificacoes consegue renovar assinatura com helper global",
@@ -182,10 +184,12 @@ const checks = [
   },
 ];
 
-const edge = fs.readFileSync("outputs/edge-functions/rest-timer-push/index.ts", "utf8");
+const edge = fs.readFileSync("supabase/functions/rest-timer-push/index.ts", "utf8");
 const sql = fs.readFileSync("sql/rest_timer_push_jobs_2026_05_05.sql", "utf8");
 const pushSql = fs.readFileSync("sql/push_subscriptions_2026_05_06.sql", "utf8");
 const cronSql = fs.readFileSync("sql/rest_timer_push_cron_setup_TEMPLATE_2026_05_06.sql", "utf8");
+const idempotencySql = fs.readFileSync("supabase/migrations/20260713091140_rest_timer_push_delivery_idempotency.sql", "utf8");
+const indexCleanupSql = fs.readFileSync("supabase/migrations/20260713093000_remove_duplicate_rest_timer_push_index.sql", "utf8");
 
 checks.push(
   {
@@ -218,11 +222,37 @@ checks.push(
       edge.includes("/?view=workout&restTimer=1"),
   },
   {
+    name: "edge entrega cada descanso somente uma vez e no aparelho de origem",
+    pass: edge.includes("async function claimDueJob(jobId: string)") &&
+      edge.includes('status: "processing"') &&
+      edge.includes('.eq("status", "scheduled")') &&
+      edge.includes('.eq("status", "processing")') &&
+      edge.includes("schedule_token: scheduleToken") &&
+      edge.includes("target_endpoint: requestSubscription?.endpoint || null") &&
+      edge.includes("const targetEndpoint = String(job.target_endpoint || \"\")") &&
+      edge.includes("(subs || []).filter((s: any) => s.endpoint === targetEndpoint)") &&
+      edge.includes("requestSub\n      ? [requestSub]") &&
+      edge.includes("(subs || []).slice(0, 1)") &&
+      edge.includes("Job cancelado antes do envio.") &&
+      edge.includes('.in("status", ["scheduled", "processing"])'),
+  },
+  {
     name: "migration cria tabela e indices do timer push",
     pass: sql.includes("create table if not exists public.rest_timer_push_jobs") &&
       sql.includes("idx_rest_timer_push_jobs_due") &&
       sql.includes("enable row level security") &&
       sql.includes("treinova-rest-timer-push-every-minute"),
+  },
+  {
+    name: "migration adiciona claim atomico e destino por dispositivo",
+    pass: idempotencySql.includes("add column if not exists schedule_token text") &&
+      idempotencySql.includes("add column if not exists target_endpoint text") &&
+      idempotencySql.includes("add column if not exists claimed_at timestamptz") &&
+      idempotencySql.includes("idx_rest_timer_push_jobs_processing_claimed"),
+  },
+  {
+    name: "migration remove indice duplicado sem afetar jobs agendados",
+    pass: indexCleanupSql.includes("drop index if exists public.idx_rest_timer_push_jobs_due_claim"),
   },
   {
     name: "migration cria tabela segura de push subscriptions",
