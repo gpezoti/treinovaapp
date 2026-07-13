@@ -1282,7 +1282,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
     <div class="bn-bar cols-5" id="bn-bar"></div>
   </nav>
 
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <div class="sheet-overlay" id="sheet"><div class="sheet" id="sheet-content"><div class="sheet-handle"></div></div></div>
 </div>
@@ -2701,6 +2701,9 @@ function userFacingErrorMessage(msg) {
 }
 function showToast(msg, kind) {
   const t = document.getElementById("toast");
+  if (!t) return;
+  t.setAttribute("role", kind === "error" ? "alert" : "status");
+  t.setAttribute("aria-live", kind === "error" ? "assertive" : "polite");
   t.textContent = kind === "error" ? userFacingErrorMessage(msg) : msg;
   t.classList.remove("error","success"); t.classList.add("show");
   if (kind) t.classList.add(kind);
@@ -7577,7 +7580,10 @@ function navTo(view) {
       }
     }
   }
+  const previousView = STATE.view;
   STATE.view = view;
+  if (view === "calendar" && previousView !== "calendar") STATE._focusCurrentCalendarWeek = true;
+  if (view === "home" && STATE.profile?.role === "coach") STATE._coachPeriodizationLoadedSignature = null;
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
 
   // Sub-views que renderizam dentro de view-home (sem section própria)
@@ -7586,8 +7592,9 @@ function navTo(view) {
   const target = document.getElementById(targetId);
   if (target) target.classList.add("active");
 
-  // Destaque no bottom nav: sub-views ficam sem item ativo (ou home ativo)
-  document.querySelectorAll(".bn-item, .desktop-nav-item").forEach(b => b.classList.toggle("active", b.dataset.nav === view));
+  // Mantém o contexto de navegação em atalhos renderizados dentro da Home.
+  const parentNav = HOME_SUBVIEWS.includes(view) || view === "calendar" ? "home" : view;
+  document.querySelectorAll(".bn-item, .desktop-nav-item").forEach(b => b.classList.toggle("active", b.dataset.nav === parentNav));
 
   // Nav bar: só oculta quando a barra "deslize para concluir" estiver visível
   // (ou seja, quando o treino foi explicitamente iniciado pelo usuário)
@@ -7956,7 +7963,7 @@ function renderHome() {
     </div>
     <div id="weekly-volume-card"></div>
     <div id="assessment-reminder-card"></div>
-    <div class="section-title">Lembretes do treinador</div>
+    <div class="section-title">Dicas para seu treino</div>
     <div class="note-box">
       <ul>
         <li>Faça <b>progressões de carga conscientes</b>, sem comprometer a técnica.</li>
@@ -8231,15 +8238,67 @@ function renderSelfTrainingCard({ emptyCta = true } = {}) {
    RENDER — COACH HOME
    ============================================================================= */
 
+function coachChecklistStudentIds() {
+  return (STATE.students || [])
+    .filter(s => s?.status === "approved")
+    .map(s => s.student_id || s.id)
+    .filter(Boolean)
+    .sort();
+}
+
+async function refreshCoachPeriodizationChecklist() {
+  if (STATE.profile?.role !== "coach" || !sb) return;
+  const studentIds = coachChecklistStudentIds();
+  const signature = studentIds.join(",");
+  if (
+    STATE._coachPeriodizationLoadedSignature === signature ||
+    STATE._coachPeriodizationPendingSignature === signature
+  ) return;
+
+  STATE._coachPeriodizationPendingSignature = signature;
+  try {
+    const students = (STATE.students || []).filter(s => s?.status === "approved");
+    if (!studentIds.length) {
+      STATE._coachPeriodizedStudentIds = new Set();
+      return;
+    }
+    // A view resumida evita carregar todos os dias de cada aluno no dashboard.
+    if (students.every(s => typeof s.has_periodization === "boolean")) {
+      STATE._coachPeriodizedStudentIds = new Set(
+        students.filter(s => s.has_periodization).map(s => s.student_id || s.id)
+      );
+      return;
+    }
+    const { data, error } = await sb.from("periodization_days")
+      .select("student_id")
+      .in("student_id", studentIds);
+    if (error) {
+      console.warn("[coach-checklist] Falha ao validar periodizações", error);
+      return;
+    }
+
+    const nextIds = new Set((data || []).map(day => day.student_id).filter(Boolean));
+    const previousIds = STATE._coachPeriodizedStudentIds || new Set();
+    const changed = previousIds.size !== nextIds.size || [...nextIds].some(id => !previousIds.has(id));
+    STATE._coachPeriodizedStudentIds = nextIds;
+    if (changed && STATE.view === "home") renderHome();
+  } finally {
+    STATE._coachPeriodizationLoadedSignature = signature;
+    STATE._coachPeriodizationPendingSignature = null;
+  }
+}
+
 function renderCoachOnboardingChecklist() {
   if (!STATE.profile || STATE.profile.role !== "coach") return "";
+  void refreshCoachPeriodizationChecklist();
   const myId = STATE.profile.id;
   const branding = STATE.branding || {};
   const customizedBrand = !!(branding.logo_url || (branding.primary_color && branding.primary_color !== "#00b4ff" && branding.primary_color !== "#13baf2"));
   const ownPresets = (typeof _PRESETS !== "undefined" ? _PRESETS : []).filter(p => p.coach_id === myId).length;
   const ownWorkouts = Object.values(STATE.workouts || {}).filter(w => w && w.coach_id === myId).length;
-  const numStudents = (STATE.students || []).length;
-  const hasPeriod = (STATE.students || []).some(s => Number(s.sessions_done || 0) > 0 || s.last_session_at);
+  const numStudents = (STATE.students || []).filter(s => s?.status === "approved").length;
+  const periodizedStudentIds = STATE._coachPeriodizedStudentIds || new Set();
+  const hasPeriod = coachChecklistStudentIds().some(id => periodizedStudentIds.has(id));
   const hasPixKey = Boolean((STATE.paymentAccounts || []).find(item => item.provider === "manual_pix" && item.pix_key));
   let appInstallGuided = isStandalonePWA();
   try { appInstallGuided = appInstallGuided || localStorage.getItem(`treinova_coach_install_guide_v1_${myId}`) === "1"; } catch(e) {}
@@ -8260,7 +8319,7 @@ function renderCoachOnboardingChecklist() {
     { id: "presets",   label: "Configure tipos de periodização",  done: ownPresets > 0,         action: "openPresetEditor()" },
     { id: "workouts",  label: "Crie seu primeiro tipo de treino", done: ownWorkouts > 0,        action: "navTo('admin-workouts'); setTimeout(openCreateWorkoutTypeSheet, 200)" },
     { id: "students",  label: "Adicione seu primeiro aluno",      done: numStudents > 0,        action: "navTo('students'); setTimeout(openNewStudentSheet, 200)" },
-    { id: "period",    label: "Monte a periodização do aluno",    done: numStudents > 0 && hasPeriod, action: "navTo('students')" },
+    { id: "period",    label: "Monte a periodização do aluno",    done: numStudents > 0 && hasPeriod, action: "openCoachFirstStudentPeriodization()" },
     { id: "share",     label: "Compartilhe o link de cadastro",   done: sharedOnce,             action: "trackCoachSharedLink(); openShareLinkSheet()" }
   ];
   const total = steps.length;
@@ -8304,6 +8363,17 @@ window.trackCoachSharedLink = function() {
     localStorage.setItem(`treinova_coach_shared_link_v1_${myId}`, "1");
     localStorage.removeItem("treinova_coach_shared_link_v1");
   } catch(e) {}
+};
+
+window.openCoachFirstStudentPeriodization = function() {
+  const student = (STATE.students || []).find(s => s?.status === "approved");
+  const studentId = student?.student_id || student?.id;
+  if (!studentId) {
+    navTo("students");
+    setTimeout(openNewStudentSheet, 150);
+    return;
+  }
+  openStudentPeriodSheet(studentId);
 };
 
 window.openCoachInstallGuide = async function() {
@@ -9587,7 +9657,16 @@ function renderCalendar() {
   const today = todayISO();
   const weeks = groupWeeks();
   if (!weeks.length) {
-    el.innerHTML = `<div class="empty"><h3>Sem periodização</h3><p>Peça ao seu treinador para criar.</p></div>`;
+    const isCoachOrAdmin = ["coach", "admin"].includes(STATE.profile?.role);
+    el.innerHTML = `<div class="empty">
+      <h3>${isCoachOrAdmin ? "Seu ciclo ainda não está configurado" : "Sua periodização ainda não foi configurada"}</h3>
+      <p>${isCoachOrAdmin ? "Defina as semanas e distribua seus treinos para começar a acompanhar o ciclo." : "Peça ao seu treinador para montar o seu ciclo de treinos."}</p>
+      <div class="empty-actions">
+        ${isCoachOrAdmin
+          ? `<button class="btn-primary" style="width:auto" onclick="openStudentPeriodSheet('${STATE.profile.id}')">Configurar ciclo</button>`
+          : `${STATE.profile?.coach_id ? `<button class="btn-primary" style="width:auto" onclick="openChatThread('${STATE.profile.coach_id}')">Falar com treinador</button>` : ""}<button class="btn-ghost" style="width:auto" onclick="navTo('home')">Voltar ao início</button>`}
+      </div>
+    </div>`;
     return;
   }
 
@@ -9691,10 +9770,13 @@ function renderCalendar() {
     ${legendHtml}
     ${html}`;
 
-  requestAnimationFrame(() => {
-    const current = el.querySelector(".week-card.is-current");
-    if (current) current.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+  if (STATE._focusCurrentCalendarWeek) {
+    STATE._focusCurrentCalendarWeek = false;
+    requestAnimationFrame(() => {
+      const current = el.querySelector(".week-card.is-current");
+      if (current) current.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 }
 
 // Histórico de cargas de um dia específico
