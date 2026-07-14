@@ -107,11 +107,14 @@ async function updatePlatformSubscription(params: {
     profileUpdate.subscription_locked_at = null;
     profileUpdate.subscription_current_period_ends_at = update.current_period_ends_at;
   } else if (event === "SUBSCRIPTION_CREATED" || event === "SUBSCRIPTION_UPDATED") {
-    update.status = subscription?.status === "ACTIVE" ? "active" : "checkout_pending";
+    // Criar/atualizar uma assinatura no Asaas nao prova que a primeira cobrança
+    // foi paga. O acesso so e liberado pelos eventos de pagamento confirmados.
+    const wasAlreadyActive = row.status === "active";
+    update.status = wasAlreadyActive ? "active" : "checkout_pending";
     update.current_period_ends_at = subscription?.nextDueDate ? addDaysIso(subscription.nextDueDate, 0) : row.current_period_ends_at;
     profileUpdate.subscription_status = update.status;
     profileUpdate.subscription_current_period_ends_at = update.current_period_ends_at || null;
-    if (update.status === "active") profileUpdate.subscription_locked_at = null;
+    if (wasAlreadyActive) profileUpdate.subscription_locked_at = null;
   } else if (event === "PAYMENT_OVERDUE") {
     update.status = "past_due";
     profileUpdate.subscription_status = "past_due";

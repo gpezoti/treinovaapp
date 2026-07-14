@@ -13,6 +13,7 @@ const APP_SITE_URL = (Deno.env.get("APP_SITE_URL") || "https://treinovaapp.com/"
 
 const PLAN_AMOUNT = 59.90;
 const PLAN_CODE = "coach_monthly";
+const CHECKOUT_TTL_MS = 24 * 60 * 60 * 1000;
 const ITEM_IMAGE_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
 
@@ -91,6 +92,12 @@ function asaasErrorResponse(e: any) {
   }, e?.status && e.status >= 400 && e.status < 500 ? e.status : 500);
 }
 
+function hasReusableCheckout(subscription: any) {
+  if (subscription?.status !== "checkout_pending" || !subscription?.asaas_checkout_url) return false;
+  const openedAt = new Date(subscription.last_webhook_at || subscription.updated_at || subscription.created_at || 0).getTime();
+  return Number.isFinite(openedAt) && openedAt > 0 && (Date.now() - openedAt) < CHECKOUT_TTL_MS;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "POST") return json({ error: "Método não permitido." }, 405);
@@ -152,6 +159,19 @@ serve(async (req) => {
 
     if (sub?.status === "active" && sub.current_period_ends_at && new Date(sub.current_period_ends_at).getTime() > Date.now()) {
       return json({ ok: true, already_active: true, current_period_ends_at: sub.current_period_ends_at });
+    }
+
+    // O link do checkout e valido por 24 horas. Reutiliza-lo evita criar duas
+    // assinaturas quando o treinador volta ao app sem concluir a primeira tentativa.
+    if (hasReusableCheckout(sub)) {
+      return json({
+        ok: true,
+        reused: true,
+        checkout_id: sub.asaas_checkout_id,
+        checkout_url: sub.asaas_checkout_url,
+        amount: PLAN_AMOUNT,
+        status: "checkout_pending",
+      });
     }
 
     const externalReference = `platform:${profile.id}:${Date.now()}`;

@@ -2473,6 +2473,7 @@ const STATE = {
   },
   myPaymentBlocked: false, // flag de bloqueio
   platformAccess: { locked: false, status: "unknown" },
+  platformCheckoutReturn: null,
   operationalHealth: null, // resumo tecnico do ADM, sem dados pessoais
   realtimeChannels: [],
   authMode: "signin",
@@ -7125,10 +7126,12 @@ function savePlatformBillingAddressDraft(address) {
 
 function platformBillingFieldsHTML() {
   const status = getPlatformBillingStatus();
-  if (status.ready) return "";
   return `
-    <div style="border:1px solid var(--line);border-radius:16px;padding:14px;margin:-4px 0 16px;background:rgba(255,255,255,.025);text-align:left">
-      <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:900;margin-bottom:8px">Dados para assinatura</div>
+    <details id="platform-billing-details" ${status.ready ? "" : "open"} style="border:1px solid var(--line);border-radius:16px;padding:0 14px;margin:-4px 0 16px;background:rgba(255,255,255,.025);text-align:left">
+      <summary style="cursor:pointer;list-style:none;padding:14px 0;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);font-weight:900;display:flex;justify-content:space-between;align-items:center;gap:8px">
+        Dados para assinatura
+        <span style="letter-spacing:0;text-transform:none;font-size:11px;color:${status.ready ? "var(--green)" : "var(--yellow)"}">${status.ready ? "Revisar" : "Preencher"}</span>
+      </summary>
       <p style="font-size:12px;color:var(--text-2);line-height:1.4;margin:0 0 10px">O Asaas exige CPF/CNPJ, telefone e endereço válidos para abrir o checkout recorrente.</p>
       <div class="form-group" style="margin-bottom:10px">
         <label class="form-label" for="platform-billing-cpf">CPF/CNPJ</label>
@@ -7162,15 +7165,52 @@ function platformBillingFieldsHTML() {
           <input class="input" id="platform-billing-complement" autocomplete="address-line3" value="${escape(status.complement)}" placeholder="Opcional" />
         </div>
       </div>
-      <div id="platform-billing-error" style="display:none;margin-top:10px;color:var(--red);font-size:12px;font-weight:800;line-height:1.35"></div>
-    </div>`;
+    </details>`;
 }
 
 function setPlatformBillingError(message) {
   const el = document.getElementById("platform-billing-error");
+  const details = document.getElementById("platform-billing-details");
+  if (message && details) details.open = true;
   if (!el) return;
   el.textContent = message || "";
   el.style.display = message ? "block" : "none";
+}
+
+function consumePlatformCheckoutReturn() {
+  try {
+    const url = new URL(window.location.href);
+    const billing = String(url.searchParams.get("billing") || "").toLowerCase();
+    if (!["success", "cancel", "expired"].includes(billing)) return null;
+    url.searchParams.delete("billing");
+    history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    return billing;
+  } catch (_) {
+    return null;
+  }
+}
+
+function platformCheckoutReturnHTML() {
+  const status = STATE.platformCheckoutReturn;
+  if (status === "success") {
+    return `<div style="margin:0 0 14px;padding:12px;border:1px solid var(--brand);border-radius:12px;background:var(--brand-soft);color:var(--text);text-align:left" role="status">
+      <strong>Pagamento recebido</strong><br>
+      <span style="font-size:12px">Estamos confirmando a assinatura com o Asaas. O acesso será liberado automaticamente assim que a confirmação chegar.</span>
+    </div>`;
+  }
+  if (status === "cancel") {
+    return `<div style="margin:0 0 14px;padding:12px;border:1px solid var(--yellow);border-radius:12px;background:var(--yellow-soft);color:var(--text);text-align:left" role="status">
+      <strong>Checkout cancelado</strong><br>
+      <span style="font-size:12px">Nenhuma cobrança foi concluída. Você pode tentar novamente quando quiser.</span>
+    </div>`;
+  }
+  if (status === "expired") {
+    return `<div style="margin:0 0 14px;padding:12px;border:1px solid var(--yellow);border-radius:12px;background:var(--yellow-soft);color:var(--text);text-align:left" role="status">
+      <strong>Link expirado</strong><br>
+      <span style="font-size:12px">Gere um novo checkout para concluir a assinatura.</span>
+    </div>`;
+  }
+  return "";
 }
 
 async function savePlatformBillingDataFromLockScreen() {
@@ -7277,9 +7317,13 @@ function renderPlatformLockedScreen(access = STATE.platformAccess || getPlatform
           </div>`;
     const billingFields = studentBlockedByCoach ? "" : platformBillingFieldsHTML();
     const billingReady = studentBlockedByCoach ? false : getPlatformBillingStatus().ready;
+    const checkoutReturn = studentBlockedByCoach ? "" : platformCheckoutReturnHTML();
+    const coachAction = STATE.platformCheckoutReturn === "success"
+      ? `<button class="btn-primary" id="platform-refresh-btn" onclick="refreshPlatformSubscriptionStatus()">Atualizar status da assinatura</button>`
+      : `<button class="btn-primary" id="platform-upgrade-btn" onclick="startPlatformUpgradeCheckout()">${billingReady ? "Assinar e liberar acesso" : "Salvar dados e assinar"}</button>`;
     const primaryAction = studentBlockedByCoach
       ? `<button class="btn-ghost" onclick="signOut()">Sair da conta</button>`
-      : `<button class="btn-primary" id="platform-upgrade-btn" onclick="startPlatformUpgradeCheckout()">${billingReady ? "Assinar e liberar acesso" : "Salvar dados e assinar"}</button>
+      : `${coachAction}
           <button class="btn-ghost" style="margin-top:10px" onclick="signOut()">Sair da conta</button>`;
     el.innerHTML = `
       <div style="min-height:70vh;display:flex;align-items:center;justify-content:center;padding:24px 16px">
@@ -7290,7 +7334,9 @@ function renderPlatformLockedScreen(access = STATE.platformAccess || getPlatform
           <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:var(--text)">${title}</h2>
           <p style="margin:0 auto 16px;color:var(--text-2);font-size:14px;line-height:1.45;max-width:320px">${body}</p>
           ${planCard}
+          ${checkoutReturn}
           ${billingFields}
+          <div id="platform-billing-error" style="display:none;margin:-4px 0 12px;color:var(--red);font-size:12px;font-weight:800;line-height:1.35;text-align:left" role="alert"></div>
           ${primaryAction}
         </div>
       </div>`;
@@ -7319,11 +7365,30 @@ async function startPlatformUpgradeCheckout() {
       source: "platform_locked_screen",
       error_kind: operationalErrorKind(e)
     });
-    showToast(e.message || "Não foi possível abrir o checkout.", "error");
     setPlatformBillingError(e.message || "");
     if (btn) { btn.disabled = false; btn.textContent = getPlatformBillingStatus().ready ? "Assinar e liberar acesso" : "Salvar dados e assinar"; }
   }
 }
+
+window.refreshPlatformSubscriptionStatus = async function() {
+  const btn = document.getElementById("platform-refresh-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Atualizando..."; }
+  try {
+    const profile = await loadProfile();
+    await loadPlatformAccess(profile);
+    if (!STATE.platformAccess?.locked) {
+      STATE.platformCheckoutReturn = null;
+      renderBottomNav();
+      navTo("home");
+      showToast("Assinatura confirmada. Acesso liberado.", "success");
+      return;
+    }
+    renderPlatformLockedScreen(STATE.platformAccess);
+    setPlatformBillingError("A confirmação ainda não chegou. Aguarde alguns instantes e atualize novamente.");
+  } catch (e) {
+    setPlatformBillingError("Não foi possível atualizar o status agora. Tente novamente em instantes.");
+  }
+};
 
 function renderCoachFinanceTabs() {
   const ownOpen = (STATE.myPayments || []).filter(p => {
@@ -16779,6 +16844,8 @@ async function postSignIn() {
 	    const roleLabel = profile.role === "admin" ? "Admin · " : profile.role === "coach" ? "Treinador · " : "Aluno · ";
 	    headerSub.textContent = roleLabel + (profile.full_name || profile.email);
 	    if (desktopHeaderSub) desktopHeaderSub.textContent = roleLabel + (profile.full_name || profile.email);
+
+      STATE.platformCheckoutReturn = consumePlatformCheckoutReturn();
 
       if (profile.role === "student" && profile.status === "blocked") {
         await safeLoad("branding", loadBranding);
