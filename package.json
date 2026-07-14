@@ -6,7 +6,8 @@
     "check:inline-js": "node scripts/check-inline-js.mjs",
     "qa:static": "node scripts/run-static-qa.mjs",
     "qa:critical": "node outputs/qa-observability-tests.mjs",
-    "test": "npm run check:inline-js && npm run qa:static && npm run qa:critical",
+    "qa:analytics": "node outputs/qa-product-analytics-tests.mjs",
+    "test": "npm run check:inline-js && npm run qa:static && npm run qa:critical && npm run qa:analytics",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

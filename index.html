@@ -1063,14 +1063,9 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 }
 </style>
 
-<!-- [B-03] PostHog Analytics — substitua YOUR_POSTHOG_KEY pela chave real
-     Obtenha em: https://app.posthog.com → Project Settings → Project API Key
-     Free tier: até 1M eventos/mês. Remova este bloco se não quiser analytics. -->
-<script>
-  window.posthog = window.posthog || {
-    init(){}, capture(){}, identify(){}, reset(){}, people: { set(){}, set_once(){} }
-  };
-</script>
+<!-- Analytics de produto: o projeto pode ser ativado via analytics-config.js.
+     Nenhuma captura e iniciada antes do consentimento explicito do usuario. -->
+<script src="/analytics-config.js"></script>
 </head>
 <body>
 
@@ -1310,6 +1305,18 @@ const APP_SITE_URL = (window.location.hostname === "localhost" || window.locatio
   ? "https://treinovaapp.vercel.app/"
   : window.location.origin + "/";
 const APP_PASSWORD_RECOVERY_URL = APP_SITE_URL + "?auth=recovery";
+
+/* =============================================================================
+   ANALYTICS DE PRODUTO
+   A chave publica do PostHog fica em analytics-config.js. Sem chave, esta camada
+   permanece inerte. Nao coloque tokens privados, chaves de API ou PII aqui.
+   ============================================================================= */
+const TREINOVA_ANALYTICS_CONFIG = Object.freeze({
+  posthogProjectKey: String(window.__TREINOVA_ANALYTICS_CONFIG__?.posthogProjectKey || "").trim(),
+  posthogHost: String(window.__TREINOVA_ANALYTICS_CONFIG__?.posthogHost || "https://us.i.posthog.com").replace(/\/+$/, ""),
+  enableHeatmaps: window.__TREINOVA_ANALYTICS_CONFIG__?.enableHeatmaps !== false,
+  allowSessionReplay: window.__TREINOVA_ANALYTICS_CONFIG__?.allowSessionReplay !== false
+});
 
 /* =============================================================================
    ICONS — SVG dos exercícios (categoria → svg)
@@ -2492,6 +2499,267 @@ const CRITICAL_LOAD_LABELS = new Set([
   "students", "trainers", "payment status"
 ]);
 
+/* =============================================================================
+   ANALYTICS DE PRODUTO - consentimento, mascaramento e eventos de jornada
+   ============================================================================= */
+const PRODUCT_ANALYTICS_CONSENT_VERSION = 1;
+const PRODUCT_ANALYTICS_EVENTS = new Set([
+  "screen viewed",
+  "account signed in",
+  "trial signup completed",
+  "student created",
+  "trainer created",
+  "workout started",
+  "workout completed",
+  "rest timer scheduled",
+  "rest timer scheduling failed",
+  "subscription checkout started",
+  "subscription checkout failed",
+  "analytics preference updated"
+]);
+const PRODUCT_ANALYTICS_PROPERTIES = new Set([
+  "screen", "previous_screen", "role", "account_state", "source", "outcome",
+  "device_class", "layout", "sets_bucket", "duration_bucket", "error_kind",
+  "timer_state", "trial_state"
+]);
+
+function analyticsConsentStorageKey() {
+  return `treinova_product_analytics_v${PRODUCT_ANALYTICS_CONSENT_VERSION}_${STATE.user?.id || "anonymous"}`;
+}
+
+function getProductAnalyticsConsent() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(analyticsConsentStorageKey()) || "null");
+    if (stored && ["granted", "declined"].includes(stored.decision)) {
+      return { decision: stored.decision, replay: !!stored.replay };
+    }
+  } catch (_) {}
+  return { decision: "unknown", replay: false };
+}
+
+function hasProductAnalyticsProject() {
+  return !!TREINOVA_ANALYTICS_CONFIG.posthogProjectKey;
+}
+
+function analyticsDeviceClass() {
+  return window.matchMedia?.("(min-width: 900px)")?.matches ? "desktop" : "mobile";
+}
+
+function analyticsValue(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value);
+  if (typeof value === "string") return value.slice(0, 48);
+  return undefined;
+}
+
+function sanitizeProductAnalyticsProperties(properties = {}) {
+  const safe = {
+    screen: String(STATE.view || "unknown").slice(0, 48),
+    role: String(STATE.profile?.role || "anonymous").slice(0, 24),
+    device_class: analyticsDeviceClass(),
+    layout: document.documentElement.dataset.layout === "desktop" ? "desktop" : "mobile"
+  };
+  Object.entries(properties || {}).forEach(([key, value]) => {
+    if (!PRODUCT_ANALYTICS_PROPERTIES.has(key)) return;
+    const normalized = analyticsValue(value);
+    if (normalized !== undefined) safe[key] = normalized;
+  });
+  return safe;
+}
+
+function ensurePostHogQueue() {
+  const existing = window.posthog;
+  if (existing && typeof existing.capture === "function" && !existing.__treinovaQueue) return existing;
+  if (existing?.__treinovaQueue) return existing;
+
+  const queue = [];
+  queue.__treinovaQueue = true;
+  queue.__SV = 1;
+  queue._i = [];
+  ["capture", "identify", "reset", "opt_in_capturing", "opt_out_capturing", "startSessionRecording", "stopSessionRecording"].forEach((method) => {
+    queue[method] = (...args) => queue.push([method, ...args]);
+  });
+  queue.init = (projectKey, options) => {
+    queue._i.push([projectKey, options, "posthog"]);
+    const host = String(options?.api_host || TREINOVA_ANALYTICS_CONFIG.posthogHost).replace(/\/+$/, "");
+    const assetHost = host.replace(/\.i\.posthog\.com$/, "-assets.i.posthog.com");
+    if (document.getElementById("treinova-posthog-loader")) return;
+    const script = document.createElement("script");
+    script.id = "treinova-posthog-loader";
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.src = `${assetHost}/static/array.js`;
+    script.onerror = () => { window.__treinovaPosthogLoadFailed = true; };
+    document.head.appendChild(script);
+  };
+  window.posthog = queue;
+  return queue;
+}
+
+function initializeProductAnalytics() {
+  const consent = getProductAnalyticsConsent();
+  if (!hasProductAnalyticsProject() || consent.decision !== "granted") return false;
+  const client = ensurePostHogQueue();
+  if (!window.__treinovaPosthogInitialized) {
+    client.init(TREINOVA_ANALYTICS_CONFIG.posthogProjectKey, {
+      api_host: TREINOVA_ANALYTICS_CONFIG.posthogHost,
+      capture_pageview: false,
+      capture_pageleave: false,
+      autocapture: {
+        dom_event_allowlist: ["click", "submit"],
+        element_allowlist: ["a", "button", "form"],
+        css_selector_ignorelist: [".ph-no-capture", "[data-analytics-private]", "input", "textarea", "select", "option"]
+      },
+      disable_session_recording: !TREINOVA_ANALYTICS_CONFIG.allowSessionReplay || !consent.replay,
+      session_recording: {
+        maskAllInputs: true,
+        maskTextSelector: "*",
+        maskCapturedNetworkRequestFn: (request) => {
+          if (request && typeof request === "object") request.name = String(request.name || "").split("?")[0];
+          return request;
+        }
+      },
+      enable_heatmaps: TREINOVA_ANALYTICS_CONFIG.enableHeatmaps,
+      mask_all_text: true,
+      mask_all_element_attributes: true
+    });
+    window.__treinovaPosthogInitialized = true;
+  }
+  try {
+    client.opt_in_capturing?.();
+    if (consent.replay && TREINOVA_ANALYTICS_CONFIG.allowSessionReplay) client.startSessionRecording?.();
+    else client.stopSessionRecording?.();
+  } catch (_) {}
+  return true;
+}
+
+function identifyProductAnalytics(profile = STATE.profile) {
+  if (!profile || !initializeProductAnalytics()) return;
+  try {
+    window.posthog?.identify?.(profile.id, {
+      role: String(profile.role || "unknown"),
+      account_state: String(profile.status || "unknown")
+    });
+  } catch (_) {}
+}
+
+function resetProductAnalyticsIdentity() {
+  try { window.posthog?.reset?.(); } catch (_) {}
+}
+
+function trackProductEvent(event, properties = {}) {
+  if (!PRODUCT_ANALYTICS_EVENTS.has(event) || !initializeProductAnalytics()) return false;
+  try {
+    window.posthog?.capture?.(event, sanitizeProductAnalyticsProperties(properties));
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function flushPendingProductAnalyticsEvents() {
+  try {
+    if (sessionStorage.getItem("treinova_pending_trial_signup") === "1") {
+      const captured = trackProductEvent("trial signup completed", {
+        source: "public_signup",
+        trial_state: "started"
+      });
+      if (captured) sessionStorage.removeItem("treinova_pending_trial_signup");
+    }
+  } catch (_) {}
+}
+
+function productAnalyticsStatus() {
+  if (!hasProductAnalyticsProject()) return { label: "Indisponivel", description: "As metricas de uso ainda nao foram configuradas pelo Treinova." };
+  const consent = getProductAnalyticsConsent();
+  if (consent.decision === "granted") {
+    return {
+      label: consent.replay ? "Metricas, mapa de calor e replay ativos" : "Metricas e mapa de calor ativos",
+      description: consent.replay ? "A reproducao de sessao esta ativada com texto, campos e imagens mascarados." : "A reproducao de sessao esta desativada."
+    };
+  }
+  if (consent.decision === "declined") return { label: "Metricas desativadas", description: "Voce pode reativar quando quiser." };
+  return { label: "Escolha pendente", description: "Defina se quer contribuir com metricas anonimizadas de uso." };
+}
+
+function markAnalyticsSensitiveNodes() {
+  document.querySelectorAll("#app img, #app video, #auth-page img, #auth-page video").forEach((node) => node.classList.add("ph-no-capture"));
+  document.getElementById("auth-page")?.setAttribute("data-analytics-private", "");
+  document.getElementById("view-chat")?.setAttribute("data-analytics-private", "");
+  document.getElementById("view-payments")?.setAttribute("data-analytics-private", "");
+  document.getElementById("view-profile")?.setAttribute("data-analytics-private", "");
+}
+
+function renderProductAnalyticsCard() {
+  const status = productAnalyticsStatus();
+  return `
+    <div class="section-title">Dados de uso</div>
+    <div class="card">
+      <div class="fw-700 text-sm" style="margin-bottom:6px">${escape(status.label)}</div>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.5;margin:0 0 12px">${escape(status.description)}</p>
+      <button class="btn-ghost" style="width:100%" onclick="openAnalyticsPrivacySettings()">Gerenciar privacidade de uso</button>
+    </div>`;
+}
+
+function openAnalyticsConsentSheet() {
+  if (!hasProductAnalyticsProject()) return;
+  openSheet(`
+    <div class="sheet-head"><div><div class="sheet-title">Privacidade de uso</div><div class="sheet-sub">Ajude a melhorar o Treinova</div></div><button class="sheet-close" onclick="closeSheet()">×</button></div>
+    <div class="card" style="margin:0;border-color:var(--line)">
+      <div class="fw-700" style="font-size:16px;margin-bottom:8px">Metricas anonimizadas</div>
+      <p style="margin:0;color:var(--text-2);font-size:13px;line-height:1.5">Podemos medir telas, cliques e pontos de friccao para melhorar o app. Nao enviamos nome, email, CPF, fotos, mensagens, cargas ou conteudo dos treinos.</p>
+      ${TREINOVA_ANALYTICS_CONFIG.allowSessionReplay ? `<label style="display:flex;align-items:flex-start;gap:10px;margin-top:16px;font-size:13px;color:var(--text-2);line-height:1.45;cursor:pointer"><input id="analytics-replay-choice" type="checkbox" style="margin-top:3px;accent-color:var(--brand)"><span>Permitir reproducao tecnica da sessao para identificar travamentos. Textos, campos e imagens ficam mascarados.</span></label>` : ""}
+    </div>
+    <button class="btn-primary" onclick="saveProductAnalyticsConsent('granted')">Ativar metricas</button>
+    <button class="btn-ghost" onclick="saveProductAnalyticsConsent('declined')">Agora nao</button>
+  `);
+}
+
+window.saveProductAnalyticsConsent = function(decision) {
+  const replay = decision === "granted" && !!document.getElementById("analytics-replay-choice")?.checked;
+  try {
+    localStorage.setItem(analyticsConsentStorageKey(), JSON.stringify({ decision, replay, updated_at: new Date().toISOString() }));
+  } catch (_) {}
+  if (decision === "granted") {
+    identifyProductAnalytics();
+    trackProductEvent("analytics preference updated", { outcome: "granted" });
+    flushPendingProductAnalyticsEvents();
+  } else {
+    try {
+      window.posthog?.stopSessionRecording?.();
+      window.posthog?.opt_out_capturing?.();
+    } catch (_) {}
+  }
+  closeSheetForAction();
+  if (STATE.view === "profile") renderProfile();
+  showToast(decision === "granted" ? "Metricas de uso ativadas." : "Metricas de uso desativadas.", "success");
+};
+
+window.openAnalyticsPrivacySettings = function() {
+  if (!hasProductAnalyticsProject()) {
+    showToast("Metricas de uso ainda nao estao ativas no Treinova.", "info");
+    return;
+  }
+  const consent = getProductAnalyticsConsent();
+  openSheet(`
+    <div class="sheet-head"><div><div class="sheet-title">Dados de uso</div><div class="sheet-sub">Controle sua preferencia a qualquer momento</div></div><button class="sheet-close" onclick="closeSheet()">×</button></div>
+    <div class="card" style="margin:0;border-color:var(--line)">
+      <p style="margin:0;color:var(--text-2);font-size:13px;line-height:1.5">As metricas mostram navegacao, cliques e pontos de friccao. Dados pessoais, textos, campos, fotos, conversas e dados de treino ficam fora da captura.</p>
+      ${TREINOVA_ANALYTICS_CONFIG.allowSessionReplay ? `<label style="display:flex;align-items:flex-start;gap:10px;margin-top:16px;font-size:13px;color:var(--text-2);line-height:1.45;cursor:pointer"><input id="analytics-replay-choice" type="checkbox" ${consent.replay ? "checked" : ""} style="margin-top:3px;accent-color:var(--brand)"><span>Permitir reproducao tecnica com mascaramento de texto, campos e imagens.</span></label>` : ""}
+    </div>
+    <button class="btn-primary" onclick="saveProductAnalyticsConsent('granted')">Salvar preferencias</button>
+    <button class="btn-ghost" onclick="saveProductAnalyticsConsent('declined')">Desativar metricas</button>
+  `);
+};
+
+function maybeShowProductAnalyticsConsent() {
+  if (!STATE.user || !hasProductAnalyticsProject() || getProductAnalyticsConsent().decision !== "unknown") return;
+  if (document.getElementById("sheet")?.classList.contains("active")) return;
+  setTimeout(() => {
+    if (!document.getElementById("sheet")?.classList.contains("active")) openAnalyticsConsentSheet();
+  }, 600);
+}
+
 function operationalErrorKind(error) {
   const message = String(error?.message || error || "").toLowerCase();
   if (/timeout/.test(message)) return "timeout";
@@ -2520,7 +2788,8 @@ function reportOperationalEvent(event, outcome = "success", details = {}) {
   const previous = _OPERATIONAL_EVENT_DEDUP.get(signature) || 0;
   if (outcome === "failure" && Date.now() - previous < 5000) return;
   _OPERATIONAL_EVENT_DEDUP.set(signature, Date.now());
-  try { window.posthog?.capture(`ops_${event}`, { outcome, ...safeDetails }); } catch (_) {}
+  // Eventos operacionais ficam somente no Supabase. Nao misturamos erros tecnicos
+  // com analytics de produto, que depende de consentimento explicito.
   setTimeout(() => {
     sb.functions.invoke("app-observability", {
       body: { event, outcome, details: safeDetails }
@@ -3450,6 +3719,7 @@ async function submitCoachTrialSignup() {
       throw new Error(apiMsg || "Não foi possível criar seu acesso. Verifique os dados e tente novamente.");
     }
     if (!data?.ok) throw new Error(data?.error || "Cadastro não confirmado.");
+    try { sessionStorage.setItem("treinova_pending_trial_signup", "1"); } catch (_) {}
     const { error: loginError } = await sb.auth.signInWithPassword({
       email: payload.email,
       password: payload.password,
@@ -3780,6 +4050,7 @@ window.refreshOperationalHealth = async function() {
 async function signOut() {
   if (!await showConfirm({ title: "Sair da conta?", confirm: "Sair", cancel: "Cancelar" })) return;
   cleanupRealtime();
+  resetProductAnalyticsIdentity();
   // M-01 FIX: limpar dados do timer para não vazar entre usuários do mesmo dispositivo
   try {
     localStorage.removeItem("treinova_rest_timer_v2");
@@ -4208,6 +4479,7 @@ async function loadOrCreateSession(date, workoutCode, intensity, workoutId = nul
   await loadSetLogs();
   if (createdSession) {
     reportOperationalEvent("workout_session_started", "success", { source: "session_insert" });
+    trackProductEvent("workout started", { source: "student_workout" });
   }
   return STATE.currentSession;
 }
@@ -4985,15 +5257,12 @@ async function completeSession() {
   mergeKnownWorkoutSession(STATE.currentSession);
   await abandonInProgressSessionsForDate(null, STATE.currentSession.id);
   await loadLastLoads();
-  // [B-03] PostHog — evento mais importante: treino concluído
-  try {
-    if (window.posthog) posthog.capture("workout_completed", {
-      workout_code: STATE.selectedWorkout,
-      total_volume_kg: totalVolume,
-      duration_seconds: duration,
-      sets_done: STATE.setLogs.filter(s => s.done).length,
-    });
-  } catch(e) {}
+  // Metricas de produto usam somente faixas, sem codigo do treino, carga ou dados pessoais.
+  const setsDone = STATE.setLogs.filter(s => s.done).length;
+  trackProductEvent("workout completed", {
+    sets_bucket: setsDone === 0 ? "0" : setsDone <= 10 ? "1_10" : setsDone <= 25 ? "11_25" : "26_plus",
+    duration_bucket: duration <= 900 ? "up_to_15m" : duration <= 2700 ? "16_45m" : "46m_plus"
+  });
   reportOperationalEvent("workout_completed", "success", {
     source: "session_update",
     duration_ms: duration * 1000
@@ -6204,6 +6473,10 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       source: verified ? "job_verified" : "job_verify",
       error_kind: verified ? "" : "unconfirmed"
     });
+    trackProductEvent(verified ? "rest timer scheduled" : "rest timer scheduling failed", {
+      source: verified ? "server_verified" : "server_unverified",
+      timer_state: verified ? "scheduled" : "unverified"
+    });
     if (!verified && document.visibilityState === "hidden") scheduleBackgroundRestNotification();
     return verified;
   } catch(e) {
@@ -6211,6 +6484,11 @@ async function scheduleServerRestPush(seconds, exerciseName) {
     reportOperationalEvent("rest_push_schedule_failed", "failure", {
       source: "schedule",
       error_kind: operationalErrorKind(e)
+    });
+    trackProductEvent("rest timer scheduling failed", {
+      source: "server_schedule",
+      error_kind: operationalErrorKind(e),
+      timer_state: "failed"
     });
     rememberRestPushStatus("schedule_failed", e.message || e);
     if (STATE.timer) {
@@ -7359,9 +7637,14 @@ async function startPlatformUpgradeCheckout() {
     if (error) throw new Error(await getFunctionErrorMessage(error, "Não foi possível abrir o checkout."));
     if (!data?.checkout_url) throw new Error(data?.error || "Checkout não retornado pelo Asaas.");
     reportOperationalEvent("checkout_started", "success", { source: "platform_locked_screen" });
+    trackProductEvent("subscription checkout started", { source: "platform_locked_screen" });
     window.location.href = data.checkout_url;
   } catch (e) {
     reportOperationalEvent("checkout_failed", "failure", {
+      source: "platform_locked_screen",
+      error_kind: operationalErrorKind(e)
+    });
+    trackProductEvent("subscription checkout failed", {
       source: "platform_locked_screen",
       error_kind: operationalErrorKind(e)
     });
@@ -7775,6 +8058,7 @@ function renderCurrentView() {
   else if (v === "progress") renderProgress && renderProgress();
   else if (v === "aero") renderAero && renderAero();
   else if (v === "onerm") renderOneRM && renderOneRM();
+  requestAnimationFrame(markAnalyticsSensitiveNodes);
 }
 
 function renderBlockedScreen() {
@@ -7824,6 +8108,9 @@ function navTo(view) {
   }
   const previousView = STATE.view;
   STATE.view = view;
+  if (previousView !== view) {
+    trackProductEvent("screen viewed", { screen: view, previous_screen: previousView || "initial" });
+  }
   if (view === "calendar" && previousView !== "calendar") STATE._focusCurrentCalendarWeek = true;
   if (view === "home" && STATE.profile?.role === "coach") STATE._coachPeriodizationLoadedSignature = null;
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
@@ -9169,6 +9456,7 @@ window.submitNewTrainer = async function() {
 
     showToast("Treinador criado com sucesso!", "success");
     reportOperationalEvent("trainer_create_completed", "success", { source: "admin_user" });
+    trackProductEvent("trainer created", { source: "admin_user" });
     closeSheet();
     await loadTrainers(); renderTrainers();
   } catch (e) {
@@ -11201,6 +11489,8 @@ async function renderProfile() {
       <button class="btn-ghost" onclick="saveNewPassword()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Alterar senha</button>
     </div>
 
+    ${renderProductAnalyticsCard()}
+
     ${!isStaff ? `
       <div class="section-title">Privacidade</div>
       <div class="card">
@@ -12330,6 +12620,7 @@ window.submitNewStudent = async function() {
     await loadStudents();
     renderStudents();
     reportOperationalEvent("student_create_completed", "success", { source: "admin_user" });
+    trackProductEvent("student created", { source: "coach_panel" });
     showToast("Aluno criado" + (planValue ? " com plano de R$ " + planValue.toFixed(2) : ""), "success");
     if (shareWhatsApp) {
       openStudentInviteSuccessSheet({ name, email, phone, password: pass, studentId }, planValue);
@@ -16862,6 +17153,15 @@ async function postSignIn() {
 	      return;
 	    }
 
+  // Inicializa antes da primeira navegacao para registrar a tela inicial, sem PII.
+  identifyProductAnalytics(profile);
+  trackProductEvent("account signed in", {
+    role: profile.role,
+    account_state: profile.status,
+    source: "password_login"
+  });
+  flushPendingProductAnalyticsEvents();
+
   // === GRUPO 1: dados essenciais para a primeira renderização ===
   await Promise.all([
     safeLoad("branding", loadBranding),
@@ -16928,17 +17228,6 @@ async function postSignIn() {
   }, 1000);
   setupRealtime();
   setupPullToRefresh();
-
-  // [B-03] PostHog — identificar usuário após login
-  try {
-    if (window.posthog && profile) {
-      posthog.identify(profile.id, {
-        role: profile.role,
-        status: profile.status,
-        name: profile.full_name,
-      });
-    }
-  } catch(e) { /* analytics nunca deve quebrar o app */ }
 
   // Pré-seleciona treino do dia se for aluno
   if (profile.role === "student" || profile.role === "coach") {
@@ -17051,6 +17340,7 @@ async function postLoginInit() {
 	    showInstallBannerIfPossible();
     // [UX-06] iOS não suporta beforeinstallprompt — exibir instrução manual
     showIOSInstallHintIfNeeded();
+	    setTimeout(maybeShowProductAnalyticsConsent, 1200);
 	}
 }
 
@@ -17704,6 +17994,7 @@ function showOnboarding() {
       await sb.from("profiles").update({ onboarded: true }).eq("id", STATE.profile.id);
       STATE.profile.onboarded = true;
     } catch(e){ console.warn(e); }
+    setTimeout(maybeShowProductAnalyticsConsent, 500);
   }
   overlay.addEventListener("click", async (e)=>{
     const act = e.target.closest("[data-act]");
@@ -17844,6 +18135,7 @@ function showCoachOnboarding() {
       await sb.from("profiles").update({ onboarded: true }).eq("id", STATE.profile.id);
       STATE.profile.onboarded = true;
     } catch(e) { console.warn(e); }
+    setTimeout(maybeShowProductAnalyticsConsent, 500);
   }
   overlay.addEventListener("click", async (e) => {
     const act = e.target.closest("[data-act]");
@@ -20420,7 +20712,7 @@ const PRIVACY_TXT = `<h2>Política de Privacidade — Treinova</h2>
 <p>Conexões em HTTPS. Senhas armazenadas com hash. Acesso ao banco controlado por Row Level Security (RLS) do Supabase.</p>
 
 <h3>6. Cookies</h3>
-<p>Usamos somente cookies/storage técnicos (sessão e preferências). Não fazemos rastreamento de terceiros.</p>
+<p>Usamos cookies/storage técnicos para sessão e preferências. Com seu consentimento opcional, também usamos métricas de produto para entender navegação, cliques e pontos de fricção. Essas métricas não incluem nome, e-mail, CPF, fotos, mensagens, cargas ou conteúdo de treino. A reprodução técnica de sessão, quando habilitada por você, mascara textos, campos e imagens.</p>
 
 <h3>7. Contato do encarregado</h3>
 <p>suporte@treinovaapp.com</p>`;
