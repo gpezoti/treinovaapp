@@ -6,6 +6,8 @@ const socialPeopleEdge = fs.readFileSync("supabase/functions/social-people/index
 const sql = fs.readFileSync("sql/social_feed_coach_training_2026_05_08.sql", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20260508223000_social_feed_coach_training.sql", "utf8");
 const hardening = fs.readFileSync("supabase/migrations/20260602153000_harden_social_people_discovery.sql", "utf8");
+const rpcHardening = fs.readFileSync("supabase/migrations/20260714170000_harden_sensitive_rpcs.sql", "utf8");
+const anonRpcHardening = fs.readFileSync("supabase/migrations/20260714171000_revoke_anon_sensitive_rpcs.sql", "utf8");
 
 assert.equal(sql, migration, "migration must mirror legacy social script");
 
@@ -34,6 +36,13 @@ assert.match(html, /function peopleRow\(p, context = "sheet"\)/);
 assert.doesNotMatch(html, /const sub = \[roleLabel, p\.email\]/);
 assert.match(html, /row\?\.profile \|\| profileById\[id\]/);
 assert.match(html, /window\.onFollowToggle = async function\(id, currentlyFollowing = null\)/);
+assert.match(html, /const ok = currentlyFollowing \? await unfollowUser\(id\) : await followUser\(id\);/);
+assert.match(html, /Não foi possível seguir essa pessoa agora\. Tente novamente\./);
+assert.match(html, /Não foi possível atualizar quem você segue agora\. Tente novamente\./);
+assert.match(html, /let _peopleSearchRequest = 0;/);
+assert.match(html, /requestId !== _peopleSearchRequest/);
+assert.match(html, /let _feedPeopleSearchRequest = 0;/);
+assert.match(html, /requestId !== _feedPeopleSearchRequest/);
 assert.match(html, /function renderSelfTrainingCard\(/);
 assert.match(html, /\{ id: "feed", label: "Feed"/);
 assert.match(html, /\{ id: "workout", label: "Treino"/);
@@ -84,5 +93,15 @@ assert.match(hardening, /create policy "profiles social scoped read"/);
 assert.match(hardening, /delete from public\.follows f\s+where not public\.can_social_discover/);
 assert.match(hardening, /create policy "follows insert self"[\s\S]*public\.can_social_discover\(auth\.uid\(\), following_id, false\)/);
 assert.match(hardening, /create policy "feed social read"[\s\S]*public\.can_social_discover\(auth\.uid\(\), feed_posts\.student_id, true\)/);
+
+assert.match(rpcHardening, /revoke execute on function public\.admin_update_trainer\([\s\S]*\) from public;/);
+assert.match(rpcHardening, /revoke execute on function public\.can_manage_periodization_student\(uuid\) from public;/);
+assert.match(rpcHardening, /revoke execute on function public\.can_social_discover\(uuid, uuid, boolean\) from public;/);
+assert.match(rpcHardening, /revoke execute on function public\.ensure_coach_owns_student\(uuid\) from public;/);
+assert.match(rpcHardening, /alter function public\.set_updated_at\(\) set search_path = public;/);
+assert.match(rpcHardening, /alter function public\.touch_updated_at\(\) set search_path = public;/);
+assert.match(anonRpcHardening, /revoke execute on function public\.can_manage_periodization_student\(uuid\) from anon;/);
+assert.match(anonRpcHardening, /revoke execute on function public\.can_social_discover\(uuid, uuid, boolean\) from anon;/);
+assert.match(anonRpcHardening, /revoke execute on function public\.ensure_coach_owns_student\(uuid\) from anon;/);
 
 console.log("qa-social-feed-coach-training ok");

@@ -4342,33 +4342,29 @@ async function followUser(userId) {
       await loadFeed();
       return true;
     }
-    if (error || data?.error) console.warn("[follow edge]", error || data.error);
+    console.warn("[follow edge]", error || data?.error);
   } catch(e) {
     console.warn("[follow edge]", e);
   }
-  const { error } = await sb.from("follows").upsert(
-    { follower_id: STATE.profile.id, following_id: userId },
-    { onConflict: "follower_id,following_id", ignoreDuplicates: true }
-  );
-  if (error && !error.message.includes("duplicate")) {
-    showToast("Erro: " + error.message, "error"); return false;
-  }
-  await loadFollows();
-  await loadFeed();
-  return true;
+  showToast("Não foi possível seguir essa pessoa agora. Tente novamente.", "error");
+  return false;
 }
 async function unfollowUser(userId) {
   try {
     const { data, error } = await sb.functions.invoke("social-people", {
       body: { action: "unfollow", user_id: userId }
     });
-    if (error || data?.error) console.warn("[unfollow edge]", error || data.error);
+    if (!error && data?.ok) {
+      await loadFollows();
+      await loadFeed();
+      return true;
+    }
+    console.warn("[unfollow edge]", error || data?.error);
   } catch(e) {
     console.warn("[unfollow edge]", e);
-    await sb.from("follows").delete().eq("follower_id", STATE.profile.id).eq("following_id", userId);
   }
-  await loadFollows();
-  await loadFeed();
+  showToast("Não foi possível atualizar quem você segue agora. Tente novamente.", "error");
+  return false;
 }
 function isFollowing(userId) {
   return ((STATE.follows && STATE.follows.following) || []).some(f => f.following_id === userId);
@@ -11299,7 +11295,9 @@ window.openSocialList = async function(type) {
 };
 
 let _peopleSearchTimer = null;
+let _peopleSearchRequest = 0;
 window.onPeopleSearch = function(q) {
+  const requestId = ++_peopleSearchRequest;
   clearTimeout(_peopleSearchTimer);
   const box = document.getElementById("ps-results");
   if (!box) return;
@@ -11311,7 +11309,7 @@ window.onPeopleSearch = function(q) {
   _peopleSearchTimer = setTimeout(async () => {
     const res = await searchPeople(q);
     const latestBox = document.getElementById("ps-results");
-    if (!latestBox) return;
+    if (!latestBox || requestId !== _peopleSearchRequest) return;
     STATE._peopleResults = res;
     latestBox.innerHTML = res.length === 0
       ? `<div class="empty"><p>Ninguém encontrado</p></div>`
@@ -11320,7 +11318,9 @@ window.onPeopleSearch = function(q) {
 };
 
 let _feedPeopleSearchTimer = null;
+let _feedPeopleSearchRequest = 0;
 window.onFeedPeopleSearch = function(q) {
+  const requestId = ++_feedPeopleSearchRequest;
   clearTimeout(_feedPeopleSearchTimer);
   const box = document.getElementById("feed-people-results");
   if (!box) return;
@@ -11332,7 +11332,7 @@ window.onFeedPeopleSearch = function(q) {
   _feedPeopleSearchTimer = setTimeout(async () => {
     const res = await searchPeople(q);
     const latestBox = document.getElementById("feed-people-results");
-    if (!latestBox) return;
+    if (!latestBox || requestId !== _feedPeopleSearchRequest) return;
     STATE._feedPeopleQuery = q;
     STATE._feedPeopleResults = res;
     latestBox.innerHTML = res.length === 0
@@ -11362,11 +11362,8 @@ function peopleRow(p, context = "sheet") {
 
 window.onFollowToggle = async function(id, currentlyFollowing = null) {
   currentlyFollowing = typeof currentlyFollowing === "boolean" ? currentlyFollowing : isFollowing(id);
-  if (currentlyFollowing) await unfollowUser(id);
-  else {
-    const ok = await followUser(id);
-    if (!ok) return;
-  }
+  const ok = currentlyFollowing ? await unfollowUser(id) : await followUser(id);
+  if (!ok) return;
   showToast(currentlyFollowing ? "Você deixou de seguir." : "Agora você segue essa pessoa.", "success");
   const q = document.getElementById("ps-search")?.value;
   if (q) onPeopleSearch(q);
