@@ -2,6 +2,14 @@ import fs from "node:fs";
 
 const html = fs.readFileSync("index.html", "utf8");
 const sw = fs.readFileSync("sw.js", "utf8");
+const lifecycleTimerSource = html.slice(
+  html.indexOf("function reconcileTimerAfterLifecycle"),
+  html.indexOf("// Re-adquire wake lock")
+);
+const finishTimerSource = html.slice(
+  html.indexOf("function finishTimer()"),
+  html.indexOf("function cancelTimer()")
+);
 
 const checks = [
   {
@@ -81,12 +89,13 @@ const checks = [
       sw.includes("timerId"),
   },
   {
-    name: "timer invalida o job remoto ao finalizar ou cancelar localmente",
+    name: "timer preserva o job remoto na expiracao e o invalida ao cancelar",
     pass: html.includes("function isAppForegroundActive()") &&
       !html.includes('if (isAppForegroundActive()) cancelServerRestPush(STATE.timer.id);') &&
       html.includes("cancelServerRestPush(STATE.timer.id, STATE.timer.pushScheduleToken);") &&
       html.includes("cancelServerRestPush(timerId, scheduleToken);") &&
-      html.includes("cancelServerRestPush(saved.id, saved.pushScheduleToken);"),
+      !lifecycleTimerSource.includes("cancelServerRestPush(") &&
+      !finishTimerSource.includes("cancelServerRestPush("),
   },
   {
     name: "modal de notificacoes consegue renovar assinatura com helper global",
