@@ -174,6 +174,18 @@ serve(async (req) => {
       }, { onConflict: "coach_id" });
     if (subErr) throw subErr;
 
+    // Observabilidade operacional sem dados pessoais. Falha no log nunca deve
+    // impedir o cadastro do treinador.
+    await sbAdmin.from("app_event_log").insert({
+      user_id: createdUserId,
+      role: "coach",
+      event_name: "signup_completed",
+      outcome: "success",
+      context: { source: "public_trial" },
+    }).then(({ error }) => {
+      if (error) console.warn("[platform-signup observability]", error.message);
+    });
+
     return json({
       ok: true,
       user_id: createdUserId,

@@ -1,0 +1,15 @@
+{
+  "name": "treinova",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:inline-js": "node scripts/check-inline-js.mjs",
+    "qa:static": "node scripts/run-static-qa.mjs",
+    "qa:critical": "node outputs/qa-observability-tests.mjs",
+    "test": "npm run check:inline-js && npm run qa:static && npm run qa:critical",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}

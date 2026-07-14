@@ -2473,6 +2473,7 @@ const STATE = {
   },
   myPaymentBlocked: false, // flag de bloqueio
   platformAccess: { locked: false, status: "unknown" },
+  operationalHealth: null, // resumo tecnico do ADM, sem dados pessoais
   realtimeChannels: [],
   authMode: "signin",
   authRole: "student",
@@ -2483,6 +2484,48 @@ const STATE = {
            raf:null, onDone:null, label:"Próxima série", exerciseName:"Próxima série",
            focusExercisePosition:null, pushScheduled:false, pushScheduling:false, notified:false }
 };
+
+const _OPERATIONAL_EVENT_DEDUP = new Map();
+const CRITICAL_LOAD_LABELS = new Set([
+  "workouts", "presets", "today blocks", "today sessions", "periodization",
+  "students", "trainers", "payment status"
+]);
+
+function operationalErrorKind(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  if (/timeout/.test(message)) return "timeout";
+  if (/network|fetch|offline|load failed/.test(message)) return "network";
+  if (/permission|forbidden|unauthorized|rls|policy/.test(message)) return "permission";
+  if (/non-2xx|edge function|functions? returned/.test(message)) return "edge_function";
+  if (/duplicate|unique|23505/.test(message)) return "duplicate";
+  if (/invalid|validation|required|not-null/.test(message)) return "validation";
+  return "unknown";
+}
+
+// Telemetria de fluxos criticos: melhor esforco, sem bloquear a experiencia e
+// sem enviar mensagem, conteudo ou qualquer dado pessoal para o banco.
+function reportOperationalEvent(event, outcome = "success", details = {}) {
+  if (!sb || !STATE.user?.id || !event) return;
+  const safeDetails = {
+    source: String(details.source || "").slice(0, 80),
+    load: String(details.load || "").slice(0, 80),
+    error_kind: String(details.error_kind || "").slice(0, 80),
+    view: String(details.view || STATE.view || "").slice(0, 80),
+    action: String(details.action || "").slice(0, 80),
+    ...(Number.isFinite(Number(details.duration_ms)) ? { duration_ms: Math.round(Number(details.duration_ms)) } : {}),
+    ...(Number.isInteger(Number(details.http_status)) ? { http_status: Number(details.http_status) } : {})
+  };
+  const signature = `${event}:${outcome}:${safeDetails.source}:${safeDetails.load}:${safeDetails.error_kind}`;
+  const previous = _OPERATIONAL_EVENT_DEDUP.get(signature) || 0;
+  if (outcome === "failure" && Date.now() - previous < 5000) return;
+  _OPERATIONAL_EVENT_DEDUP.set(signature, Date.now());
+  try { window.posthog?.capture(`ops_${event}`, { outcome, ...safeDetails }); } catch (_) {}
+  setTimeout(() => {
+    sb.functions.invoke("app-observability", {
+      body: { event, outcome, details: safeDetails }
+    }).catch(() => {});
+  }, 0);
+}
 
 let _PULL_TO_REFRESH_BOUND = false;
 let _APP_RESUME_BOUND = false;
@@ -2655,7 +2698,8 @@ function iconSvg(name, size = 18, extra = "") {
     star: `<svg ${attrs}><polygon points="12 2 15 8.5 22 9.3 16.8 14 18.2 21 12 17.4 5.8 21 7.2 14 2 9.3 9 8.5 12 2"/></svg>`,
     user: `<svg ${attrs}><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>`,
     trophy: `<svg ${attrs}><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v6a5 5 0 0 1-10 0V4z"/><path d="M5 5H3v3a4 4 0 0 0 4 4"/><path d="M19 5h2v3a4 4 0 0 1-4 4"/></svg>`,
-    check: `<svg ${attrs}><path d="M20 6 9 17l-5-5"/></svg>`
+    check: `<svg ${attrs}><path d="M20 6 9 17l-5-5"/></svg>`,
+    refresh: `<svg ${attrs}><path d="M20 11a8 8 0 1 0 2 5.5"/><path d="M20 4v7h-7"/></svg>`
   };
   return icons[name] || icons.user;
 }
@@ -2758,11 +2802,19 @@ function withTimeout(promise, ms, label = "timeout") {
 }
 
 async function safeLoad(label, task, ms = 10000) {
+  const startedAt = Date.now();
   try {
     const promise = typeof task === "function" ? task() : task;
     return await withTimeout(promise, ms, `${label} timeout`);
   } catch (e) {
     console.warn(`[safeLoad] ${label}:`, e);
+    if (CRITICAL_LOAD_LABELS.has(label)) {
+      reportOperationalEvent("critical_load_failed", "failure", {
+        load: label,
+        error_kind: operationalErrorKind(e),
+        duration_ms: Date.now() - startedAt
+      });
+    }
     return null;
   }
 }
@@ -3706,6 +3758,24 @@ async function loadProfile() {
   return data;
 }
 
+async function loadOperationalHealth() {
+  if (!sb || STATE.profile?.role !== "admin") return null;
+  const { data, error } = await sb.rpc("get_admin_operational_health", { p_hours: 24 });
+  if (error) {
+    console.warn("[operational health]", error);
+    return null;
+  }
+  STATE.operationalHealth = data || null;
+  return STATE.operationalHealth;
+}
+
+window.refreshOperationalHealth = async function() {
+  if (STATE.profile?.role !== "admin") return;
+  await loadOperationalHealth();
+  if (STATE.view === "home") renderCurrentView();
+  showToast("Saúde do sistema atualizada", "success");
+};
+
 async function signOut() {
   if (!await showConfirm({ title: "Sair da conta?", confirm: "Sair", cancel: "Cancelar" })) return;
   cleanupRealtime();
@@ -4088,8 +4158,13 @@ async function loadOrCreateSession(date, workoutCode, intensity, workoutId = nul
     .eq("date", date).eq("workout_code", workoutCode).limit(5);
   if (existingError) {
     console.error("[workout] Falha ao buscar sessão", existingError);
+    reportOperationalEvent("workout_start_failed", "failure", {
+      source: "session_lookup",
+      error_kind: operationalErrorKind(existingError)
+    });
     throw existingError;
   }
+  let createdSession = false;
   const existing = pickBestWorkoutSession(existingRows || [], workoutId || w?.id || null);
   if (existing) {
     setCurrentWorkoutSession(existing, { remember: existing.status === "in_progress" });
@@ -4119,12 +4194,20 @@ async function loadOrCreateSession(date, workoutCode, intensity, workoutId = nul
         }
       }
       console.error("[workout] Falha ao iniciar sessão", error);
+      reportOperationalEvent("workout_start_failed", "failure", {
+        source: "session_insert",
+        error_kind: operationalErrorKind(error)
+      });
       throw error;
     }
     setCurrentWorkoutSession(data, { remember: true });
+    createdSession = true;
   }
   await abandonOtherInProgressSessions(STATE.currentSession);
   await loadSetLogs();
+  if (createdSession) {
+    reportOperationalEvent("workout_session_started", "success", { source: "session_insert" });
+  }
   return STATE.currentSession;
 }
 
@@ -4880,7 +4963,15 @@ async function completeSession() {
     total_volume_kg: totalVolume,
     duration_seconds: duration
   }).eq("id", STATE.currentSession.id);
-  if (error) { console.error(error); showToast("Erro ao concluir","error"); return; }
+  if (error) {
+    console.error(error);
+    reportOperationalEvent("workout_complete_failed", "failure", {
+      source: "session_update",
+      error_kind: operationalErrorKind(error)
+    });
+    showToast("Erro ao concluir","error");
+    return;
+  }
   showToast("Treino concluído! ✓", "success");
   STATE.currentSession = {
     ...STATE.currentSession,
@@ -4902,6 +4993,10 @@ async function completeSession() {
       sets_done: STATE.setLogs.filter(s => s.done).length,
     });
   } catch(e) {}
+  reportOperationalEvent("workout_completed", "success", {
+    source: "session_update",
+    duration_ms: duration * 1000
+  });
   // Animação de conclusão
   if (typeof fireConfetti === "function") fireConfetti(2800);
   // Mostra modal de "treino concluído" com stats e botão de compartilhar
@@ -4912,6 +5007,10 @@ async function completeSession() {
   }
   } catch(e) {
     console.error("[completeSession]", e);
+    reportOperationalEvent("workout_complete_failed", "failure", {
+      source: "completion_flow",
+      error_kind: operationalErrorKind(e)
+    });
     showToast("Erro ao concluir treino", "error");
   } finally {
     STATE._completingSession = false;
@@ -6065,6 +6164,10 @@ async function scheduleServerRestPush(seconds, exerciseName) {
       STATE.timer.pushScheduling = false;
       STATE.timer.pushScheduled = false;
       persistTimerState();
+      reportOperationalEvent("rest_push_schedule_failed", "failure", {
+        source: "subscription",
+        error_kind: "permission"
+      });
       if (document.visibilityState === "hidden") scheduleBackgroundRestNotification();
       return false;
     }
@@ -6096,10 +6199,18 @@ async function scheduleServerRestPush(seconds, exerciseName) {
     STATE.timer.pushScheduled = verified;
     persistTimerState();
     rememberRestPushStatus(verified ? "scheduled" : "schedule_unverified", verified ? "Job agendado no Supabase." : "A Edge Function respondeu, mas o job não foi confirmado.");
+    reportOperationalEvent(verified ? "rest_push_scheduled" : "rest_push_schedule_failed", verified ? "success" : "failure", {
+      source: verified ? "job_verified" : "job_verify",
+      error_kind: verified ? "" : "unconfirmed"
+    });
     if (!verified && document.visibilityState === "hidden") scheduleBackgroundRestNotification();
     return verified;
   } catch(e) {
     console.warn("[rest timer server schedule]", e);
+    reportOperationalEvent("rest_push_schedule_failed", "failure", {
+      source: "schedule",
+      error_kind: operationalErrorKind(e)
+    });
     rememberRestPushStatus("schedule_failed", e.message || e);
     if (STATE.timer) {
       STATE.timer.pushScheduling = false;
@@ -7201,8 +7312,13 @@ async function startPlatformUpgradeCheckout() {
     }), 30000, "platform-create-checkout timeout");
     if (error) throw new Error(await getFunctionErrorMessage(error, "Não foi possível abrir o checkout."));
     if (!data?.checkout_url) throw new Error(data?.error || "Checkout não retornado pelo Asaas.");
+    reportOperationalEvent("checkout_started", "success", { source: "platform_locked_screen" });
     window.location.href = data.checkout_url;
   } catch (e) {
+    reportOperationalEvent("checkout_failed", "failure", {
+      source: "platform_locked_screen",
+      error_kind: operationalErrorKind(e)
+    });
     showToast(e.message || "Não foi possível abrir o checkout.", "error");
     setPlatformBillingError(e.message || "");
     if (btn) { btn.disabled = false; btn.textContent = getPlatformBillingStatus().ready ? "Assinar e liberar acesso" : "Salvar dados e assinar"; }
@@ -8588,6 +8704,22 @@ function renderAdminHome(el) {
   const totalStudents = STATE.students.length;
   const hour = new Date().getHours();
   const greet = hour < 5 ? "Boa madrugada" : hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const health = STATE.operationalHealth || {};
+  const healthFailures = Number(health.failures_total || 0);
+  const healthTone = healthFailures > 0 ? "var(--yellow)" : "var(--green)";
+  const latestFailure = Array.isArray(health.recent_failures) ? health.recent_failures[0] : null;
+  const healthCard = `
+    <div class="card" style="margin:14px 0 0;border-left:3px solid ${healthTone}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div>
+          <div class="text-xs muted" style="text-transform:uppercase;letter-spacing:.7px">Saúde do sistema · últimas 24h</div>
+          <div style="font-size:20px;font-weight:900;margin-top:5px;color:${healthTone}">${healthFailures ? `${healthFailures} falha${healthFailures === 1 ? "" : "s"} registrada${healthFailures === 1 ? "" : "s"}` : "Operação estável"}</div>
+          <div class="text-xs muted" style="margin-top:5px">${Number(health.workouts_completed || 0)} treinos concluídos · ${Number(health.workouts_started || 0)} iniciados</div>
+          ${latestFailure ? `<div class="text-xs muted" style="margin-top:7px">Última: ${escape(String(latestFailure.event_name || "falha"))} · ${escape(String(latestFailure.error_kind || "unknown"))}</div>` : ""}
+        </div>
+        <button class="mini-btn" onclick="refreshOperationalHealth()" aria-label="Atualizar saúde do sistema" title="Atualizar">${iconSvg("refresh", 16)}</button>
+      </div>
+    </div>`;
 
   // Se o admin tem periodização (admin também treina), mostra card "Hoje"
   const today = todayISO();
@@ -8632,6 +8764,7 @@ function renderAdminHome(el) {
       <div class="stat-card"><div class="stat-value">${totalStudents}</div><div class="stat-label">Alunos</div></div>
       <div class="stat-card"><div class="stat-value">${STATE.feed.length}</div><div class="stat-label">Posts</div></div>
     </div>
+    ${healthCard}
     <div class="section-title">Acesso rápido</div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
       <button class="btn-ghost" onclick="navTo('trainers')">Treinadores</button>
@@ -8970,10 +9103,15 @@ window.submitNewTrainer = async function() {
     if (data?.error) throw new Error(data.error);
 
     showToast("Treinador criado com sucesso!", "success");
+    reportOperationalEvent("trainer_create_completed", "success", { source: "admin_user" });
     closeSheet();
     await loadTrainers(); renderTrainers();
   } catch (e) {
     console.error("[submitNewTrainer] Falha:", e);
+    reportOperationalEvent("trainer_create_failed", "failure", {
+      source: "admin_user",
+      error_kind: operationalErrorKind(e)
+    });
     showToast("Erro: " + await getFunctionErrorMessage(e), "error");
   } finally {
     setBusy(false);
@@ -10183,6 +10321,10 @@ async function startWorkoutSession(date, code, intensity, workoutId = null) {
     await renderWorkout();
   } catch (e) {
     console.error("[workout] Não foi possível iniciar treino", e);
+    reportOperationalEvent("workout_start_failed", "failure", {
+      source: "start_workout",
+      error_kind: operationalErrorKind(e)
+    });
     const msg = String(e?.message || e || "");
     const friendly = /is_payment_ok|permission denied|unauthorized|forbidden/i.test(msg)
       ? "Você não tem permissão para iniciar este treino. Atualize o app ou fale com seu treinador."
@@ -12122,6 +12264,7 @@ window.submitNewStudent = async function() {
 
     await loadStudents();
     renderStudents();
+    reportOperationalEvent("student_create_completed", "success", { source: "admin_user" });
     showToast("Aluno criado" + (planValue ? " com plano de R$ " + planValue.toFixed(2) : ""), "success");
     if (shareWhatsApp) {
       openStudentInviteSuccessSheet({ name, email, phone, password: pass, studentId }, planValue);
@@ -12130,6 +12273,10 @@ window.submitNewStudent = async function() {
     }
   } catch (e) {
     console.error("Falha criar aluno:", e);
+    reportOperationalEvent("student_create_failed", "failure", {
+      source: "admin_user",
+      error_kind: operationalErrorKind(e)
+    });
     showToast("Erro: " + await getFunctionErrorMessage(e), "error");
   } finally {
     setBusy(false);
@@ -16603,6 +16750,10 @@ async function boot() {
     _BOOT_DONE = true;
     clearTimeout(safetyTimer);
     console.error("boot crashou:", e);
+    reportOperationalEvent("app_boot_failed", "failure", {
+      source: "boot",
+      error_kind: operationalErrorKind(e)
+    });
     showStuckEscape("Erro ao iniciar o app. " + (e.message || ""));
   }
 }
@@ -16686,7 +16837,10 @@ async function postSignIn() {
       safeLoad("coach auto-follow", ensureCoachStudentFollows)
     );
   } else if (profile.role === "admin") {
-    _backgroundLoads.push(safeLoad("admin payments", loadAdminPayments));
+    _backgroundLoads.push(
+      safeLoad("admin payments", loadAdminPayments),
+      safeLoad("operational health", loadOperationalHealth, 7000)
+    );
   }
   Promise.all(_backgroundLoads)
     .then(() => {
