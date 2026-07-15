@@ -5245,6 +5245,15 @@ async function completeSession() {
     showToast("Erro ao concluir","error");
     return;
   }
+  // A sessão foi persistida. Não deixe um descanso desta sessão continuar no
+  // aparelho, no Service Worker ou no job remoto depois da conclusão.
+  try {
+    await withTimeout(closeTimer(), 3500, "rest timer cancel timeout");
+  } catch (timerCancelError) {
+    // A conclusão já está salva. Não mantenha a pessoa presa se a chamada de
+    // cancelamento remoto estiver indisponível; o job expira sozinho.
+    console.warn("[complete session rest timer cancel]", timerCancelError);
+  }
   showToast("Treino concluído! ✓", "success");
   STATE.currentSession = {
     ...STATE.currentSession,
@@ -6797,15 +6806,16 @@ function cancelTimer() {
   resetTimerState();
   _releaseWakeLock();
   cancelBackgroundRestNotification();
-  cancelServerRestPush(timerId, scheduleToken);
   clearPersistedTimer();
+  return cancelServerRestPush(timerId, scheduleToken);
 }
 function closeTimer() {
-  cancelTimer();
-  document.getElementById("timer-bar").classList.remove("active","warning","done");
-  document.getElementById("timer-ring").classList.remove("warning","done");
+  const cancellation = cancelTimer();
+  document.getElementById("timer-bar")?.classList.remove("active","warning","done");
+  document.getElementById("timer-ring")?.classList.remove("warning","done");
   document.getElementById("timer-fs")?.classList.remove("done");
   closeFsTimer();
+  return cancellation;
 }
 function adjustTimer(delta) {
   if (!STATE.timer.running && !STATE.timer.paused) return;

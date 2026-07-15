@@ -98,6 +98,31 @@ const checks = [
       !finishTimerSource.includes("cancelServerRestPush("),
   },
   {
+    name: "concluir treino encerra o descanso local e cancela o push pendente",
+    pass: (() => {
+      const completeStart = html.indexOf("async function completeSession()");
+      const completionToast = html.indexOf('showToast("Treino concluído! ✓", "success");', completeStart);
+      const cancelTimerCall = html.indexOf(
+        'await withTimeout(closeTimer(), 3500, "rest timer cancel timeout");',
+        completeStart
+      );
+      const closeTimerStart = html.indexOf("function closeTimer()");
+      const closeTimerEnd = html.indexOf("function startTimer(", closeTimerStart);
+      const closeTimerSource = html.slice(closeTimerStart, closeTimerEnd);
+      const cancelTimerStart = html.indexOf("function cancelTimer()");
+      const cancelTimerEnd = html.indexOf("function closeTimer()", cancelTimerStart);
+      const cancelTimerSource = html.slice(cancelTimerStart, cancelTimerEnd);
+
+      return completeStart >= 0 &&
+        cancelTimerCall > completeStart &&
+        completionToast > cancelTimerCall &&
+        closeTimerSource.includes("const cancellation = cancelTimer();") &&
+        closeTimerSource.includes("return cancellation;") &&
+        cancelTimerSource.includes("cancelBackgroundRestNotification();") &&
+        cancelTimerSource.includes("return cancelServerRestPush(timerId, scheduleToken);");
+    })(),
+  },
+  {
     name: "modal de notificacoes consegue renovar assinatura com helper global",
     pass: html.includes("window.openNotificationsSheet = function()") &&
       html.includes("function renderPushSubscriptionCardHTML()") &&
