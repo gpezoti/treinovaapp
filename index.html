@@ -2446,6 +2446,7 @@ const STATE = {
   selectedWorkoutId: null,
   selectedIntensity: "yellow",
   selectedPresetCode: null,
+  agendaWorkoutTarget: null, // seleção explícita da Agenda; não pode ser sobrescrita por refresh da Home
   expandedEx: null,
   currentSession: null,  // active session row
   todaySessions: [],     // sessions do dia para refletir Iniciar/Continuar/Concluído na Home
@@ -4251,10 +4252,47 @@ function setSelectedWorkoutFromSession(session) {
   );
 }
 
-function setCurrentWorkoutSession(session, { remember = false } = {}) {
+function currentWorkoutTarget() {
+  const target = STATE.agendaWorkoutTarget;
+  if (!target || !target.date || !target.workoutCode) return null;
+  return target;
+}
+
+function setWorkoutTarget({ date, workoutCode, workoutId = null, presetCode = null, intensity = "yellow", source = "manual" }) {
+  if (!date || !workoutCode) return null;
+  const resolvedPreset = presetCode || resolvePresetForWorkoutDate(date, workoutCode, workoutId);
+  const target = {
+    date,
+    workoutCode,
+    workoutId: workoutId || null,
+    presetCode: resolvedPreset || null,
+    intensity: legacyIntensityFromPresetCode(resolvedPreset, intensity || "yellow"),
+    source
+  };
+  STATE.agendaWorkoutTarget = target;
+  STATE.selectedDate = target.date;
+  STATE.selectedWorkout = target.workoutCode;
+  STATE.selectedWorkoutId = target.workoutId;
+  STATE.selectedPresetCode = target.presetCode;
+  STATE.selectedIntensity = target.intensity;
+  STATE.expandedEx = null;
+  if (STATE.currentSession && !sessionMatchesWorkoutTarget(STATE.currentSession, target.date, target.workoutCode, target.workoutId)) {
+    STATE.currentSession = null;
+    STATE.setLogs = [];
+  }
+  return target;
+}
+
+function setCurrentWorkoutSession(session, { remember = false, syncSelection = true } = {}) {
   if (!session) return null;
   STATE.currentSession = session;
-  setSelectedWorkoutFromSession(session);
+  if (syncSelection) {
+    setSelectedWorkoutFromSession(session);
+    const target = currentWorkoutTarget();
+    if (target && sessionMatchesWorkoutTarget(session, target.date, target.workoutCode, target.workoutId)) {
+      STATE.agendaWorkoutTarget = null;
+    }
+  }
   mergeKnownWorkoutSession(session);
   if (remember && session.status === "in_progress") rememberActiveWorkoutSession(session);
   if (session.status === "completed") forgetActiveWorkoutSession(session.id);
@@ -4381,12 +4419,21 @@ async function loadKnownWorkoutSessions(date = todayISO()) {
   STATE.todaySessions = sortWorkoutSessionsByRecency(Object.values(byId));
   const active = getActiveWorkoutSessionForHome();
   if (active) {
+    const explicitTarget = currentWorkoutTarget();
+    const keepAgendaSelection = STATE.view === "workout"
+      && explicitTarget
+      && !sessionMatchesWorkoutTarget(active, explicitTarget.date, explicitTarget.workoutCode, explicitTarget.workoutId);
     const changed = !STATE.currentSession
       || STATE.currentSession.status !== "in_progress"
       || String(STATE.currentSession.id) !== String(active.id);
-    setCurrentWorkoutSession(active, { remember: true });
-    if (changed) await loadSetLogs();
-    await abandonOtherInProgressSessions(active);
+    // Uma atualização tardia da Home não pode trocar o treino que o aluno acabou
+    // de abrir pela Agenda. A sessão antiga continua visível na Home, mas não
+    // substitui o alvo explícito que está sendo aberto/executado.
+    if (!keepAgendaSelection) {
+      setCurrentWorkoutSession(active, { remember: true });
+      if (changed) await loadSetLogs();
+      await abandonOtherInProgressSessions(active);
+    }
   }
   return STATE.todaySessions;
 }
@@ -4408,14 +4455,35 @@ async function loadWorkoutSessionById(sessionId) {
   return data;
 }
 
-async function loadExistingSession(date, workoutCode, workoutId = null) {
-  if (!STATE.profile || !workoutCode) return null;
-  const { data, error } = await sb.from("sessions")
+async function findWorkoutSessionRows(date, workoutCode, workoutId = null) {
+  const base = () => sb.from("sessions")
     .select("*")
     .eq("student_id", STATE.profile.id)
     .eq("date", date)
-    .eq("workout_code", workoutCode)
-    .limit(5);
+    .eq("workout_code", workoutCode);
+
+  if (!workoutId) {
+    const result = await base().limit(5);
+    return { data: result.data || [], error: result.error || null };
+  }
+
+  // Modelos diferentes podem compartilhar o mesmo código. Busca primeiro pelo
+  // ID do modelo e mantém apenas sessões legadas sem ID como compatibilidade.
+  const [exact, legacy] = await Promise.all([
+    base().eq("workout_id", workoutId).limit(5),
+    base().is("workout_id", null).limit(5)
+  ]);
+  const error = exact.error || legacy.error || null;
+  const byId = {};
+  [...(exact.data || []), ...(legacy.data || [])].forEach(row => {
+    if (row?.id) byId[row.id] = row;
+  });
+  return { data: Object.values(byId), error };
+}
+
+async function loadExistingSession(date, workoutCode, workoutId = null) {
+  if (!STATE.profile || !workoutCode) return null;
+  const { data, error } = await findWorkoutSessionRows(date, workoutCode, workoutId);
   if (error) {
     console.warn("[workout] Falha ao buscar sessão existente", error);
     return null;
@@ -4430,9 +4498,11 @@ async function loadExistingSession(date, workoutCode, workoutId = null) {
 async function loadOrCreateSession(date, workoutCode, intensity, workoutId = null) {
   // procura sessão do dia
   const w = resolveWorkoutRef(workoutCode, workoutId) || STATE.workouts[workoutCode];
-  const { data: existingRows, error: existingError } = await sb.from("sessions")
-    .select("*").eq("student_id", STATE.profile.id)
-    .eq("date", date).eq("workout_code", workoutCode).limit(5);
+  const { data: existingRows, error: existingError } = await findWorkoutSessionRows(
+    date,
+    workoutCode,
+    workoutId || w?.id || null
+  );
   if (existingError) {
     console.error("[workout] Falha ao buscar sessão", existingError);
     reportOperationalEvent("workout_start_failed", "failure", {
@@ -8122,6 +8192,7 @@ function navTo(view) {
     }
   }
   const previousView = STATE.view;
+  if (view !== "workout") STATE.agendaWorkoutTarget = null;
   STATE.view = view;
   if (previousView !== view) {
     trackProductEvent("screen viewed", { screen: view, previous_screen: previousView || "initial" });
@@ -8568,40 +8639,9 @@ function refreshActiveWorkoutHomeCard() {
   if (slot) slot.innerHTML = renderActiveWorkoutHomeCard();
 }
 window.onDayClick = function(iso) {
-  const info = findDayInfo(iso);
-  if (!info) return;
-  if (info.workout_code === "OFF") { showToast("Dia OFF — descanso!"); return; }
-  const today = todayISO();
-  const isLate = iso < today;
-  if (isLate) {
-    // Sheet de retomada para dias atrasados
-    const dt = new Date(iso + "T00:00:00");
-    const dayLabel = dt.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
-    const wCode = info.workout_code;
-    const W = resolveWorkoutRef(wCode, info.workout_id);
-    const wName = W ? W.name : "Treino " + wCode;
-    openSheet(`
-      <div style="text-align:center;margin-bottom:4px">
-        <div style="height:36px;display:grid;place-items:center;color:var(--brand);margin-bottom:6px">${iconSvg("calendar", 32)}</div>
-        <h3 style="margin:0 0 4px">Treino em atraso</h3>
-        <p style="color:var(--text-2);font-size:13px;margin:0 0 16px">${wName} · ${dayLabel}</p>
-        <p style="color:var(--text-2);font-size:13px;line-height:1.5;margin:0 0 20px">Sem problema — você ainda pode registrar este treino. Acontece com todo mundo!</p>
-      </div>
-      <button class="btn-primary" onclick="openAgendaWorkoutFromSheet(${jsArg(iso)},${jsArg(wCode)},${jsArg(info.preset_code || "")},${jsArg(info.intensity || "")},${jsArg(info.workout_id || "")})" style="margin-bottom:10px">
-        Fazer este treino agora
-      </button>
-      <button class="btn-ghost" onclick="closeSheet();navTo('chat')" style="margin-bottom:8px">
-        ${iconSvg("message", 16)} Avisar o treinador
-      </button>
-      <button class="btn-ghost" onclick="closeSheet()">Fechar</button>
-    `);
-    return;
-  }
-  if (info.preset_code) {
-    openWorkoutWithPreset(iso, info.workout_code, info.preset_code, info.workout_id);
-  } else {
-    openWorkout(iso, info.workout_code, info.intensity, info.workout_id);
-  }
+  // A faixa de dias da Home e a Agenda usam exatamente o mesmo fluxo.
+  // Assim qualquer treino planejado pode ser aberto, não apenas o de hoje.
+  window.openAgendaDay(iso);
 };
 
 function openAgendaBlockDirect(iso, block, dayInfo = null) {
@@ -8625,31 +8665,15 @@ function openAgendaBlockDirect(iso, block, dayInfo = null) {
     return;
   }
 
-  const today = todayISO();
-  if (iso < today) {
-    const dt = new Date(iso + "T00:00:00");
-    const dayLabel = dt.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
-    const display = getAgendaBlockDisplay(block || info, info);
-    openSheet(`
-      <div style="text-align:center;margin-bottom:4px">
-        <div style="height:36px;display:grid;place-items:center;color:var(--brand);margin-bottom:6px">${iconSvg("calendar", 32)}</div>
-        <h3 style="margin:0 0 4px">Treino em atraso</h3>
-        <p style="color:var(--text-2);font-size:13px;margin:0 0 16px">${escape(display.title)} · ${dayLabel}</p>
-        <p style="color:var(--text-2);font-size:13px;line-height:1.5;margin:0 0 20px">Você ainda pode registrar este treino e manter seu histórico atualizado.</p>
-      </div>
-      <button class="btn-primary" onclick="openAgendaWorkoutFromSheet(${jsArg(iso)},${jsArg(workoutCode)},${jsArg(presetCode || "")},${jsArg(info.intensity || "")},${jsArg(workoutId || "")})" style="margin-bottom:10px">
-        Fazer este treino agora
-      </button>
-      <button class="btn-ghost" onclick="closeSheet()">Fechar</button>
-    `);
-    return;
-  }
-
-  if (presetCode) {
-    openWorkoutWithPreset(iso, workoutCode, presetCode, workoutId);
-  } else {
-    openWorkout(iso, workoutCode, info.intensity, workoutId);
-  }
+  setWorkoutTarget({
+    date: iso,
+    workoutCode,
+    workoutId,
+    presetCode,
+    intensity: info.intensity,
+    source: "agenda"
+  });
+  navTo("workout");
 }
 
 window.openAgendaBlock = function(iso, index = 0) {
@@ -8666,11 +8690,15 @@ window.openAgendaBlockFromSheet = function(iso, index = 0) {
 
 window.openAgendaWorkoutFromSheet = function(iso, workoutCode, presetCode = "", intensity = "", workoutId = "") {
   closeSheetForAction();
-  if (presetCode) {
-    openWorkoutWithPreset(iso, workoutCode, presetCode, workoutId || null);
-  } else {
-    openWorkout(iso, workoutCode, intensity, workoutId || null);
-  }
+  setWorkoutTarget({
+    date: iso,
+    workoutCode,
+    workoutId: workoutId || null,
+    presetCode: presetCode || null,
+    intensity,
+    source: "agenda"
+  });
+  navTo("workout");
 };
 
 window.openAgendaDay = function(iso) {
@@ -8720,16 +8748,7 @@ window.openAgendaDay = function(iso) {
 };
 
 window.openWorkout = function(iso, code, intensity, workoutId = null) {
-  STATE.selectedDate = iso;
-  STATE.selectedWorkout = code;
-  STATE.selectedWorkoutId = workoutId || null;
-  STATE.selectedPresetCode = resolvePresetForWorkoutDate(iso, code, workoutId);
-  STATE.selectedIntensity = legacyIntensityFromPresetCode(STATE.selectedPresetCode, intensity || "yellow");
-  STATE.expandedEx = null;
-  if (STATE.currentSession && !sessionMatchesWorkoutTarget(STATE.currentSession, iso, code, workoutId || null)) {
-    STATE.currentSession = null;
-    STATE.setLogs = [];
-  }
+  setWorkoutTarget({ date: iso, workoutCode: code, workoutId, intensity, source: "manual" });
   navTo("workout");
 };
 
@@ -10425,6 +10444,20 @@ async function renderWorkout() {
   let code = STATE.selectedWorkout;
   let intensity = STATE.selectedIntensity;
   const restResume = STATE._resumeWorkoutFromRestTimer;
+  const agendaTarget = currentWorkoutTarget();
+
+  // A escolha feita na Agenda é a fonte de verdade desta abertura. Isso evita
+  // que uma sessão ativa carregada em segundo plano recoloque o treino de hoje.
+  if (agendaTarget && !restResume) {
+    date = agendaTarget.date;
+    code = agendaTarget.workoutCode;
+    intensity = agendaTarget.intensity;
+    STATE.selectedDate = date;
+    STATE.selectedWorkout = code;
+    STATE.selectedWorkoutId = agendaTarget.workoutId;
+    STATE.selectedPresetCode = agendaTarget.presetCode;
+    STATE.selectedIntensity = intensity;
+  }
 
   if (restResume?.sessionId && (!STATE.currentSession || String(STATE.currentSession.id) !== String(restResume.sessionId))) {
     el.innerHTML = `<div class="loading"><div class="spinner"></div>Retomando treino ativo...</div>`;
@@ -10683,7 +10716,13 @@ async function startWorkoutSession(date, code, intensity, workoutId = null) {
   const el = document.getElementById("view-workout");
   if (el) el.innerHTML = `<div class="loading"><div class="spinner"></div>Iniciando treino...</div>`;
   try {
-    const session = await loadOrCreateSession(date, code, intensity, workoutId || STATE.selectedWorkoutId);
+    const target = currentWorkoutTarget();
+    const session = await loadOrCreateSession(
+      target?.date || date,
+      target?.workoutCode || code,
+      target?.intensity || intensity,
+      target?.workoutId || workoutId || STATE.selectedWorkoutId
+    );
     if (!session) throw new Error("Sessão não criada.");
     await renderWorkout();
   } catch (e) {
@@ -20890,16 +20929,14 @@ window.renderTodayBlocksCard = renderTodayBlocksCard;
 
 /* Abre treino com o preset selecionado (rep range + pause vêm do preset) */
 window.openWorkoutWithPreset = function(date, code, presetCode, workoutId = null) {
-  STATE.selectedPresetCode = presetCode;
-  STATE.selectedDate = date;
-  STATE.selectedWorkout = code;
-  STATE.selectedWorkoutId = workoutId || null;
-  STATE.selectedIntensity = legacyIntensityFromPresetCode(presetCode, 'yellow');
-  STATE.expandedEx = null;
-  if (STATE.currentSession && !sessionMatchesWorkoutTarget(STATE.currentSession, date, code, workoutId || null)) {
-    STATE.currentSession = null;
-    STATE.setLogs = [];
-  }
+  setWorkoutTarget({
+    date,
+    workoutCode: code,
+    workoutId,
+    presetCode,
+    intensity: 'yellow',
+    source: 'manual'
+  });
   navTo("workout");
 };
 

@@ -34,9 +34,9 @@ assert(
 );
 
 assert(
-  html.includes("openAgendaWorkoutFromSheet(${jsArg(iso)},${jsArg(workoutCode)},${jsArg(presetCode || \"\")}") &&
-    html.includes("openAgendaWorkoutFromSheet(${jsArg(iso)},${jsArg(wCode)},${jsArg(info.preset_code || \"\")}"),
-  "botões de treino atrasado usam helper seguro e preservam o dia selecionado"
+  html.includes("window.onDayClick = function(iso)") &&
+    html.includes("window.openAgendaDay(iso);"),
+  "faixa de dias da Home usa o mesmo fluxo da Agenda"
 );
 
 assert(
@@ -54,9 +54,10 @@ const pickSessionSource = html.slice(pickSessionStart, pickSessionEnd);
 
 assert(
   !agendaBlockSource.includes("openDayHistory(") &&
-    agendaBlockSource.includes("openWorkoutWithPreset(iso, workoutCode, presetCode, workoutId)") &&
-    agendaBlockSource.includes("openWorkout(iso, workoutCode, info.intensity, workoutId)"),
-  "qualquer bloco de treino da agenda abre para execução, sem bloquear dias concluídos"
+    !agendaBlockSource.includes("iso < today") &&
+    agendaBlockSource.includes("setWorkoutTarget({") &&
+    agendaBlockSource.includes('navTo("workout")'),
+  "qualquer bloco de treino da agenda abre diretamente para execução, inclusive fora do dia atual"
 );
 
 assert(
@@ -70,6 +71,22 @@ assert(
     pickSessionSource.includes("const legacy = workoutId") &&
     !pickSessionSource.includes("candidates.length ? candidates : rows"),
   "sessões de treinos com o mesmo código não se misturam entre modelos diferentes"
+);
+
+assert(
+  html.includes("function findWorkoutSessionRows(date, workoutCode, workoutId = null)") &&
+    html.includes('base().eq("workout_id", workoutId).limit(5)') &&
+    html.includes('base().is("workout_id", null).limit(5)'),
+  "sessões consultam primeiro o workout_id e só usam registros legados sem ID como fallback"
+);
+
+assert(
+  html.includes("function setWorkoutTarget({ date, workoutCode") &&
+    html.includes("const agendaTarget = currentWorkoutTarget();") &&
+    html.includes("const keepAgendaSelection = STATE.view === \"workout\"") &&
+    html.includes("if (!keepAgendaSelection) {") &&
+    html.includes("await abandonOtherInProgressSessions(active);"),
+  "a escolha da Agenda permanece estável contra refresh assíncrono da Home"
 );
 
 if (process.exitCode) {
