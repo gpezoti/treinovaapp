@@ -45,6 +45,33 @@ assert(
   "retomada de treino valida date/code/workout_id e repassa workout_id"
 );
 
+const agendaBlockStart = html.indexOf("function openAgendaBlockDirect");
+const agendaBlockEnd = html.indexOf("window.openAgendaBlock = function", agendaBlockStart);
+const agendaBlockSource = html.slice(agendaBlockStart, agendaBlockEnd);
+const pickSessionStart = html.indexOf("function pickBestWorkoutSession");
+const pickSessionEnd = html.indexOf("function findKnownSessionForWorkout", pickSessionStart);
+const pickSessionSource = html.slice(pickSessionStart, pickSessionEnd);
+
+assert(
+  !agendaBlockSource.includes("openDayHistory(") &&
+    agendaBlockSource.includes("openWorkoutWithPreset(iso, workoutCode, presetCode, workoutId)") &&
+    agendaBlockSource.includes("openWorkout(iso, workoutCode, info.intensity, workoutId)"),
+  "qualquer bloco de treino da agenda abre para execução, sem bloquear dias concluídos"
+);
+
+assert(
+  html.includes("Escolha qualquer treino para abrir e executar, mesmo fora do dia atual.") &&
+    html.includes('"Executar agora"'),
+  "agenda deixa explícito que o aluno pode executar qualquer treino planejado"
+);
+
+assert(
+  pickSessionSource.includes("const exact = workoutId") &&
+    pickSessionSource.includes("const legacy = workoutId") &&
+    !pickSessionSource.includes("candidates.length ? candidates : rows"),
+  "sessões de treinos com o mesmo código não se misturam entre modelos diferentes"
+);
+
 if (process.exitCode) {
   throw new Error("Agenda other-day workout QA failed");
 }

@@ -4313,10 +4313,15 @@ async function abandonOtherInProgressSessions(session) {
 }
 
 function pickBestWorkoutSession(rows = [], workoutId = null) {
-  const candidates = workoutId
-    ? rows.filter(s => !s.workout_id || String(s.workout_id) === String(workoutId))
+  // Nunca reutilize a sessão de outro modelo só porque o código do treino é igual.
+  // Sessões antigas sem workout_id continuam como fallback para preservar histórico.
+  const exact = workoutId
+    ? rows.filter(s => String(s.workout_id || "") === String(workoutId))
     : rows;
-  const list = sortWorkoutSessionsByRecency(candidates.length ? candidates : rows);
+  const legacy = workoutId
+    ? rows.filter(s => !s.workout_id)
+    : [];
+  const list = sortWorkoutSessionsByRecency(exact.length ? exact : legacy);
   return list.find(s => s.status === "in_progress")
     || list.find(s => s.status === "completed")
     || null;
@@ -8605,7 +8610,6 @@ function openAgendaBlockDirect(iso, block, dayInfo = null) {
   const presetCode = block?.preset_code || info.preset_code || null;
   const workoutCode = block?.workout_code || info.workout_code;
   const workoutId = block?.workout_id || info.workout_id || null;
-  const isDone = info.status === "done" || info.status === "completed";
 
   if (!workoutCode && isAeroPresetCode(presetCode)) {
     navTo("aero");
@@ -8618,10 +8622,6 @@ function openAgendaBlockDirect(iso, block, dayInfo = null) {
   const workout = resolveWorkoutRef(workoutCode, workoutId);
   if (!workout) {
     showToast("Treino não encontrado para este dia.", "error");
-    return;
-  }
-  if (isDone) {
-    openDayHistory(iso, workoutCode);
     return;
   }
 
@@ -8688,17 +8688,21 @@ window.openAgendaDay = function(iso) {
 
   const dt = new Date(iso + "T00:00:00");
   const dayLabel = dt.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
-  const isDone = info.status === "done" || info.status === "completed";
   openSheet(`
     <h3>${escape(dayLabel)}</h3>
-    <p>${blocks.length} atividades programadas para este dia.</p>
+    <p>${blocks.length} atividades programadas para este dia. Escolha qualquer treino para abrir e executar, mesmo fora do dia atual.</p>
     <div style="display:grid;gap:10px;margin-top:12px">
       ${blocks.map((block, idx) => {
         const display = getAgendaBlockDisplay(block, info);
         const scheme = block.preset_code ? getTrainingScheme(block.preset_code, info.intensity) : null;
+        const session = block.workout_code
+          ? findKnownSessionForWorkout(iso, block.workout_code, block.workout_id)
+          : null;
         const actionLabel = display.isAero
           ? "Abrir cardio"
-          : (isDone ? "Ver registro" : (iso < todayISO() ? "Fazer agora" : "Abrir"));
+          : (session?.status === "in_progress"
+            ? "Continuar"
+            : (session?.status === "completed" ? "Ver treino" : "Executar agora"));
         return `
           <button type="button" class="btn-ghost" onclick="openAgendaBlockFromSheet(${jsArg(iso)},${idx})" style="text-align:left;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
             <span style="min-width:0">
