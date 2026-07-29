@@ -24,13 +24,17 @@ assert(
 );
 
 assert(
-  html.includes("onclick=\"openAgendaDay(${jsArg(d.date)})\""),
-  "cards da agenda escapam a data com jsArg antes de chamar openAgendaDay"
+  html.includes('data-agenda-day="${escape(d.date)}"') &&
+    html.includes('event.target.closest("[data-agenda-day]")') &&
+    html.includes("window.openAgendaDay(dayButton.dataset.agendaDay)"),
+  "cards da agenda usam clique delegado resiliente a re-renderizacoes no mobile"
 );
 
 assert(
-  html.includes("onclick=\"openAgendaBlockFromSheet(${jsArg(iso)},${idx})\""),
-  "sheet de dia com vários blocos abre bloco sem chamar closeSheet direto"
+  html.includes('data-agenda-block-date="${escape(iso)}"') &&
+    html.includes('data-agenda-block-index="${idx}"') &&
+    html.includes("window.openAgendaBlockFromSheet("),
+  "sheet de dia com varios blocos abre bloco pelo mesmo clique delegado"
 );
 
 assert(

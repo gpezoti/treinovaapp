@@ -3291,11 +3291,22 @@ function calendarDayCompletion(day, today = todayISO()) {
     return matchingCode.some(session => String(session.workout_id || "") === String(requirement.id))
       || matchingCode.some(session => !session.workout_id);
   }).length;
+
+  // Um aluno pode executar outro modelo planejado no mesmo dia (por exemplo,
+  // trocar B por C na Agenda). Para um dia com um unico treino, essa sessao
+  // tambem conta como dia realizado. A correspondencia por codigo/id acima
+  // continua sendo a regra preferencial, preservando o controle de dias com
+  // treino + cardio ou mais de uma atividade.
+  const completedWorkoutSessions = sessions.filter(session => session.status === "completed");
+  const hasSingleWorkoutFallback = requirements.length === 1
+    && requirements[0]?.type === "workout"
+    && completed === 0
+    && completedWorkoutSessions.length > 0;
   const isDone = STATE.calendarProgressLoaded
-    ? requirements.length > 0 && completed >= requirements.length
+    ? requirements.length > 0 && (completed >= requirements.length || hasSingleWorkoutFallback)
     : legacyDone;
   const state = isDone ? "done" : (day.date < today ? "missed" : (day.date === today ? "pending" : "scheduled"));
-  return { state, required: requirements.length, completed, isDone };
+  return { state, required: requirements.length, completed, isDone, usedWorkoutFallback: hasSingleWorkoutFallback };
 }
 
 function dayHasScheduledActivity(day) {
@@ -4307,8 +4318,12 @@ async function loadCalendarCompletionState() {
       .lte("date", endDate)
   ]);
 
-  if (sessionsResult.error || aeroResult.error) {
-    console.warn("[calendar] Falha ao carregar progresso", sessionsResult.error || aeroResult.error);
+  // O progresso de treino nao pode depender da tabela de cardio. Se ela
+  // falhar por migracao/RLS, ainda exibimos os treinos concluidos corretamente.
+  if (sessionsResult.error) {
+    console.warn("[calendar] Falha ao carregar sessoes concluidas", sessionsResult.error);
+    STATE.calendarSessionsByDate = {};
+    STATE.calendarAeroDates = new Set();
     STATE.calendarProgressLoaded = false;
     return;
   }
@@ -4320,7 +4335,12 @@ async function loadCalendarCompletionState() {
     sessionsByDate[session.date].push(session);
   });
   STATE.calendarSessionsByDate = sessionsByDate;
-  STATE.calendarAeroDates = new Set((aeroResult.data || []).map(log => log.date).filter(Boolean));
+  if (aeroResult.error) {
+    console.warn("[calendar] Falha ao carregar aerobios concluidos", aeroResult.error);
+    STATE.calendarAeroDates = new Set();
+  } else {
+    STATE.calendarAeroDates = new Set((aeroResult.data || []).map(log => log.date).filter(Boolean));
+  }
   STATE.calendarProgressLoaded = true;
 }
 
@@ -8809,29 +8829,38 @@ window.onDayClick = function(iso) {
 };
 
 function openAgendaBlockDirect(iso, block, dayInfo = null) {
-  const info = dayInfo || findDayInfo(iso);
-  if (!info) return;
-  const presetCode = block?.preset_code || info.preset_code || null;
-  const workoutCode = block?.workout_code || info.workout_code;
-  const workoutId = block?.workout_id || info.workout_id || null;
+  try {
+    const info = dayInfo || findDayInfo(iso);
+    if (!info) {
+      showToast("Não foi possível encontrar este dia da periodização.", "error");
+      return;
+    }
+    const presetCode = block?.preset_code || info.preset_code || null;
+    const workoutCode = block?.workout_code || info.workout_code;
+    const workoutId = block?.workout_id || info.workout_id || null;
 
-  if (!workoutCode && isAeroPresetCode(presetCode)) {
-    navTo("aero");
-    return;
+    if (!workoutCode && isAeroPresetCode(presetCode)) {
+      navTo("aero");
+      return;
+    }
+    if (!workoutCode || workoutCode === "OFF") {
+      showToast("Dia OFF — descanso!");
+      return;
+    }
+    setWorkoutTarget({
+      date: iso,
+      workoutCode,
+      workoutId,
+      presetCode,
+      intensity: info.intensity,
+      source: "agenda"
+    });
+    navTo("workout");
+  } catch (error) {
+    console.error("[agenda] Falha ao abrir treino programado", error);
+    reportOperationalEvent("agenda_workout_open", "failure", { error_kind: operationalErrorKind(error) });
+    showToast("Não foi possível abrir este treino. Tente novamente.", "error");
   }
-  if (!workoutCode || workoutCode === "OFF") {
-    showToast("Dia OFF — descanso!");
-    return;
-  }
-  setWorkoutTarget({
-    date: iso,
-    workoutCode,
-    workoutId,
-    presetCode,
-    intensity: info.intensity,
-    source: "agenda"
-  });
-  navTo("workout");
 }
 
 window.openAgendaBlock = function(iso, index = 0) {
@@ -8860,21 +8889,25 @@ window.openAgendaWorkoutFromSheet = function(iso, workoutCode, presetCode = "", 
 };
 
 window.openAgendaDay = function(iso) {
-  const info = findDayInfo(iso);
-  if (!info) return;
-  const blocks = getPeriodizationDayBlocks(info);
-  if (!blocks.length) {
-    showToast("Nenhum treino programado para este dia.", "info");
-    return;
-  }
-  if (blocks.length === 1) {
-    openAgendaBlockDirect(iso, blocks[0], info);
-    return;
-  }
+  try {
+    const info = findDayInfo(iso);
+    if (!info) {
+      showToast("Não foi possível encontrar este dia da periodização.", "error");
+      return;
+    }
+    const blocks = getPeriodizationDayBlocks(info);
+    if (!blocks.length) {
+      showToast("Nenhum treino programado para este dia.", "info");
+      return;
+    }
+    if (blocks.length === 1) {
+      openAgendaBlockDirect(iso, blocks[0], info);
+      return;
+    }
 
-  const dt = new Date(iso + "T00:00:00");
-  const dayLabel = dt.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
-  openSheet(`
+    const dt = new Date(iso + "T00:00:00");
+    const dayLabel = dt.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
+    openSheet(`
     <h3>${escape(dayLabel)}</h3>
     <p>${blocks.length} atividades programadas para este dia. Escolha qualquer treino para abrir e executar, mesmo fora do dia atual.</p>
     <div style="display:grid;gap:10px;margin-top:12px">
@@ -8890,7 +8923,7 @@ window.openAgendaDay = function(iso) {
             ? "Continuar"
             : (session?.status === "completed" ? "Ver treino" : "Executar agora"));
         return `
-          <button type="button" class="btn-ghost" onclick="openAgendaBlockFromSheet(${jsArg(iso)},${idx})" style="text-align:left;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <button type="button" class="btn-ghost" data-agenda-block-date="${escape(iso)}" data-agenda-block-index="${idx}" style="text-align:left;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
             <span style="min-width:0">
               <span style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.7px;font-weight:900;color:${display.color}">${escape(display.short)}</span>
               <span style="display:block;font-size:15px;font-weight:900;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escape(display.title)}</span>
@@ -8903,7 +8936,32 @@ window.openAgendaDay = function(iso) {
     </div>
     <button class="btn-ghost" onclick="closeSheet()" style="margin-top:12px">Fechar</button>
   `);
+  } catch (error) {
+    console.error("[agenda] Falha ao abrir atividades do dia", error);
+    reportOperationalEvent("agenda_day_open", "failure", { error_kind: operationalErrorKind(error) });
+    showToast("Não foi possível abrir este dia. Tente novamente.", "error");
+  }
 };
+
+// O listener delegado evita que navegadores moveis deixem de reconhecer os
+// handlers inline apos uma re-renderizacao da Agenda/PWA. Os elementos sao
+// recriados com frequencia, mas o clique continua ligado ao documento.
+document.addEventListener("click", (event) => {
+  const dayButton = event.target.closest("[data-agenda-day]");
+  if (dayButton) {
+    event.preventDefault();
+    window.openAgendaDay(dayButton.dataset.agendaDay);
+    return;
+  }
+  const blockButton = event.target.closest("[data-agenda-block-date][data-agenda-block-index]");
+  if (blockButton) {
+    event.preventDefault();
+    window.openAgendaBlockFromSheet(
+      blockButton.dataset.agendaBlockDate,
+      Number(blockButton.dataset.agendaBlockIndex || 0)
+    );
+  }
+});
 
 window.openWorkout = function(iso, code, intensity, workoutId = null) {
   setWorkoutTarget({ date: iso, workoutCode: code, workoutId, intensity, source: "manual" });
@@ -10492,7 +10550,7 @@ function renderCalendar() {
               </div>`
             : `<span class="dp-w">${isDone ? "✓" : (blockSummary[0]?.short || wTxt)}</span>`;
           const extraCls = isDone ? "is-done" : isLate ? "is-late" : isPending ? "is-pending" : "";
-          return `<button type="button" class="day-pill ${intensityClass(d.intensity, d.preset_code)} ${isToday ? "is-today" : ""} ${extraCls}" title="${escape(title)}" aria-label="Abrir agenda de ${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}: ${escape(title)}" onclick="openAgendaDay(${jsArg(d.date)})">
+          return `<button type="button" class="day-pill ${intensityClass(d.intensity, d.preset_code)} ${isToday ? "is-today" : ""} ${extraCls}" data-agenda-day="${escape(d.date)}" title="${escape(title)}" aria-label="Abrir agenda de ${WEEKDAY_FULL[dt.getDay()]}, ${dt.getDate()}: ${escape(title)}">
             <span class="dp-day">${WEEKDAY_LABELS[dt.getDay()]}</span>
             <span class="dp-num">${dt.getDate()}</span>
             ${blockHtml}
@@ -17690,7 +17748,7 @@ async function registerServiceWorker() {
     // Sem scope explícito: defaults para o diretório de sw.js, compatível com qualquer hosting
     // A query de release garante que um PWA já instalado busque o worker novo
     // mesmo quando o navegador ainda associa a URL anterior ao cache antigo.
-    const reg = await navigator.serviceWorker.register("/sw.js?release=20260729-agenda-progress");
+    const reg = await navigator.serviceWorker.register("/sw.js?release=20260729-agenda-interaction");
     // PWA instalado no iOS/Android pode ficar aberto por dias. Força a consulta
     // de uma nova versão em toda abertura, sem depender da janela de 24h do navegador.
     await reg.update().catch(() => {});
