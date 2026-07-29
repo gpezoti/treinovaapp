@@ -17579,6 +17579,9 @@ async function registerServiceWorker() {
   try {
     // Sem scope explícito: defaults para o diretório de sw.js, compatível com qualquer hosting
     const reg = await navigator.serviceWorker.register("sw.js");
+    // PWA instalado no iOS/Android pode ficar aberto por dias. Força a consulta
+    // de uma nova versão em toda abertura, sem depender da janela de 24h do navegador.
+    await reg.update().catch(() => {});
 
     // Se há SW esperando para ativar (nova versão já baixada), ativa imediatamente
     if (reg.waiting) {
