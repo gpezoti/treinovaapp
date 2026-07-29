@@ -10,7 +10,9 @@ assert.match(html, /from\("sessions"\)[\s\S]{0,260}\.eq\("status", "completed"\)
 assert.match(html, /from\("aero_logs"\)/);
 assert.match(html, /function calendarDayCompletion\(day, today = todayISO\(\)\)/);
 assert.match(html, /matchingCode\.some\(session => !session\.workout_id\)/);
-assert.match(html, /const hasSingleWorkoutFallback = requirements\.length === 1/);
+assert.match(html, /const hasCompletedActivity = completedWorkoutSessions\.length > 0/);
+assert.match(html, /\|\| STATE\.calendarAeroDates\?\.has\(day\.date\)/);
+assert.match(html, /function localDateKey\(value\)/);
 assert.match(html, /if \(sessionsResult\.error\)/);
 assert.match(html, /if \(aeroResult\.error\)/);
 assert.match(html, /const completedByDate = Object\.fromEntries\(allDays\.map\(day => \[day\.date, calendarDayCompletion\(day, today\)\]\)\)/);
@@ -24,6 +26,6 @@ assert.match(html, /\.day-pill\.is-done \{ border-color: var\(--green\)/);
 assert.match(html, /\.day-pill\.is-late \{ border-color: var\(--red\)/);
 assert.match(html, /completion\.state === "missed"/);
 assert.match(html, /isDone \? \"is-done\" : isLate \? \"is-late\"/);
-assert.match(html, /serviceWorker\.register\("\/sw\.js\?release=20260729-agenda-interaction"\)/);
+assert.match(html, /serviceWorker\.register\("\/sw\.js\?release=20260729-agenda-day-progress"\)/);
 
 console.log("Calendar progress QA passed");

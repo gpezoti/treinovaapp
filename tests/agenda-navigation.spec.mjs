@@ -61,7 +61,8 @@ async function seedAgenda(page) {
     // Sessao C representa uma troca de treino feita pelo aluno neste mesmo dia.
     // A Agenda deve considerar o dia concluido mesmo sem ser o codigo originalmente planejado.
     state.calendarSessionsByDate = {
-      "2026-06-08": [{ id: "completed-c", date: "2026-06-08", workout_code: "C", status: "completed" }]
+      "2026-06-08": [{ id: "completed-c", date: "2026-06-08", workout_code: "C", status: "completed" }],
+      "2026-06-09": [{ id: "completed-c-with-cardio", date: "2026-06-09", workout_code: "C", status: "completed" }]
     };
     state.calendarAeroDates = new Set();
     state.calendarProgressLoaded = true;
@@ -100,7 +101,9 @@ test("Agenda abre treino de outro dia e reconhece treino trocado como concluido"
 test("Agenda permite escolher qualquer atividade quando o dia tem mais de um treino", async ({ page }) => {
   await seedAgenda(page);
 
-  await page.locator('[data-agenda-day="2026-06-09"]').click();
+  const mixedDay = page.locator('[data-agenda-day="2026-06-09"]');
+  await expect(mixedDay).toHaveClass(/is-done/);
+  await mixedDay.click();
   const secondActivity = page.locator('[data-agenda-block-date="2026-06-09"][data-agenda-block-index="1"]');
   await expect(secondActivity).toBeVisible();
   await secondActivity.click();
