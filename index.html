@@ -3249,7 +3249,7 @@ function groupWeeks() {
 function getPeriodizationCycleProgress(weeks, today = todayISO()) {
   const datedWeeks = weeks.filter(week => week?.days?.some(day => day?.date));
   const totalWeeks = datedWeeks.length;
-  if (!totalWeeks) return { totalWeeks: 0, elapsedWeeks: 0, remainingWeeks: 0 };
+  if (!totalWeeks) return { totalWeeks: 0, elapsedWeeks: 0, remainingWeeks: 0, progressPercent: 0 };
 
   const startedWeeks = datedWeeks.filter(week => {
     const firstDay = week.days.find(day => day?.date);
@@ -3260,7 +3260,8 @@ function getPeriodizationCycleProgress(weeks, today = todayISO()) {
   return {
     totalWeeks,
     elapsedWeeks,
-    remainingWeeks: Math.max(0, totalWeeks - elapsedWeeks)
+    remainingWeeks: Math.max(0, totalWeeks - elapsedWeeks),
+    progressPercent: Math.round((elapsedWeeks / totalWeeks) * 100)
   };
 }
 
@@ -10566,7 +10567,7 @@ function renderCalendar() {
   const totalDays  = allDays.filter(dayHasScheduledActivity).length;
   const completedByDate = Object.fromEntries(allDays.map(day => [day.date, calendarDayCompletion(day, today)]));
   const doneDays   = allDays.filter(day => completedByDate[day.date]?.isDone).length;
-  const pct        = totalDays > 0 ? Math.round((doneDays / totalDays) * 100) : 0;
+  const adherencePct = totalDays > 0 ? Math.round((doneDays / totalDays) * 100) : 0;
   const cycleProgress = getPeriodizationCycleProgress(weeks, today);
 
   // Streak de dias consecutivos até hoje
@@ -10581,16 +10582,17 @@ function renderCalendar() {
     <div class="card card-lg" style="margin-bottom:16px;border-color:var(--brand);background:linear-gradient(135deg,var(--brand-soft),var(--bg-card))">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div>
-          <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--brand);font-weight:700">Seu Progresso</div>
+          <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--brand);font-weight:700">Progresso do ciclo</div>
           <div style="font-size:20px;font-weight:900;margin-top:2px">${cycleProgress.elapsedWeeks} de ${cycleProgress.totalWeeks} semanas</div>
         </div>
-        <div style="font-size:30px;font-weight:900;color:var(--brand)">${pct}%</div>
+        <div style="font-size:30px;font-weight:900;color:var(--brand)">${cycleProgress.progressPercent}%</div>
       </div>
       <div style="height:8px;background:var(--line-2);border-radius:999px;overflow:hidden;margin-bottom:12px">
-        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--brand),#00e5ff);border-radius:999px;transition:width .4s ease"></div>
+        <div style="height:100%;width:${cycleProgress.progressPercent}%;background:linear-gradient(90deg,var(--brand),#00e5ff);border-radius:999px;transition:width .4s ease"></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <span class="today-pill pill-flex" style="font-size:11px">✓ ${doneDays} treinos</span>
+        <span class="today-pill pill-off" style="font-size:11px">${adherencePct}% aderência</span>
         ${streak > 1 ? `<span class="today-pill pill-yellow" style="font-size:11px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg> ${streak} dias seguidos</span>` : ""}
         <span class="today-pill pill-off" style="font-size:11px">${cycleProgress.remainingWeeks} sem. restantes</span>
       </div>
@@ -17913,7 +17915,7 @@ async function registerServiceWorker() {
     // Sem scope explícito: defaults para o diretório de sw.js, compatível com qualquer hosting
     // A query de release garante que um PWA já instalado busque o worker novo
     // mesmo quando o navegador ainda associa a URL anterior ao cache antigo.
-    const reg = await navigator.serviceWorker.register("/sw.js?release=20260729-periodization-cycle-progress");
+    const reg = await navigator.serviceWorker.register("/sw.js?release=20260729-periodization-progress-clarity");
     // PWA instalado no iOS/Android pode ficar aberto por dias. Força a consulta
     // de uma nova versão em toda abertura, sem depender da janela de 24h do navegador.
     await reg.update().catch(() => {});
