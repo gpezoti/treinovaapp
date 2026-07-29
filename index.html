@@ -266,7 +266,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .day-pill.intensity-flex .dp-w { background: rgba(46,204,113,0.12); color: var(--green); }
 .day-pill.is-done { border-color: var(--green); background: linear-gradient(180deg,rgba(46,204,113,0.12),var(--bg-card)); }
 .day-pill.is-done .dp-day { color: var(--green); }
-.day-pill.is-late { border-color: var(--red); opacity: 0.75; }
+.day-pill.is-late { border-color: var(--red); background: linear-gradient(180deg,rgba(255,77,79,0.10),var(--bg-card)); }
+.day-pill.is-late .dp-day, .day-pill.is-late .dp-num { color: var(--red); }
 .day-pill.is-late .dp-w { background: var(--red-soft,#fde8e8); color: var(--red); }
 .day-pill.is-pending { border-color: var(--brand); animation: pulse-border 2s infinite; }
 @keyframes pulse-border {
@@ -2450,6 +2451,9 @@ const STATE = {
   expandedEx: null,
   currentSession: null,  // active session row
   todaySessions: [],     // sessions do dia para refletir Iniciar/Continuar/Concluído na Home
+  calendarSessionsByDate: {}, // sessões do ciclo, usadas para o progresso real da Agenda
+  calendarAeroDates: new Set(),
+  calendarProgressLoaded: false,
   setLogs: [],           // current session set_logs
   lastLoads: {},         // {exercise_name: load_kg}
   feed: [],
@@ -3253,10 +3257,49 @@ function getPeriodizationDayBlocks(day) {
   }];
 }
 
+function calendarDayCompletion(day, today = todayISO()) {
+  const legacyDone = day?.status === "done" || day?.status === "completed";
+  if (!dayHasScheduledActivity(day)) {
+    return { state: "off", required: 0, completed: 0, isDone: false };
+  }
+
+  const blocks = getPeriodizationDayBlocks(day);
+  const requirements = [];
+  blocks.forEach(block => {
+    if (block?.workout_code && block.workout_code !== "OFF") {
+      requirements.push({ type: "workout", code: block.workout_code, id: block.workout_id || null });
+    } else if (isAeroPresetCode(block?.preset_code)) {
+      requirements.push({ type: "aero" });
+    }
+  });
+  // Compatibilidade com periodizações antigas que guardavam cardio no dia,
+  // antes da criação de blocos múltiplos.
+  if (day?.aero && !requirements.some(item => item.type === "aero")) {
+    requirements.push({ type: "aero" });
+  }
+
+  const sessions = STATE.calendarSessionsByDate?.[day.date] || [];
+  const completed = requirements.filter(requirement => {
+    if (requirement.type === "aero") return STATE.calendarAeroDates?.has(day.date);
+    return sessions.some(session =>
+      session.status === "completed"
+      && session.workout_code === requirement.code
+      && (!requirement.id || String(session.workout_id || "") === String(requirement.id))
+    );
+  }).length;
+  const isDone = STATE.calendarProgressLoaded
+    ? requirements.length > 0 && completed >= requirements.length
+    : legacyDone;
+  const state = isDone ? "done" : (day.date < today ? "missed" : (day.date === today ? "pending" : "scheduled"));
+  return { state, required: requirements.length, completed, isDone };
+}
+
 function dayHasScheduledActivity(day) {
   if (!day) return false;
   if (day.workout_code && day.workout_code !== "OFF") return true;
-  return getPeriodizationDayBlocks(day).some(b => b.workout_code || isAeroPresetCode(b.preset_code));
+  return getPeriodizationDayBlocks(day).some(b =>
+    (b.workout_code && b.workout_code !== "OFF") || isAeroPresetCode(b.preset_code)
+  );
 }
 
 function getAgendaBlockDisplay(block, day = null) {
@@ -4196,7 +4239,14 @@ async function loadPeriodization() {
   const sid = STATE.profile.id;
   const { data: days, error } = await sb.from("periodization_days")
     .select("*").eq("student_id", sid).order("date");
-  if (error) { console.error(error); STATE.periodization = []; return; }
+  if (error) {
+    console.error(error);
+    STATE.periodization = [];
+    STATE.calendarSessionsByDate = {};
+    STATE.calendarAeroDates = new Set();
+    STATE.calendarProgressLoaded = false;
+    return;
+  }
   // Carrega blocos para propagar preset_code/workout_code reais p/ cada dia
   const dayIds = (days || []).map(d => d.id).filter(Boolean);
   let blocksByDay = {};
@@ -4223,6 +4273,51 @@ async function loadPeriodization() {
       workout_id: first?.workout_id || null
     };
   });
+  await loadCalendarCompletionState();
+}
+
+async function loadCalendarCompletionState() {
+  const plannedDays = STATE.periodization || [];
+  const sid = STATE.profile?.id;
+  if (!sid || !plannedDays.length) {
+    STATE.calendarSessionsByDate = {};
+    STATE.calendarAeroDates = new Set();
+    STATE.calendarProgressLoaded = true;
+    return;
+  }
+
+  const dates = plannedDays.map(day => day.date).filter(Boolean).sort();
+  const startDate = dates[0];
+  const endDate = dates[dates.length - 1];
+  const [sessionsResult, aeroResult] = await Promise.all([
+    sb.from("sessions")
+      .select("id,date,workout_code,workout_id,status,completed_at")
+      .eq("student_id", sid)
+      .eq("status", "completed")
+      .gte("date", startDate)
+      .lte("date", endDate),
+    sb.from("aero_logs")
+      .select("id,date")
+      .eq("student_id", sid)
+      .gte("date", startDate)
+      .lte("date", endDate)
+  ]);
+
+  if (sessionsResult.error || aeroResult.error) {
+    console.warn("[calendar] Falha ao carregar progresso", sessionsResult.error || aeroResult.error);
+    STATE.calendarProgressLoaded = false;
+    return;
+  }
+
+  const sessionsByDate = {};
+  (sessionsResult.data || []).forEach(session => {
+    if (!session?.date) return;
+    if (!sessionsByDate[session.date]) sessionsByDate[session.date] = [];
+    sessionsByDate[session.date].push(session);
+  });
+  STATE.calendarSessionsByDate = sessionsByDate;
+  STATE.calendarAeroDates = new Set((aeroResult.data || []).map(log => log.date).filter(Boolean));
+  STATE.calendarProgressLoaded = true;
 }
 
 async function loadLastLoads() {
@@ -4294,6 +4389,14 @@ function mergeKnownWorkoutSession(session) {
     session,
     ...(STATE.todaySessions || []).filter(s => String(s.id) !== String(session.id))
   ]);
+  if (session.date) {
+    const sameDate = STATE.calendarSessionsByDate?.[session.date] || [];
+    STATE.calendarSessionsByDate ||= {};
+    STATE.calendarSessionsByDate[session.date] = [
+      session,
+      ...sameDate.filter(item => String(item.id) !== String(session.id))
+    ];
+  }
 }
 
 function setSelectedWorkoutFromSession(session) {
@@ -10315,12 +10418,13 @@ function renderCalendar() {
   // Calcular progresso
   const allDays    = weeks.flatMap(w => w.days);
   const totalDays  = allDays.filter(dayHasScheduledActivity).length;
-  const doneDays   = allDays.filter(d => (d.status === "done" || d.status === "completed") && dayHasScheduledActivity(d)).length;
+  const completedByDate = Object.fromEntries(allDays.map(day => [day.date, calendarDayCompletion(day, today)]));
+  const doneDays   = allDays.filter(day => completedByDate[day.date]?.isDone).length;
   const pct        = totalDays > 0 ? Math.round((doneDays / totalDays) * 100) : 0;
   const totalWeeks = weeks.length;
   const doneWeeks  = weeks.filter(w => {
     const trainDays = w.days.filter(dayHasScheduledActivity);
-    const doneN = trainDays.filter(d => d.status === "done" || d.status === "completed").length;
+    const doneN = trainDays.filter(day => completedByDate[day.date]?.isDone).length;
     return trainDays.length > 0 && doneN >= trainDays.length * 0.8;
   }).length;
 
@@ -10328,7 +10432,7 @@ function renderCalendar() {
   let streak = 0;
   const pastDays = [...allDays].filter(d => d.date <= today).sort((a,b) => b.date.localeCompare(a.date));
   for (const d of pastDays) {
-    if (d.status === "done" || d.status === "completed") streak++;
+    if (completedByDate[d.date]?.isDone) streak++;
     else if (dayHasScheduledActivity(d)) break;
   }
 
@@ -10366,15 +10470,17 @@ function renderCalendar() {
           const isToday    = d.date === today;
           const blocks = getPeriodizationDayBlocks(d);
           const hasActivity = dayHasScheduledActivity(d);
-          const isDone     = d.status === "done" || d.status === "completed";
-          const isLate     = d.date < today && hasActivity && !isDone;
-          const isPending  = d.date === today && hasActivity && !isDone;
+          const completion = completedByDate[d.date] || calendarDayCompletion(d, today);
+          const isDone     = completion.isDone;
+          const isLate     = completion.state === "missed";
+          const isPending  = completion.state === "pending";
           const blockSummary = blocks.map(b => getAgendaBlockDisplay(b, d));
           const wp  = workoutPretty(d.workout_code);
           const wTxt = wp === "FLEX" ? "Flex" : (wp === "OFF" ? "—" : wp);
-          const title = blockSummary.length
+          const baseTitle = blockSummary.length
             ? blockSummary.map(x => `${x.title}${x.subtitle ? ` · ${x.subtitle}` : ""}`).join(" | ")
             : wTxt;
+          const title = isDone ? `${baseTitle} · concluído` : (isLate ? `${baseTitle} · falta` : baseTitle);
           const blockHtml = blockSummary.length > 1
             ? `<div class="dp-blocks">
                 ${blockSummary.slice(0, 2).map(x => `<span class="dp-block" style="color:${x.color};border-color:${x.color}">${escape(x.short)}</span>`).join("")}
