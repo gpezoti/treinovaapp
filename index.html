@@ -4317,13 +4317,25 @@ async function loadCalendarCompletionState() {
   const dates = plannedDays.map(day => day.date).filter(Boolean).sort();
   const startDate = dates[0];
   const endDate = dates[dates.length - 1];
-  const [sessionsResult, aeroResult] = await Promise.all([
+  const completedWindowEnd = `${addDaysISO(endDate, 1)}T00:00:00.000Z`;
+  const [scheduledSessionsResult, completedSessionsResult, aeroResult] = await Promise.all([
+    // Consulta pela data planejada, que é a data registrada nas sessões
+    // novas quando o treino é iniciado pela Agenda.
     sb.from("sessions")
       .select("id,date,workout_code,workout_id,status,completed_at")
       .eq("student_id", sid)
       .eq("status", "completed")
       .gte("date", startDate)
       .lte("date", endDate),
+    // Compatibilidade para sessões históricas cuja data planejada tenha sido
+    // gravada diferente da data real de conclusão. A união é feita no
+    // cliente e continua limitada ao ciclo visualizado.
+    sb.from("sessions")
+      .select("id,date,workout_code,workout_id,status,completed_at")
+      .eq("student_id", sid)
+      .eq("status", "completed")
+      .gte("completed_at", `${startDate}T00:00:00.000Z`)
+      .lt("completed_at", completedWindowEnd),
     sb.from("aero_logs")
       .select("id,date")
       .eq("student_id", sid)
@@ -4331,18 +4343,27 @@ async function loadCalendarCompletionState() {
       .lte("date", endDate)
   ]);
 
-  // O progresso de treino nao pode depender da tabela de cardio. Se ela
-  // falhar por migracao/RLS, ainda exibimos os treinos concluidos corretamente.
-  if (sessionsResult.error) {
-    console.warn("[calendar] Falha ao carregar sessoes concluidas", sessionsResult.error);
+  // O progresso não pode depender de apenas uma das chaves históricas. Se
+  // uma consulta falhar, a outra ainda é suficiente para compor a Agenda.
+  if (scheduledSessionsResult.error && completedSessionsResult.error) {
+    console.warn("[calendar] Falha ao carregar sessões concluídas", scheduledSessionsResult.error || completedSessionsResult.error);
     STATE.calendarSessionsByDate = {};
     STATE.calendarAeroDates = new Set();
     STATE.calendarProgressLoaded = false;
     return;
   }
+  if (scheduledSessionsResult.error || completedSessionsResult.error) {
+    console.warn("[calendar] Consulta parcial de sessões", scheduledSessionsResult.error || completedSessionsResult.error);
+  }
 
+  const sessionsById = {};
+  [scheduledSessionsResult.data || [], completedSessionsResult.data || []]
+    .flat()
+    .forEach(session => {
+      if (session?.id) sessionsById[String(session.id)] = session;
+    });
   const sessionsByDate = {};
-  (sessionsResult.data || []).forEach(session => {
+  Object.values(sessionsById).forEach(session => {
     // A data planejada é a fonte principal. Também indexamos pela conclusão
     // local para recuperar sessões antigas que tenham sido gravadas com a
     // data de início divergente da data em que o aluno realmente terminou.
@@ -17768,7 +17789,7 @@ async function registerServiceWorker() {
     // Sem scope explícito: defaults para o diretório de sw.js, compatível com qualquer hosting
     // A query de release garante que um PWA já instalado busque o worker novo
     // mesmo quando o navegador ainda associa a URL anterior ao cache antigo.
-    const reg = await navigator.serviceWorker.register("/sw.js?release=20260729-agenda-day-progress");
+    const reg = await navigator.serviceWorker.register("/sw.js?release=20260729-agenda-progress-data");
     // PWA instalado no iOS/Android pode ficar aberto por dias. Força a consulta
     // de uma nova versão em toda abertura, sem depender da janela de 24h do navegador.
     await reg.update().catch(() => {});
