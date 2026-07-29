@@ -55,9 +55,29 @@ const pickSessionSource = html.slice(pickSessionStart, pickSessionEnd);
 assert(
   !agendaBlockSource.includes("openDayHistory(") &&
     !agendaBlockSource.includes("iso < today") &&
+    !agendaBlockSource.includes('showToast("Treino não encontrado para este dia."') &&
     agendaBlockSource.includes("setWorkoutTarget({") &&
     agendaBlockSource.includes('navTo("workout")'),
-  "qualquer bloco de treino da agenda abre diretamente para execução, inclusive fora do dia atual"
+  "qualquer bloco de treino da agenda abre diretamente para execução, inclusive fora do dia atual e sem depender do cache"
+);
+
+const agendaDayStart = html.indexOf("window.openAgendaDay = function");
+const agendaDayEnd = html.indexOf("function renderSelfTrainingCard", agendaDayStart);
+const agendaDaySource = html.slice(agendaDayStart, agendaDayEnd);
+assert(
+  agendaDaySource.includes('showToast("Nenhum treino programado para este dia."') &&
+    !agendaDaySource.includes("onDayClick(iso);"),
+  "dias sem treino exibem feedback sem entrar em recursão de abertura"
+);
+
+const workoutRenderStart = html.indexOf("async function renderWorkout()");
+const workoutRenderEnd = html.indexOf("function initWorkoutFinishSlider", workoutRenderStart);
+const workoutRenderSource = html.slice(workoutRenderStart, workoutRenderEnd);
+assert(
+  html.includes("async function loadWorkoutForAgendaTarget(workoutCode, workoutId = null)") &&
+    workoutRenderSource.includes("W = await loadWorkoutForAgendaTarget(code, STATE.selectedWorkoutId);") &&
+    workoutRenderSource.includes("Abrindo treino programado..."),
+  "treino agendado ausente do cache é carregado sob demanda antes de exibir erro"
 );
 
 assert(

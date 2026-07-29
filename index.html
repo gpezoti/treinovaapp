@@ -3157,6 +3157,63 @@ function resolveWorkoutRef(workoutCode, workoutId = null) {
   return workoutCode ? (STATE.workouts[workoutCode] || null) : null;
 }
 
+// A Agenda pode apontar para um modelo que ainda nao entrou no cache inicial
+// (principalmente planos antigos que ainda referenciam um treino global). A
+// permissao continua sendo aplicada pelo RLS; isto so evita bloquear o aluno
+// antes de consultar o treino que esta efetivamente programado para ele.
+async function loadWorkoutForAgendaTarget(workoutCode, workoutId = null) {
+  const cached = resolveWorkoutRef(workoutCode, workoutId);
+  if (cached) return cached;
+  if (!sb || !STATE.profile || (!workoutCode && !workoutId)) return null;
+
+  const lookupKey = `${workoutId || "code"}:${workoutCode || ""}`;
+  STATE._agendaWorkoutLookups ||= {};
+  if (STATE._agendaWorkoutLookups[lookupKey]) return STATE._agendaWorkoutLookups[lookupKey];
+
+  STATE._agendaWorkoutLookups[lookupKey] = (async () => {
+    let query = sb.from("workouts").select("*");
+    query = workoutId ? query.eq("id", workoutId) : query.eq("code", workoutCode);
+    const { data, error } = await query.limit(10);
+    if (error) {
+      console.warn("[agenda] Falha ao carregar treino programado", error);
+      return null;
+    }
+
+    const candidates = data || [];
+    const coachId = STATE.profile.coach_id;
+    const selected = workoutId
+      ? candidates.find(item => String(item.id) === String(workoutId))
+      : (candidates.find(item => item.student_id === STATE.profile.id)
+        || candidates.find(item => coachId && item.coach_id === coachId && !item.student_id)
+        || candidates.find(item => item.is_global)
+        || candidates[0]);
+    if (!selected) return null;
+
+    const { data: exercises, error: exercisesError } = await sb.from("exercises")
+      .select("*")
+      .eq("workout_id", selected.id)
+      .order("position");
+    if (exercisesError) {
+      console.warn("[agenda] Falha ao carregar exercicios do treino programado", exercisesError);
+      return null;
+    }
+
+    const hydrated = { ...selected, exercises: exercises || [] };
+    STATE.workoutsById ||= {};
+    STATE.workouts ||= {};
+    STATE.workoutsById[hydrated.id] = hydrated;
+    // Nao sobrescreve um modelo mais especifico ja resolvido pelo cache.
+    if (!STATE.workouts[hydrated.code] || String(STATE.workouts[hydrated.code].id) === String(hydrated.id)) {
+      STATE.workouts[hydrated.code] = hydrated;
+    }
+    return hydrated;
+  })().finally(() => {
+    delete STATE._agendaWorkoutLookups[lookupKey];
+  });
+
+  return STATE._agendaWorkoutLookups[lookupKey];
+}
+
 function resolvePresetForWorkoutDate(date, workoutCode, workoutId = null) {
   const info = findDayInfo(date);
   if (!info) return null;
@@ -8659,12 +8716,6 @@ function openAgendaBlockDirect(iso, block, dayInfo = null) {
     showToast("Dia OFF — descanso!");
     return;
   }
-  const workout = resolveWorkoutRef(workoutCode, workoutId);
-  if (!workout) {
-    showToast("Treino não encontrado para este dia.", "error");
-    return;
-  }
-
   setWorkoutTarget({
     date: iso,
     workoutCode,
@@ -8706,7 +8757,7 @@ window.openAgendaDay = function(iso) {
   if (!info) return;
   const blocks = getPeriodizationDayBlocks(info);
   if (!blocks.length) {
-    onDayClick(iso);
+    showToast("Nenhum treino programado para este dia.", "info");
     return;
   }
   if (blocks.length === 1) {
@@ -10514,9 +10565,19 @@ async function renderWorkout() {
     return;
   }
 
-  const W = resolveWorkoutRef(code, STATE.selectedWorkoutId);
+  let W = resolveWorkoutRef(code, STATE.selectedWorkoutId);
   if (!W) {
-    el.innerHTML = `<div class="empty"><h3>Treino não encontrado</h3><p>Esse treino ainda não está disponível para sua conta.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="navTo('home')">Voltar ao início</button></div></div>`;
+    el.innerHTML = `<div class="loading"><div class="spinner"></div>Abrindo treino programado...</div>`;
+    W = await loadWorkoutForAgendaTarget(code, STATE.selectedWorkoutId);
+    // Uma acao posterior na Agenda pode ter escolhido outro treino enquanto a
+    // consulta estava em andamento. Nesse caso, renderiza somente o alvo atual.
+    const latestTarget = currentWorkoutTarget();
+    if (latestTarget && (latestTarget.workoutCode !== code || String(latestTarget.workoutId || "") !== String(STATE.selectedWorkoutId || ""))) {
+      return renderWorkout();
+    }
+  }
+  if (!W) {
+    el.innerHTML = `<div class="empty"><h3>Treino indisponível</h3><p>Não foi possível abrir o modelo programado. Atualize a página; se persistir, peça ao treinador para revisar este dia da periodização.</p><div class="empty-actions"><button class="btn-primary" style="width:auto" onclick="renderWorkout()">Tentar novamente</button><button class="btn-ghost" style="width:auto" onclick="navTo('calendar')">Voltar à agenda</button></div></div>`;
     return;
   }
   if (!W.exercises || W.exercises.length === 0) {
