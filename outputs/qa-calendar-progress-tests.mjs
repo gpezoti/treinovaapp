@@ -9,6 +9,7 @@ assert.match(html, /async function loadCalendarCompletionState\(\)/);
 assert.match(html, /from\("sessions"\)[\s\S]{0,260}\.eq\("status", "completed"\)/);
 assert.match(html, /from\("aero_logs"\)/);
 assert.match(html, /function calendarDayCompletion\(day, today = todayISO\(\)\)/);
+assert.match(html, /matchingCode\.some\(session => !session\.workout_id\)/);
 assert.match(html, /const completedByDate = Object\.fromEntries\(allDays\.map\(day => \[day\.date, calendarDayCompletion\(day, today\)\]\)\)/);
 
 // Apenas atividade programada pode contar como falta. Um bloco OFF legado não

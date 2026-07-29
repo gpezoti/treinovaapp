@@ -3281,11 +3281,15 @@ function calendarDayCompletion(day, today = todayISO()) {
   const sessions = STATE.calendarSessionsByDate?.[day.date] || [];
   const completed = requirements.filter(requirement => {
     if (requirement.type === "aero") return STATE.calendarAeroDates?.has(day.date);
-    return sessions.some(session =>
-      session.status === "completed"
-      && session.workout_code === requirement.code
-      && (!requirement.id || String(session.workout_id || "") === String(requirement.id))
+    const matchingCode = sessions.filter(session =>
+      session.status === "completed" && session.workout_code === requirement.code
     );
+    if (!requirement.id) return matchingCode.length > 0;
+    // Sessões criadas antes de workout_id existir continuam válidas. Quando há
+    // ID, ele segue sendo a correspondência preferencial para evitar confundir
+    // modelos recentes que usam o mesmo código.
+    return matchingCode.some(session => String(session.workout_id || "") === String(requirement.id))
+      || matchingCode.some(session => !session.workout_id);
   }).length;
   const isDone = STATE.calendarProgressLoaded
     ? requirements.length > 0 && completed >= requirements.length
