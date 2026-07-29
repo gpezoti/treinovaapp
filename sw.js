@@ -6,7 +6,7 @@
 */
 // Alterar a versão a cada release que mexe no shell do app. Isso força a
 // atualização imediata do PWA instalado e elimina HTML antigo do cache.
-const VERSION = "v25-agenda-progress-data-20260729";
+const VERSION = "v26-workout-editor-reliability-20260729";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
 const REST_TIMER_HANDLES = new Map();

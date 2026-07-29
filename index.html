@@ -3020,6 +3020,9 @@ function userFacingErrorMessage(msg) {
   const raw = String(msg == null ? "" : msg).trim();
   if (!raw) return "Não foi possível concluir. Tente novamente.";
   if (/Asaas HTTP/i.test(raw)) return raw.replace(/^Asaas HTTP\s+\d+:\s*/i, "");
+  if (/exercises?.*(workout_id|position)|(workout_id|position).*exercises|exercises_workout.*position/i.test(raw)) {
+    return "A ordem dos exercícios foi alterada. Atualize o treino e tente novamente.";
+  }
   if (/duplicate key|violates unique constraint|23505/i.test(raw)) return "Este cadastro já existe. Revise os dados e tente novamente.";
   if (/row-level|rls|policy|permission denied|unauthorized|forbidden|sem permissão/i.test(raw)) return "Você não tem permissão para esta ação.";
   if (/non-2xx|edge function|functions? returned|failed to fetch|network|timeout|load failed/i.test(raw)) return "Serviço temporariamente indisponível. Tente novamente em instantes.";
@@ -4152,10 +4155,29 @@ async function loadProfile() {
   );
   if (error) {
     console.error(error);
-    return null;
+    // PGRST116 e o retorno esperado quando a conta de Auth ainda não possui
+    // perfil de produto. Os demais erros são transitórios/técnicos e precisam
+    // manter a sessão para que o usuário possa tentar novamente.
+    if (error.code === "PGRST116") return null;
+    throw error;
   }
   STATE.profile = data;
   return data;
+}
+
+async function loadProfileWithRetry() {
+  try {
+    return await loadProfile();
+  } catch (firstError) {
+    // Falhas transitórias de rede não devem encerrar uma sessão válida.
+    await new Promise(resolve => setTimeout(resolve, 350));
+    try {
+      return await loadProfile();
+    } catch (secondError) {
+      secondError.cause = secondError.cause || firstError;
+      throw secondError;
+    }
+  }
 }
 
 async function loadOperationalHealth() {
@@ -7967,7 +7989,7 @@ window.refreshPlatformSubscriptionStatus = async function() {
   const btn = document.getElementById("platform-refresh-btn");
   if (btn) { btn.disabled = true; btn.textContent = "Atualizando..."; }
   try {
-    const profile = await loadProfile();
+    const profile = await loadProfileWithRetry();
     await loadPlatformAccess(profile);
     if (!STATE.platformAccess?.locked) {
       STATE.platformCheckoutReturn = null;
@@ -16440,23 +16462,84 @@ function renderWorkoutEditorExerciseListHTML(w, code, workoutId) {
       </div>`;
   }).join("");
 }
+function isExercisePositionConflict(error) {
+  const raw = String(error?.message || error?.details || error?.hint || error || "");
+  return /exercises?.*(workout_id|position)|(workout_id|position).*exercises|exercises_workout.*position/i.test(raw);
+}
+
+function waitForWorkoutMutation(workoutId, task) {
+  if (!workoutId) return Promise.reject(new Error("Treino não identificado."));
+  if (!STATE._workoutExerciseMutationQueue) STATE._workoutExerciseMutationQueue = {};
+  const previous = STATE._workoutExerciseMutationQueue[workoutId] || Promise.resolve();
+  const queued = previous.catch(() => {}).then(task);
+  const settled = queued.finally(() => {
+    if (STATE._workoutExerciseMutationQueue?.[workoutId] === settled) {
+      delete STATE._workoutExerciseMutationQueue[workoutId];
+    }
+  });
+  STATE._workoutExerciseMutationQueue[workoutId] = settled;
+  return settled;
+}
+
+async function nextExercisePosition(workoutId) {
+  const { data, error } = await withTimeout(
+    sb.from("exercises").select("position").eq("workout_id", workoutId)
+      .order("position", { ascending: false }).limit(1),
+    8000,
+    "exercise position timeout"
+  );
+  if (error) throw error;
+  const position = Number(data?.[0]?.position);
+  return Number.isFinite(position) ? position + 1 : 1;
+}
+
+async function insertExercisesAtNextPositions(workoutId, makeRows, { returnCreated = false } = {}) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const nextPosition = await nextExercisePosition(workoutId);
+    const rows = makeRows(nextPosition);
+    let insert = sb.from("exercises").insert(rows);
+    if (returnCreated) insert = insert.select("id").single();
+    const { data, error } = await withTimeout(insert, 10000, "exercise insert timeout");
+    if (!error) return data;
+    if (!isExercisePositionConflict(error) || attempt === 1) throw error;
+    // Outra ação acabou de ocupar a posição calculada. A fila local reduz esse
+    // cenário; esta nova leitura cobre uma segunda aba/dispositivo.
+    await new Promise(resolve => setTimeout(resolve, 120));
+  }
+  return null;
+}
+
+async function loadWorkoutForEditor(code, workoutId) {
+  if (!workoutId) return STATE.workouts?.[code] || null;
+  const { data: wRow, error: workoutError } = await withTimeout(
+    sb.from("workouts").select("*").eq("id", workoutId).single(),
+    9000,
+    "workout editor timeout"
+  );
+  if (workoutError) throw workoutError;
+  if (!wRow) throw new Error("Treino não encontrado.");
+  const { data: exRows, error: exercisesError } = await withTimeout(
+    sb.from("exercises").select("*").eq("workout_id", workoutId).order("position"),
+    9000,
+    "workout exercises timeout"
+  );
+  if (exercisesError) throw exercisesError;
+  return { ...wRow, exercises: exRows || [] };
+}
+
 window.openWorkoutEditor = async function(code, workoutId) {
   openSheet(`<h3>Carregando treino...</h3><div class="loading"><div class="spinner"></div></div>`);
   let w = null;
-  if (workoutId) {
-    // Buscar workout + exercises direto do banco (ignora cache STATE.workouts)
-    const { data: wRow } = await sb.from("workouts").select("*").eq("id", workoutId).single();
-    if (wRow) {
-      const { data: exRows } = await sb.from("exercises").select("*").eq("workout_id", workoutId).order("position");
-      w = { ...wRow, exercises: exRows || [] };
-      STATE._editingWorkout = w; // cache para o picker usar
-    }
+  try {
+    w = await loadWorkoutForEditor(code, workoutId);
+  } catch (error) {
+    console.warn("[openWorkoutEditor]", error);
+    closeSheetForAction();
+    showToast("Não foi possível abrir o treino agora. Tente novamente.", "error");
+    return;
   }
-  if (!w) {
-    w = STATE.workouts[code];
-    STATE._editingWorkout = w;
-  }
-  if (!w) { showToast("Treino não encontrado", "error"); closeSheet(); return; }
+  if (!w) { showToast("Treino não encontrado", "error"); closeSheetForAction(); return; }
+  STATE._editingWorkout = w;
 
   const html = `
     <h3>Editar ${escape(w.name)}</h3>
@@ -16503,7 +16586,7 @@ function rerenderWorkoutEditorList(code, workoutId) {
 function persistEditingExerciseOrder(wId, exercises, code, workoutId) {
   if (!wId) return Promise.resolve();
   const snapshot = (exercises || []).map((e, i) => ({ id: e.id, position: i }));
-  STATE._exPersistChain = (STATE._exPersistChain || Promise.resolve()).then(async () => {
+  return waitForWorkoutMutation(wId, async () => {
     if (!snapshot.length) return;
     try {
       // Renumeração em DUAS FASES: o banco tem um índice UNIQUE(workout_id, position),
@@ -16511,7 +16594,7 @@ function persistEditingExerciseOrder(wId, exercises, code, workoutId) {
       // por um instante). Primeiro movemos todos para um range temporário que não
       // sobrepõe as posições reais, depois gravamos a ordem final. (Mesmo padrão que a
       // periodização usa com datas temporárias.)
-      const TEMP = 1000;
+      const TEMP = 1000000;
       const r1 = await Promise.all(
         snapshot.map((s, i) => sb.from("exercises").update({ position: TEMP + i }).eq("id", s.id))
       );
@@ -16524,12 +16607,11 @@ function persistEditingExerciseOrder(wId, exercises, code, workoutId) {
       if (f2) throw f2.error;
     } catch (e) {
       console.warn("[persistEditingExerciseOrder]", e);
-      showToast("Não consegui salvar a ordem (" + (e?.message || e?.code || "erro") + "). Recarregando…", "error");
+      showToast("Não consegui salvar a ordem. O treino será atualizado.", "error");
       await loadWorkouts();
       await openWorkoutEditor(code, workoutId || "");
     }
   });
-  return STATE._exPersistChain;
 }
 
 window.removeExerciseFromWorkout = async function(exId, code, workoutId) {
@@ -16589,7 +16671,12 @@ async function loadExerciseLibrary(force = false) {
   if (!force && STATE.library && STATE.library.length > 0) return STATE.library;
   if (!force && STATE._exerciseLibraryFullPromise) return STATE._exerciseLibraryFullPromise;
   STATE._exerciseLibraryFullPromise = (async () => {
-    const { data } = await sb.from("exercises").select("*").eq("is_library", true).order("muscle_group").order("name");
+    const { data, error } = await withTimeout(
+      sb.from("exercises").select("*").eq("is_library", true).order("muscle_group").order("name"),
+      10000,
+      "exercise library timeout"
+    );
+    if (error) throw error;
     const raw = data || [];
     const deduped = dedupeLibraryExercises(raw).sort(libraryExerciseSort);
     STATE.exerciseLibraryDuplicateCount = Math.max(0, raw.length - deduped.length);
@@ -16669,7 +16756,16 @@ async function loadExerciseLibraryPage({ reset = false } = {}) {
 // Picker: abre busca por grupo muscular + biblioteca
 // Bug #21 fix: aceita workoutId explícito (workout de aluno != STATE.workouts[code])
 window.openExercisePicker = async function(workoutCode, studentId, workoutId) {
-  if (!STATE.library || STATE.library.length === 0) await loadExerciseLibrary();
+  if (!STATE.library || STATE.library.length === 0) {
+    openSheet(`<h3>Carregando biblioteca...</h3><p class="muted">Preparando exercícios para o treino.</p><div class="loading"><div class="spinner"></div></div><button class="btn-ghost" onclick="openWorkoutEditor('${escapeAttr(workoutCode || "")}','${escapeAttr(workoutId || "")}')">Voltar</button>`);
+    try {
+      await withTimeout(loadExerciseLibrary(), 10000, "exercise library timeout");
+    } catch (error) {
+      console.warn("[openExercisePicker]", error);
+      openSheet(`<h3>Biblioteca indisponível</h3><p class="muted">Não foi possível carregar os exercícios agora.</p><button class="btn-primary" onclick="openExercisePicker('${escapeAttr(workoutCode || "")}','${escapeAttr(studentId || "")}','${escapeAttr(workoutId || "")}')">Tentar novamente</button><button class="btn-ghost" onclick="openWorkoutEditor('${escapeAttr(workoutCode || "")}','${escapeAttr(workoutId || "")}')">Voltar</button>`);
+      return;
+    }
+  }
   // Resolve o ID real do workout: prioriza parâmetro explícito, depois STATE._editingWorkout, depois STATE.workouts
   const resolvedId = workoutId || (STATE._editingWorkout && STATE._editingWorkout.id) || (STATE.workouts[workoutCode] && STATE.workouts[workoutCode].id);
   STATE._pickerCtx = { workoutCode, studentId, query: "", group: "todos", workoutId: resolvedId, selected: new Set() };
@@ -16897,13 +16993,13 @@ window.addSelectedExercisesToWorkout = async function() {
 
   // Calcula próxima position consultando o banco
   try {
-    await assertCanAddExercisesToWorkout(wId);
-    const { data: existingEx, error: posError } = await sb.from("exercises").select("position").eq("workout_id", wId).order("position", { ascending: false }).limit(1);
-    if (posError) throw posError;
-    const startPos = (existingEx && existingEx.length > 0 ? existingEx[0].position : 0) + 1;
-    const rows = selected.map((lib, idx) => buildWorkoutExerciseFromLibrary(lib, ctx, startPos + idx));
-    const { error } = await sb.from("exercises").insert(rows);
-    if (error) throw error;
+    await waitForWorkoutMutation(wId, async () => {
+      await assertCanAddExercisesToWorkout(wId);
+      await insertExercisesAtNextPositions(
+        wId,
+        (startPos) => selected.map((lib, idx) => buildWorkoutExerciseFromLibrary(lib, ctx, startPos + idx))
+      );
+    });
     // Registrar no histórico de recentes
     [...selectedIds].reverse().forEach(id => _saveRecentPickerId(id));
     showToast(`${selected.length} exercício${selected.length > 1 ? "s" : ""} adicionado${selected.length > 1 ? "s" : ""}`, "success");
@@ -16998,15 +17094,17 @@ window.submitNewExercise = async function() {
   STATE._addingExercise = true;
   if (btn) { btn.disabled = true; btn.textContent = "Adicionando..."; }
   try {
-    await assertCanAddExercisesToWorkout(wId);
-    const { data: existingEx, error: posError } = await sb.from("exercises").select("position").eq("workout_id", wId).order("position", { ascending: false }).limit(1);
-    if (posError) throw posError;
-    const nextPos = (existingEx && existingEx.length > 0 ? existingEx[0].position : 0) + 1;
-    const { data: createdEx, error: e1 } = await sb.from("exercises").insert({
-      ...data, workout_id: wId, student_id: ctx.studentId || null,
-      position: nextPos, is_library: false
-    }).select("id").single();
-    if (e1) throw e1;
+    const createdEx = await waitForWorkoutMutation(wId, async () => {
+      await assertCanAddExercisesToWorkout(wId);
+      return insertExercisesAtNextPositions(
+        wId,
+        (position) => ({
+          ...data, workout_id: wId, student_id: ctx.studentId || null,
+          position, is_library: false
+        }),
+        { returnCreated: true }
+      );
+    });
     let mediaPatch = {};
     let warning = "";
     try {
@@ -17256,7 +17354,6 @@ function bindTimerHandlers() {
 /* ---------- BOOT TIMEOUT SAFETY ---------- */
 let _BOOT_DONE = false;
 let _POST_SIGN_IN_RUNNING = false;
-let _SW_RELOADING = false;
 
 function showStuckEscape(reason) {
   if (_BOOT_DONE && STATE.profile) {
@@ -17271,13 +17368,24 @@ function showStuckEscape(reason) {
   div.innerHTML = `
     <div style="position:fixed;inset:0;background:#0a0e1a;color:#e7ecf5;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:-apple-system,system-ui,sans-serif">
       <div style="margin-bottom:12px"><svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
-      <h2 style="margin:0 0 6px;font-size:20px">App travou no carregamento</h2>
-      <p style="color:#9aa6c0;margin:0 0 18px;max-width:340px;font-size:13px;line-height:1.45">${reason || 'Algo deu errado. Vamos tentar limpar o cache e recarregar.'}</p>
-      <button id="stuck-clear" style="background:#00b4ff;color:#001a2a;border:0;border-radius:10px;padding:13px 22px;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:8px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Limpar cache e recarregar</button>
+      <h2 style="margin:0 0 6px;font-size:20px">Não foi possível concluir o carregamento</h2>
+      <p style="color:#9aa6c0;margin:0 0 18px;max-width:340px;font-size:13px;line-height:1.45">${reason || 'A conexão demorou mais que o esperado.'}</p>
+      <button id="stuck-retry" style="background:#00b4ff;color:#001a2a;border:0;border-radius:10px;padding:13px 22px;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:8px">Tentar novamente</button>
+      <button id="stuck-clear" style="background:transparent;color:#9aa6c0;border:1px solid #2a3654;border-radius:10px;padding:11px 20px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:8px">Limpar cache e recarregar</button>
       <button id="stuck-logout" style="background:transparent;color:#9aa6c0;border:1px solid #2a3654;border-radius:10px;padding:11px 20px;font-weight:600;font-size:13px;cursor:pointer">Sair da conta</button>
-      <div style="margin-top:18px;font-size:11px;color:#6b7892">Se persistir, abra em uma aba anônima ou desinstale o app da tela inicial.</div>
     </div>`;
   document.body.appendChild(div);
+  document.getElementById("stuck-retry").onclick = async () => {
+    div.remove();
+    try {
+      const { data: { session } } = await withTimeout(sb.auth.getSession(), 8000, "session retry timeout");
+      if (!session) { showAuth(); setAuthMode("signin"); return; }
+      await postSignIn();
+    } catch (error) {
+      console.warn("[stuck retry]", error);
+      showStuckEscape("Ainda não foi possível carregar. Verifique a conexão e tente novamente.");
+    }
+  };
   document.getElementById("stuck-clear").onclick = async () => {
     try {
       if ('caches' in window) {
@@ -17306,7 +17414,7 @@ async function boot() {
   // Helper: marca boot como concluído e limpa o timer de segurança
   const safetyTimer = setTimeout(() => {
     if (!_BOOT_DONE) showStuckEscape("Carregamento demorou demais.");
-  }, 12000);
+  }, 30000);
   const doneBoot = () => { _BOOT_DONE = true; clearTimeout(safetyTimer); };
 
   try {
@@ -17449,7 +17557,7 @@ async function postSignIn() {
   if (desktopHeaderSub) desktopHeaderSub.textContent = "";
 
   try {
-    const profile = await loadProfile();
+    const profile = await loadProfileWithRetry();
     if (!profile) {
       showToast("Perfil não encontrado", "error");
       await sb.auth.signOut();
@@ -17789,17 +17897,22 @@ async function registerServiceWorker() {
     // Sem scope explícito: defaults para o diretório de sw.js, compatível com qualquer hosting
     // A query de release garante que um PWA já instalado busque o worker novo
     // mesmo quando o navegador ainda associa a URL anterior ao cache antigo.
-    const reg = await navigator.serviceWorker.register("/sw.js?release=20260729-agenda-progress-data");
+    const reg = await navigator.serviceWorker.register("/sw.js?release=20260729-workout-editor-reliability");
     // PWA instalado no iOS/Android pode ficar aberto por dias. Força a consulta
     // de uma nova versão em toda abertura, sem depender da janela de 24h do navegador.
     await reg.update().catch(() => {});
 
-    // Se há SW esperando para ativar (nova versão já baixada), ativa imediatamente
+    const announceServiceWorkerUpdate = () => {
+      // Nunca recarregue automaticamente no meio da edição de um treino. Um
+      // refresh forçado descartaria campos ainda não salvos; a nova versão
+      // passa a valer na próxima abertura normal do app.
+      showToast("Nova versão pronta. Ela será aplicada ao reabrir o app.", "info");
+    };
+
+    // Se há SW aguardando, preserve a sessão atual e deixe a ativação ocorrer
+    // quando o usuário fechar/reabrir o app.
     if (reg.waiting) {
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (!_SW_RELOADING) { _SW_RELOADING = true; location.reload(); }
-      }, { once: true });
-      reg.waiting.postMessage("SKIP_WAITING");
+      announceServiceWorkerUpdate();
     }
 
     // Detecta nova versão sendo instalada durante a sessão
@@ -17808,11 +17921,7 @@ async function registerServiceWorker() {
       if (!sw) return;
       sw.addEventListener("statechange", () => {
         if (sw.state === "installed" && navigator.serviceWorker.controller) {
-          showToast("Nova versão disponível, recarregando…", "info");
-          navigator.serviceWorker.addEventListener("controllerchange", () => {
-            if (!_SW_RELOADING) { _SW_RELOADING = true; location.reload(); }
-          }, { once: true });
-          sw.postMessage("SKIP_WAITING");
+          announceServiceWorkerUpdate();
         }
       });
     });

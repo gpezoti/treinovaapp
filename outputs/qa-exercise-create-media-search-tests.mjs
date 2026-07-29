@@ -18,7 +18,8 @@ assert.ok(html.includes("pickExerciseDraftImage('_newExerciseDraftMedia'"), "Dir
 assert.ok(html.includes("pickExerciseDraftVideo('_newExerciseDraftMedia'"), "Direct new exercise flow must allow picking a video before saving");
 assert.match(html, /insert\(payload\)\.select\("id"\)\.single\(\)/, "Library insert must return id before uploading media");
 assert.match(html, /uploadExerciseDraftMedia\(savedId,\s*"_libraryExerciseDraftMedia"/, "Library save must upload draft media after DB save");
-assert.match(html, /insert\(\{\s*\.\.\.data,[\s\S]*?\}\)\.select\("id"\)\.single\(\)/, "Direct workout exercise insert must return id before uploading media");
+assert.match(html, /async function insertExercisesAtNextPositions/, "Direct workout exercise insert must reserve a safe position before saving media");
+assert.match(html, /returnCreated:\s*true/, "Direct workout exercise insert must return id before uploading media");
 assert.match(html, /uploadExerciseDraftMedia\(createdEx\?\.id,\s*"_newExerciseDraftMedia"/, "Direct new exercise must upload draft media after DB save");
 
 assert.doesNotMatch(bodyOf("setTrainerSearch"), /renderTrainers\(\)/, "Trainer search must not recreate the input on every key");
