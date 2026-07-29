@@ -4,7 +4,9 @@
    - Cache-first com revalidação para assets estáticos (CDN, imagens)
    - Push notifications nativos
 */
-const VERSION = "v21-agenda-workout-target-20260729";
+// Alterar a versão a cada release que mexe no shell do app. Isso força a
+// atualização imediata do PWA instalado e elimina HTML antigo do cache.
+const VERSION = "v22-agenda-progress-20260729";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
 const REST_TIMER_HANDLES = new Map();

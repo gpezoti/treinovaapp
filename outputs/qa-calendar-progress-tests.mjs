@@ -20,5 +20,6 @@ assert.match(html, /\.day-pill\.is-done \{ border-color: var\(--green\)/);
 assert.match(html, /\.day-pill\.is-late \{ border-color: var\(--red\)/);
 assert.match(html, /completion\.state === "missed"/);
 assert.match(html, /isDone \? \"is-done\" : isLate \? \"is-late\"/);
+assert.match(html, /serviceWorker\.register\("\/sw\.js\?release=20260729-agenda-progress"\)/);
 
 console.log("Calendar progress QA passed");
