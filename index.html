@@ -1073,7 +1073,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 <!-- ============ AUTH PAGE — Marca dinâmica (admin define) ============ -->
 <div id="auth-page" class="auth-page" style="display:none">
   <div class="auth-logo">
-    <div class="brand-logo" id="auth-logo" style="background: linear-gradient(135deg, var(--bg), var(--bg-3)); border-color: var(--brand); color: var(--brand);"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 10-13h-7l1-7z"/></svg></div>
+    <div class="brand-logo" id="auth-logo" style="background: linear-gradient(135deg, var(--bg), var(--bg-3)); border-color: var(--brand); color: var(--brand);"><img src="/assets/icon-192.png?v=20260825-login" alt="Treinova" width="60" height="60" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>
     <h1 id="auth-title" style="background: linear-gradient(135deg, var(--brand), var(--brand-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">TREINOVA</h1>
     <p id="auth-tagline">Seu App, seu treino, sua marca</p>
   </div>
@@ -2424,6 +2424,8 @@ const MONTH_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho
    ============================================================================= */
 let sb = null;
 const ACTIVE_WORKOUT_SESSION_KEY = "treinova_active_workout_session_v1";
+const AUTH_FALLBACK_LOGO_URL = "/assets/icon-192.png?v=20260825-login";
+const AUTH_LOGIN_TIMEOUT_MS = 12000;
 const OFFLINE_STUDENT_BUNDLE_VERSION = 1;
 const OFFLINE_STUDENT_BUNDLE_PREFIX = "treinova_student_offline_bundle_v1";
 const OFFLINE_WORKOUT_STATE_VERSION = 1;
@@ -3899,11 +3901,42 @@ async function applySystemBranding() {
   if (data) applyBranding(data);
 }
 
+function renderAuthLogo({ logoUrl = "", logoText = "", appName = "Treinova" } = {}) {
+  const logo = document.getElementById("auth-logo");
+  if (!logo) return;
+  const fallbackText = String(appName || "Treinova").trim().slice(0, 2).toUpperCase() || "TN";
+  if (!logoUrl && logoText) {
+    logo.textContent = String(logoText).trim().slice(0, 2).toUpperCase();
+    return;
+  }
+  const image = document.createElement("img");
+  image.src = logoUrl || AUTH_FALLBACK_LOGO_URL;
+  image.alt = appName || "Treinova";
+  image.width = 60;
+  image.height = 60;
+  image.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
+  image.onerror = () => {
+    if (image.src.includes(AUTH_FALLBACK_LOGO_URL.split("?")[0])) {
+      logo.textContent = fallbackText;
+      return;
+    }
+    renderAuthLogo({ appName });
+  };
+  logo.replaceChildren(image);
+}
+
 // Aplica branding do sistema (id=1) nos elementos da tela de login
 async function applyAuthBranding() {
   try {
-    const { data } = await sb.from("app_branding").select("*").eq("id", 1).maybeSingle();
-    if (!data) return;
+    const { data } = await withTimeout(
+      sb.from("app_branding").select("*").eq("id", 1).maybeSingle(),
+      4500,
+      "auth branding timeout"
+    );
+    if (!data) {
+      renderAuthLogo();
+      return;
+    }
     const root = document.documentElement;
     if (data.primary_color) root.style.setProperty('--brand', data.primary_color);
     if (data.accent_color) root.style.setProperty('--brand-2', data.accent_color);
@@ -3912,21 +3945,19 @@ async function applyAuthBranding() {
       root.style.setProperty('--brand-on', luminance(data.primary_color) > 0.55 ? '#001a2a' : '#ffffff');
     }
     document.title = data.app_name || 'Treinova';
-    const logo = document.getElementById("auth-logo");
     const title = document.getElementById("auth-title");
     const tagline = document.getElementById("auth-tagline");
     if (title) title.textContent = (data.app_name || 'Treinova').toUpperCase();
     if (tagline) tagline.textContent = data.app_tagline || 'Seu App, seu treino, sua marca';
-    if (logo) {
-      if (data.logo_url) {
-        logo.innerHTML = `<img src="${escape(data.logo_url)}" alt="${escape(data.app_name || '')}" style="width:100%; height:100%; object-fit:cover;" />`;
-      } else if (data.logo_text) {
-        logo.textContent = data.logo_text.toUpperCase();
-      } else {
-        logo.innerHTML = iconSvg("bolt", 28);
-      }
-    }
-  } catch(e) { console.warn("auth branding load failed", e); }
+    renderAuthLogo({
+      logoUrl: data.logo_url || "",
+      logoText: data.logo_text || "",
+      appName: data.app_name || "Treinova"
+    });
+  } catch(e) {
+    console.warn("auth branding load failed", e);
+    renderAuthLogo();
+  }
 }
 
 async function saveBranding(patch) {
@@ -4294,9 +4325,21 @@ async function handleAuthSubmit(ev) {
   const email = document.getElementById("auth-email").value.trim();
   const password = document.getElementById("auth-password").value;
   const submitBtn = document.getElementById("auth-submit");
+  if (!email || !password) {
+    showAuthError("Informe seu email e senha para entrar.");
+    return;
+  }
+  if (navigator.onLine === false) {
+    showAuthError("Você está sem conexão. Conecte-se à internet para entrar.");
+    return;
+  }
   submitBtn.disabled = true; submitBtn.textContent = "Entrando...";
   try {
-    const { error } = await sb.auth.signInWithPassword({ email, password });
+    const { error } = await withTimeout(
+      sb.auth.signInWithPassword({ email, password }),
+      AUTH_LOGIN_TIMEOUT_MS,
+      "login timeout"
+    );
     if (error) throw error;
     // Sucesso — zera contador
     _loginAttempts = 0;
@@ -4309,7 +4352,10 @@ async function handleAuthSubmit(ev) {
       _startLoginCooldown(secs);
       return; // finally não precisa resetar botão — cooldown cuida disso
     }
-    showAuthError(e.message || "Email ou senha inválidos");
+    const timedOut = /login timeout|timeout/i.test(e?.message || "");
+    showAuthError(timedOut
+      ? "Não foi possível conectar agora. Verifique sua internet e tente novamente."
+      : (e.message || "Email ou senha inválidos"));
   } finally {
     if (Date.now() >= _loginCooldownUntil) {
       submitBtn.disabled = false;
@@ -18455,7 +18501,7 @@ async function registerServiceWorker() {
     // Sem scope explícito: defaults para o diretório de sw.js, compatível com qualquer hosting
     // A query de release garante que um PWA já instalado busque o worker novo
     // mesmo quando o navegador ainda associa a URL anterior ao cache antigo.
-    const reg = await navigator.serviceWorker.register("/sw.js?release=20260825-offline-workouts");
+    const reg = await navigator.serviceWorker.register("/sw.js?release=20260825-auth-recovery");
     // PWA instalado no iOS/Android pode ficar aberto por dias. Força a consulta
     // de uma nova versão em toda abertura, sem depender da janela de 24h do navegador.
     await reg.update().catch(() => {});

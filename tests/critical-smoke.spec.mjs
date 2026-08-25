@@ -5,6 +5,7 @@ test("abre o login sem tela travada", async ({ page }) => {
   await expect(page.locator("#auth-page")).toBeVisible();
   await expect(page.locator("#auth-submit")).toBeVisible();
   await expect(page.locator("#auth-email")).toBeVisible();
+  await expect(page.locator("#auth-logo img")).toHaveAttribute("src", /icon-192\.png/);
 });
 
 test("abre cadastro público de treinador", async ({ page }) => {

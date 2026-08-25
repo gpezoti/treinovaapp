@@ -6,7 +6,7 @@
 */
 // Alterar a versão a cada release que mexe no shell do app. Isso força a
 // atualização imediata do PWA instalado e elimina HTML antigo do cache.
-const VERSION = "v29-offline-workouts-20260825";
+const VERSION = "v30-auth-recovery-20260825";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
 const REST_TIMER_HANDLES = new Map();
