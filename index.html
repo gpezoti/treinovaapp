@@ -2425,7 +2425,10 @@ const MONTH_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho
 let sb = null;
 const ACTIVE_WORKOUT_SESSION_KEY = "treinova_active_workout_session_v1";
 const AUTH_FALLBACK_LOGO_URL = "/assets/icon-192.png?v=20260825-login";
-const AUTH_LOGIN_TIMEOUT_MS = 12000;
+// Auth can remain available while the database is recovering, but its response
+// time may temporarily exceed the usual request budget. Do not abort a valid
+// login before the provider has had a reasonable chance to finish it.
+const AUTH_LOGIN_TIMEOUT_MS = 35000;
 const OFFLINE_STUDENT_BUNDLE_VERSION = 1;
 const OFFLINE_STUDENT_BUNDLE_PREFIX = "treinova_student_offline_bundle_v1";
 const OFFLINE_WORKOUT_STATE_VERSION = 1;
