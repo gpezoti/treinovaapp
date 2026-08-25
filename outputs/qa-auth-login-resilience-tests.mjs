@@ -9,7 +9,10 @@ assert.match(html, /function renderAuthLogo\(/);
 assert.match(html, /renderAuthLogo\(\{[\s\S]*logoUrl: data\.logo_url/);
 assert.match(html, /AUTH_LOGIN_TIMEOUT_MS\s*=\s*12000/);
 assert.match(html, /withTimeout\([\s\S]*?sb\.auth\.signInWithPassword\(\{ email, password \}\)[\s\S]*?AUTH_LOGIN_TIMEOUT_MS[\s\S]*?"login timeout"/);
+assert.match(html, /function isTransientAuthFailure\(error\)/);
+assert.match(html, /async function signInWithTransientRetry\(email, password\)/);
+assert.match(html, /O serviço está indisponível no momento\. Tente novamente em instantes\./);
+assert.match(html, /if \(!transient\) _loginAttempts\+\+;/);
 assert.match(html, /Você está sem conexão\. Conecte-se à internet para entrar\./);
-assert.match(html, /Não foi possível conectar agora\. Verifique sua internet e tente novamente\./);
 
 console.log("Auth login resilience QA passed.");

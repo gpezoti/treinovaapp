@@ -4300,6 +4300,33 @@ let _loginAttempts = 0;
 let _loginCooldownUntil = 0;
 let _loginCooldownTimer = null;
 
+function isTransientAuthFailure(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  const status = Number(error?.status || error?.statusCode || 0);
+  return status >= 500 || /timeout|timed out|failed to fetch|network|networkerror|gateway|temporar/.test(message);
+}
+
+async function signInWithTransientRetry(email, password) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const { error } = await withTimeout(
+        sb.auth.signInWithPassword({ email, password }),
+        AUTH_LOGIN_TIMEOUT_MS,
+        "login timeout"
+      );
+      if (!error) return;
+      lastError = error;
+      if (!isTransientAuthFailure(error) || attempt === 1) throw error;
+    } catch (error) {
+      lastError = error;
+      if (!isTransientAuthFailure(error) || attempt === 1) throw error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 1200));
+  }
+  throw lastError || new Error("login failed");
+}
+
 function _startLoginCooldown(seconds) {
   _loginCooldownUntil = Date.now() + seconds * 1000;
   const submitBtn = document.getElementById("auth-submit");
@@ -4335,26 +4362,21 @@ async function handleAuthSubmit(ev) {
   }
   submitBtn.disabled = true; submitBtn.textContent = "Entrando...";
   try {
-    const { error } = await withTimeout(
-      sb.auth.signInWithPassword({ email, password }),
-      AUTH_LOGIN_TIMEOUT_MS,
-      "login timeout"
-    );
-    if (error) throw error;
+    await signInWithTransientRetry(email, password);
     // Sucesso — zera contador
     _loginAttempts = 0;
   } catch (e) {
-    _loginAttempts++;
+    const transient = isTransientAuthFailure(e);
+    if (!transient) _loginAttempts++;
     // Cooldown progressivo: 3 falhas=30s, 4=60s, 5+=120s
-    if (_loginAttempts >= 3) {
+    if (!transient && _loginAttempts >= 3) {
       const secs = _loginAttempts === 3 ? 30 : _loginAttempts === 4 ? 60 : 120;
       showAuthError(`Muitas tentativas. Aguarde ${secs} segundos.`);
       _startLoginCooldown(secs);
       return; // finally não precisa resetar botão — cooldown cuida disso
     }
-    const timedOut = /login timeout|timeout/i.test(e?.message || "");
-    showAuthError(timedOut
-      ? "Não foi possível conectar agora. Verifique sua internet e tente novamente."
+    showAuthError(transient
+      ? "O serviço está indisponível no momento. Tente novamente em instantes."
       : (e.message || "Email ou senha inválidos"));
   } finally {
     if (Date.now() >= _loginCooldownUntil) {
