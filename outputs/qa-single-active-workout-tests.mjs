@@ -7,12 +7,12 @@ const migration = fs.readFileSync(
   "utf8"
 );
 
-assert.match(html, /await abandonInProgressSessionsForDate\(null\);\s*const \{ data, error \} = await sb\.from\("sessions"\)\.insert/);
+assert.match(html, /const localSession = \{[\s\S]*?id: createOfflineUuid\(\),[\s\S]*?status: "in_progress"/);
+assert.match(html, /queueOfflineSessionSync\(localSession\)/);
+assert.match(html, /sb\.from\("sessions"\)\.upsert\(pendingSession\.row, \{ onConflict: "id" \}\)/);
 assert.match(html, /await abandonOtherInProgressSessions\(active\)/);
 assert.match(html, /activeRows\.find\(s => String\(s\.id\) === String\(STATE\.currentSession\.id\)\)/);
 assert.doesNotMatch(html, /list\.find\(s => s\.status === "completed"\)\s*\|\| list\[0\]/);
-assert.match(html, /String\(error\.code \|\| ""\) === "23505"/);
-assert.match(html, /O treino ativo em outra aba foi retomado\./);
 assert.match(migration, /row_number\(\) over/);
 assert.match(migration, /where status = 'in_progress'/);
 assert.match(migration, /sessions_one_in_progress_per_student_uidx/);

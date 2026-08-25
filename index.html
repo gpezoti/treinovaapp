@@ -2424,6 +2424,10 @@ const MONTH_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho
    ============================================================================= */
 let sb = null;
 const ACTIVE_WORKOUT_SESSION_KEY = "treinova_active_workout_session_v1";
+const OFFLINE_STUDENT_BUNDLE_VERSION = 1;
+const OFFLINE_STUDENT_BUNDLE_PREFIX = "treinova_student_offline_bundle_v1";
+const OFFLINE_WORKOUT_STATE_VERSION = 1;
+const OFFLINE_WORKOUT_STATE_PREFIX = "treinova_student_offline_workout_v1";
 const DEFAULT_BRANDING = {
   app_name: "Coach",
   app_tagline: "Treine de verdade",
@@ -2497,6 +2501,378 @@ const STATE = {
            raf:null, onDone:null, label:"Próxima série", exerciseName:"Próxima série",
            focusExercisePosition:null, pushScheduled:false, pushScheduling:false, notified:false }
 };
+
+/* =============================================================================
+   OFFLINE-FIRST — DADOS DE TREINO DO ALUNO
+   ============================================================================= */
+let _offlineStudentBundleTimer = null;
+let _offlineWorkoutSyncTimer = null;
+let _offlineWorkoutSyncPromise = null;
+
+function offlineStorageKey(prefix, userId = STATE.user?.id) {
+  return userId ? `${prefix}:${userId}` : "";
+}
+
+function readOfflineStorage(prefix, userId = STATE.user?.id) {
+  const key = offlineStorageKey(prefix, userId);
+  if (!key) return null;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "null");
+    return parsed?.user_id === userId ? parsed : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function removeOfflineStudentData(userId = STATE.user?.id) {
+  try {
+    const bundleKey = offlineStorageKey(OFFLINE_STUDENT_BUNDLE_PREFIX, userId);
+    const workoutKey = offlineStorageKey(OFFLINE_WORKOUT_STATE_PREFIX, userId);
+    if (bundleKey) localStorage.removeItem(bundleKey);
+    if (workoutKey) localStorage.removeItem(workoutKey);
+  } catch (e) {}
+}
+
+function isStudentOfflineEnabled() {
+  return STATE.profile?.role === "student" && !!STATE.user?.id;
+}
+
+function safeOfflineClone(value, fallback) {
+  try { return JSON.parse(JSON.stringify(value)); }
+  catch (e) { return fallback; }
+}
+
+function writeOfflineStudentBundle() {
+  if (!isStudentOfflineEnabled()) return;
+  const workouts = Object.values(STATE.workoutsById || {});
+  const workoutRefs = Object.fromEntries(Object.entries(STATE.workouts || {})
+    .filter(([, workout]) => workout?.id)
+    .map(([code, workout]) => [code, workout.id]));
+  const bundle = {
+    version: OFFLINE_STUDENT_BUNDLE_VERSION,
+    user_id: STATE.user.id,
+    saved_at: new Date().toISOString(),
+    profile: STATE.profile,
+    workouts,
+    workout_refs: workoutRefs,
+    periodization: STATE.periodization || [],
+    day_blocks: STATE.dayBlocks || {},
+    presets: typeof _PRESETS === "undefined" ? [] : _PRESETS,
+    today_sessions: STATE.todaySessions || [],
+    calendar_sessions_by_date: STATE.calendarSessionsByDate || {},
+    calendar_aero_dates: [...(STATE.calendarAeroDates || [])],
+    calendar_progress_loaded: !!STATE.calendarProgressLoaded,
+    last_loads: STATE.lastLoads || {}
+  };
+  try {
+    const raw = JSON.stringify(bundle);
+    // localStorage tem quota limitada. Nao apagamos um cache valido anterior se
+    // um plano excepcionalmente grande nao couber no dispositivo.
+    if (raw.length > 3_500_000) {
+      console.warn("[offline] Cache do aluno excede o limite local.");
+      return;
+    }
+    localStorage.setItem(offlineStorageKey(OFFLINE_STUDENT_BUNDLE_PREFIX), raw);
+  } catch (e) {
+    console.warn("[offline] Nao foi possivel gravar o plano local.", e);
+  }
+}
+
+function scheduleOfflineStudentBundleWrite() {
+  if (!isStudentOfflineEnabled()) return;
+  clearTimeout(_offlineStudentBundleTimer);
+  _offlineStudentBundleTimer = setTimeout(writeOfflineStudentBundle, 180);
+}
+
+function hydrateOfflineStudentBundle(userId = STATE.user?.id) {
+  const bundle = readOfflineStorage(OFFLINE_STUDENT_BUNDLE_PREFIX, userId);
+  if (!bundle || bundle.version !== OFFLINE_STUDENT_BUNDLE_VERSION || bundle.profile?.role !== "student") return null;
+
+  if (!STATE.profile) STATE.profile = bundle.profile;
+  const byId = {};
+  (bundle.workouts || []).forEach(workout => {
+    if (workout?.id) byId[workout.id] = workout;
+  });
+  const byCode = {};
+  Object.entries(bundle.workout_refs || {}).forEach(([code, workoutId]) => {
+    if (byId[workoutId]) byCode[code] = byId[workoutId];
+  });
+  Object.values(byId).forEach(workout => {
+    if (workout?.code && !byCode[workout.code]) byCode[workout.code] = workout;
+  });
+  if (Object.keys(byId).length) {
+    STATE.workoutsById = byId;
+    STATE.workouts = byCode;
+  }
+  if (Array.isArray(bundle.periodization) && bundle.periodization.length) STATE.periodization = bundle.periodization;
+  if (bundle.day_blocks && typeof bundle.day_blocks === "object") STATE.dayBlocks = bundle.day_blocks;
+  if (Array.isArray(bundle.presets) && bundle.presets.length && typeof _PRESETS !== "undefined") _PRESETS = bundle.presets;
+  if (Array.isArray(bundle.today_sessions)) STATE.todaySessions = sortWorkoutSessionsByRecency(bundle.today_sessions);
+  if (bundle.calendar_sessions_by_date && typeof bundle.calendar_sessions_by_date === "object") {
+    STATE.calendarSessionsByDate = bundle.calendar_sessions_by_date;
+  }
+  if (Array.isArray(bundle.calendar_aero_dates)) STATE.calendarAeroDates = new Set(bundle.calendar_aero_dates);
+  if (bundle.calendar_progress_loaded) STATE.calendarProgressLoaded = true;
+  if (bundle.last_loads && typeof bundle.last_loads === "object") STATE.lastLoads = bundle.last_loads;
+  return bundle;
+}
+
+function createOfflineUuid() {
+  try {
+    if (crypto?.randomUUID) return crypto.randomUUID();
+  } catch (e) {}
+  const bytes = new Uint8Array(16);
+  try { crypto.getRandomValues(bytes); } catch (e) { bytes.forEach((_, i) => { bytes[i] = Math.floor(Math.random() * 256); }); }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function offlineWorkoutSyncState() {
+  if (!STATE._offlineWorkoutSync) {
+    STATE._offlineWorkoutSync = { pending_session: null, set_log_ops: [], last_error: null };
+  }
+  return STATE._offlineWorkoutSync;
+}
+
+function hasPendingOfflineWorkoutChanges() {
+  const sync = offlineWorkoutSyncState();
+  return !!sync.pending_session || (sync.set_log_ops || []).length > 0;
+}
+
+function sessionSyncPayload(session) {
+  if (!session) return null;
+  const payload = {
+    id: session.id,
+    student_id: session.student_id,
+    date: session.date,
+    workout_code: session.workout_code,
+    workout_id: session.workout_id || null,
+    intensity: session.intensity || null,
+    status: session.status,
+    started_at: session.started_at || null,
+    completed_at: session.completed_at || null,
+    total_volume_kg: session.total_volume_kg ?? null,
+    duration_seconds: session.duration_seconds ?? null,
+    exercise_overrides: session.exercise_overrides || {}
+  };
+  return payload;
+}
+
+function setLogSyncPayload(log) {
+  return {
+    id: log.id,
+    session_id: log.session_id,
+    student_id: log.student_id,
+    exercise_name: log.exercise_name,
+    exercise_position: log.exercise_position,
+    exercise_cat: log.exercise_cat || null,
+    set_number: log.set_number,
+    target_reps: log.target_reps || null,
+    reps_done: log.reps_done ?? null,
+    load_kg: log.load_kg ?? null,
+    done: !!log.done,
+    done_at: log.done_at || null
+  };
+}
+
+function persistOfflineWorkoutState() {
+  if (!isStudentOfflineEnabled()) return;
+  const sync = offlineWorkoutSyncState();
+  const session = STATE.currentSession;
+  const shouldPersist = session?.status === "in_progress" || hasPendingOfflineWorkoutChanges();
+  const key = offlineStorageKey(OFFLINE_WORKOUT_STATE_PREFIX);
+  if (!shouldPersist) {
+    try { localStorage.removeItem(key); } catch (e) {}
+    return;
+  }
+  const workout = resolveWorkoutRef(STATE.selectedWorkout, STATE.selectedWorkoutId) || null;
+  const payload = {
+    version: OFFLINE_WORKOUT_STATE_VERSION,
+    user_id: STATE.user.id,
+    saved_at: new Date().toISOString(),
+    session: session ? safeOfflineClone(session, null) : null,
+    set_logs: safeOfflineClone(STATE.setLogs || [], []),
+    workout: safeOfflineClone(workout, null),
+    target: {
+      date: STATE.selectedDate || session?.date || null,
+      workout_code: STATE.selectedWorkout || session?.workout_code || null,
+      workout_id: STATE.selectedWorkoutId || session?.workout_id || null,
+      intensity: STATE.selectedIntensity || session?.intensity || "yellow",
+      preset_code: STATE.selectedPresetCode || null
+    },
+    pending_session: sync.pending_session,
+    set_log_ops: sync.set_log_ops || []
+  };
+  try {
+    localStorage.setItem(key, JSON.stringify(payload));
+  } catch (e) {
+    console.warn("[offline] Nao foi possivel gravar o treino em andamento.", e);
+  }
+}
+
+function hydrateOfflineWorkoutState(userId = STATE.user?.id) {
+  const saved = readOfflineStorage(OFFLINE_WORKOUT_STATE_PREFIX, userId);
+  if (!saved || saved.version !== OFFLINE_WORKOUT_STATE_VERSION) return null;
+  STATE._offlineWorkoutSync = {
+    pending_session: saved.pending_session || null,
+    set_log_ops: Array.isArray(saved.set_log_ops) ? saved.set_log_ops : [],
+    last_error: null
+  };
+  if (saved.workout?.id) {
+    STATE.workoutsById ||= {};
+    STATE.workouts ||= {};
+    STATE.workoutsById[saved.workout.id] = saved.workout;
+    if (saved.workout.code && !STATE.workouts[saved.workout.code]) STATE.workouts[saved.workout.code] = saved.workout;
+  }
+  if (saved.session?.status === "in_progress") {
+    STATE.currentSession = saved.session;
+    STATE.setLogs = saved.set_logs || [];
+    const target = saved.target || {};
+    STATE.selectedDate = target.date || saved.session.date || STATE.selectedDate;
+    STATE.selectedWorkout = target.workout_code || saved.session.workout_code || STATE.selectedWorkout;
+    STATE.selectedWorkoutId = target.workout_id || saved.session.workout_id || STATE.selectedWorkoutId;
+    STATE.selectedIntensity = target.intensity || saved.session.intensity || STATE.selectedIntensity;
+    STATE.selectedPresetCode = target.preset_code || STATE.selectedPresetCode;
+    mergeKnownWorkoutSession(saved.session);
+  }
+  return saved;
+}
+
+function queueOfflineSessionSync(session = STATE.currentSession) {
+  if (!isStudentOfflineEnabled() || !session) return;
+  const sync = offlineWorkoutSyncState();
+  sync.pending_session = { revision: createOfflineUuid(), row: sessionSyncPayload(session) };
+  persistOfflineWorkoutState();
+  scheduleOfflineWorkoutSync();
+}
+
+function queueOfflineSetLogUpsert(log) {
+  if (!isStudentOfflineEnabled() || !log?.id) return;
+  const sync = offlineWorkoutSyncState();
+  sync.set_log_ops = (sync.set_log_ops || []).filter(op => String(op.id) !== String(log.id));
+  sync.set_log_ops.push({ type: "upsert", id: log.id, revision: createOfflineUuid(), row: setLogSyncPayload(log) });
+  persistOfflineWorkoutState();
+  scheduleOfflineWorkoutSync();
+}
+
+function queueOfflineSetLogDelete(logId) {
+  if (!isStudentOfflineEnabled() || !logId) return;
+  const sync = offlineWorkoutSyncState();
+  sync.set_log_ops = (sync.set_log_ops || []).filter(op => String(op.id) !== String(logId));
+  sync.set_log_ops.push({ type: "delete", id: logId, revision: createOfflineUuid() });
+  persistOfflineWorkoutState();
+  scheduleOfflineWorkoutSync();
+}
+
+function mergePendingSetLogOperations(rows = []) {
+  const sync = offlineWorkoutSyncState();
+  const byId = Object.fromEntries((rows || []).filter(row => row?.id).map(row => [String(row.id), row]));
+  (sync.set_log_ops || []).forEach(op => {
+    if (op.type === "delete") delete byId[String(op.id)];
+    else if (op.row) byId[String(op.id)] = op.row;
+  });
+  return Object.values(byId).sort((a, b) => Number(a.exercise_position || 0) - Number(b.exercise_position || 0) || Number(a.set_number || 0) - Number(b.set_number || 0));
+}
+
+function scheduleOfflineWorkoutSync(delay = 280) {
+  if (!hasPendingOfflineWorkoutChanges()) return;
+  clearTimeout(_offlineWorkoutSyncTimer);
+  _offlineWorkoutSyncTimer = setTimeout(() => { void flushOfflineWorkoutSync("scheduled"); }, delay);
+}
+
+function offlineWorkoutNoticeHTML() {
+  const pending = hasPendingOfflineWorkoutChanges();
+  if (!pending && navigator.onLine !== false) return "";
+  const offline = navigator.onLine === false;
+  const text = offline
+    ? "Sem conexão. Seu treino está salvo neste aparelho e será enviado quando a internet voltar."
+    : "Alterações salvas neste aparelho. Sincronizando com segurança...";
+  return `<div id="workout-offline-notice" role="status" aria-live="polite" style="margin:0 0 10px;padding:9px 11px;border:1px solid ${offline ? "rgba(255,196,0,.36)" : "rgba(0,180,255,.30)"};border-radius:10px;background:${offline ? "rgba(255,196,0,.08)" : "var(--brand-soft)"};color:var(--text-2);font-size:12px;line-height:1.4">${text}</div>`;
+}
+
+function refreshOfflineWorkoutNotice() {
+  const current = document.getElementById("workout-offline-notice");
+  const next = offlineWorkoutNoticeHTML();
+  if (current) {
+    if (next) current.outerHTML = next;
+    else current.remove();
+  }
+}
+
+async function flushOfflineWorkoutSync(reason = "manual") {
+  if (!isStudentOfflineEnabled() || !hasPendingOfflineWorkoutChanges() || navigator.onLine === false || !sb) return false;
+  if (_offlineWorkoutSyncPromise) return _offlineWorkoutSyncPromise;
+  _offlineWorkoutSyncPromise = (async () => {
+    const sync = offlineWorkoutSyncState();
+    const pendingSession = sync.pending_session;
+    const operations = [...(sync.set_log_ops || [])];
+    try {
+      if (pendingSession?.row?.id) {
+        // A regra do produto continua sendo uma sessao ativa por aluno. Se o
+        // treino foi iniciado offline, ele representa a escolha mais recente
+        // deste aparelho e encerra qualquer sessao concorrente antes do upsert.
+        if (["in_progress", "completed"].includes(pendingSession.row.status)) {
+          const { error: abandonError } = await sb.from("sessions")
+            .update({ status: "abandoned" })
+            .eq("student_id", STATE.profile.id)
+            .eq("status", "in_progress")
+            .neq("id", pendingSession.row.id);
+          if (abandonError) throw abandonError;
+        }
+        const { error } = await sb.from("sessions").upsert(pendingSession.row, { onConflict: "id" });
+        if (error) throw error;
+        if (sync.pending_session?.revision === pendingSession.revision) sync.pending_session = null;
+      }
+
+      const upserts = operations.filter(op => op.type === "upsert" && op.row).map(op => op.row);
+      if (upserts.length) {
+        const { error } = await sb.from("set_logs").upsert(upserts, { onConflict: "id" });
+        if (error) throw error;
+      }
+      const deletes = operations.filter(op => op.type === "delete").map(op => op.id).filter(Boolean);
+      if (deletes.length) {
+        const { error } = await sb.from("set_logs").delete().eq("student_id", STATE.profile.id).in("id", deletes);
+        if (error) throw error;
+      }
+      const syncedRevisions = new Set(operations.map(op => op.revision));
+      sync.set_log_ops = (sync.set_log_ops || []).filter(op => syncedRevisions.has(op.revision) ? false : true);
+      sync.last_error = null;
+      persistOfflineWorkoutState();
+      refreshOfflineWorkoutNotice();
+      return true;
+    } catch (error) {
+      sync.last_error = String(error?.message || error || "sync_failed").slice(0, 180);
+      persistOfflineWorkoutState();
+      refreshOfflineWorkoutNotice();
+      console.warn(`[offline] Sincronização do treino pendente (${reason}).`, error);
+      return false;
+    }
+  })().finally(() => { _offlineWorkoutSyncPromise = null; });
+  return _offlineWorkoutSyncPromise;
+}
+
+function preloadStudentWorkoutAssets() {
+  if (!isStudentOfflineEnabled() || !navigator.serviceWorker) return;
+  const urls = [...new Set(Object.values(STATE.workoutsById || {})
+    .flatMap(workout => (workout.exercises || []).map(exercise => getExerciseImageMeta(exercise).url))
+    .map(url => {
+      try { return url && !String(url).startsWith("data:") ? new URL(url, location.href).href : ""; }
+      catch (e) { return ""; }
+    })
+    .filter(Boolean))];
+  if (!urls.length) return;
+  const preload = async () => {
+    try { await navigator.serviceWorker.ready; } catch (e) { return; }
+    for (let index = 0; index < urls.length; index += 4) {
+      await Promise.all(urls.slice(index, index + 4).map(url => fetch(url).catch(() => null)));
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  };
+  const idle = window.requestIdleCallback || ((callback) => setTimeout(callback, 350));
+  idle(() => { void preload(); });
+}
 
 const _OPERATIONAL_EVENT_DEDUP = new Map();
 const CRITICAL_LOAD_LABELS = new Set([
@@ -4167,9 +4543,25 @@ window.submitPasswordRecovery = async function() {
 };
 
 async function loadProfile() {
-  const { data: { user } } = await withTimeout(sb.auth.getUser(), 8000, "profile user timeout");
+  // getSession le o token persistido no aparelho e continua disponivel offline.
+  // getUser valida no servidor e transformava um login offline em tela travada.
+  let user = STATE.user || null;
+  if (!user) {
+    const { data } = await withTimeout(sb.auth.getSession(), 2500, "profile session timeout");
+    user = data?.session?.user || null;
+  }
   if (!user) return null;
   STATE.user = user;
+  // Sem rede, nao espere o timeout da consulta de perfil. O pacote local ja
+  // foi associado a este mesmo usuario e contem a ultima versao autorizada do
+  // planejamento para execucao offline.
+  if (navigator.onLine === false) {
+    const offlineBundle = hydrateOfflineStudentBundle(user.id);
+    if (offlineBundle?.profile) {
+      STATE.profile = offlineBundle.profile;
+      return STATE.profile;
+    }
+  }
   const { data, error } = await withTimeout(
     sb.from("profiles").select("*").eq("id", user.id).single(),
     9000,
@@ -4181,9 +4573,15 @@ async function loadProfile() {
     // perfil de produto. Os demais erros são transitórios/técnicos e precisam
     // manter a sessão para que o usuário possa tentar novamente.
     if (error.code === "PGRST116") return null;
+    const offlineBundle = hydrateOfflineStudentBundle(user.id);
+    if (offlineBundle?.profile) {
+      STATE.profile = offlineBundle.profile;
+      return STATE.profile;
+    }
     throw error;
   }
   STATE.profile = data;
+  scheduleOfflineStudentBundleWrite();
   return data;
 }
 
@@ -4232,6 +4630,7 @@ async function signOut() {
     localStorage.removeItem("timer_total");
     localStorage.removeItem("timer_label");
   } catch(e) {}
+  removeOfflineStudentData(STATE.user?.id);
   await sb.auth.signOut();
   location.reload();
 }
@@ -4264,7 +4663,12 @@ async function loadWorkouts() {
     q = q.eq("coach_id", myId).is("student_id", null);
   }
   const { data: workouts, error } = await q;
-  if (error) { console.error(error); return; }
+  if (error) {
+    console.error(error);
+    // Mantem o ultimo plano valido no aparelho para o aluno continuar treinando
+    // mesmo se a requisicao atual falhar por sinal fraco.
+    return;
+  }
   const scopedWorkouts = (workouts || []).filter(w => {
     if (!w) return false;
     if (isStudent) return w.student_id === myId || (studentCoachId && w.coach_id === studentCoachId && !w.student_id);
@@ -4305,6 +4709,8 @@ async function loadWorkouts() {
   });
   STATE.workouts = map;
   STATE.workoutsById = byId;
+  scheduleOfflineStudentBundleWrite();
+  preloadStudentWorkoutAssets();
 }
 
 async function loadPeriodization() {
@@ -4313,10 +4719,7 @@ async function loadPeriodization() {
     .select("*").eq("student_id", sid).order("date");
   if (error) {
     console.error(error);
-    STATE.periodization = [];
-    STATE.calendarSessionsByDate = {};
-    STATE.calendarAeroDates = new Set();
-    STATE.calendarProgressLoaded = false;
+    // Nao zera uma periodizacao previamente sincronizada ao ficar offline.
     return;
   }
   // Carrega blocos para propagar preset_code/workout_code reais p/ cada dia
@@ -4346,6 +4749,7 @@ async function loadPeriodization() {
     };
   });
   await loadCalendarCompletionState();
+  scheduleOfflineStudentBundleWrite();
 }
 
 async function loadCalendarCompletionState() {
@@ -4391,9 +4795,6 @@ async function loadCalendarCompletionState() {
   // uma consulta falhar, a outra ainda é suficiente para compor a Agenda.
   if (scheduledSessionsResult.error && completedSessionsResult.error) {
     console.warn("[calendar] Falha ao carregar sessões concluídas", scheduledSessionsResult.error || completedSessionsResult.error);
-    STATE.calendarSessionsByDate = {};
-    STATE.calendarAeroDates = new Set();
-    STATE.calendarProgressLoaded = false;
     return;
   }
   if (scheduledSessionsResult.error || completedSessionsResult.error) {
@@ -4427,6 +4828,7 @@ async function loadCalendarCompletionState() {
     STATE.calendarAeroDates = new Set((aeroResult.data || []).map(log => log.date).filter(Boolean));
   }
   STATE.calendarProgressLoaded = true;
+  scheduleOfflineStudentBundleWrite();
 }
 
 async function loadLastLoads() {
@@ -4437,6 +4839,7 @@ async function loadLastLoads() {
   const m = {};
   (data || []).forEach(r => { m[r.exercise_name] = r.last_load_kg; });
   STATE.lastLoads = m;
+  scheduleOfflineStudentBundleWrite();
 }
 
 function sessionRecencyTime(session) {
@@ -4565,6 +4968,8 @@ function setCurrentWorkoutSession(session, { remember = false, syncSelection = t
   mergeKnownWorkoutSession(session);
   if (remember && session.status === "in_progress") rememberActiveWorkoutSession(session);
   if (session.status === "completed") forgetActiveWorkoutSession(session.id);
+  persistOfflineWorkoutState();
+  scheduleOfflineStudentBundleWrite();
   return session;
 }
 
@@ -4655,6 +5060,9 @@ async function loadKnownWorkoutSessions(date = todayISO()) {
     STATE.todaySessions = [];
     return [];
   }
+  if (STATE.profile.role === "student" && navigator.onLine === false) {
+    return STATE.todaySessions || [];
+  }
   const [dayRes, activeRes, completedRes] = await Promise.all([
     sb.from("sessions")
       .select("*")
@@ -4680,11 +5088,14 @@ async function loadKnownWorkoutSessions(date = todayISO()) {
   ]);
   if (dayRes.error || activeRes.error || completedRes.error) {
     console.warn("[workout] Falha ao carregar sessões conhecidas", dayRes.error || activeRes.error || completedRes.error);
-    STATE.todaySessions = [];
-    return [];
+    return STATE.todaySessions || [];
   }
   const byId = {};
   [...(dayRes.data || []), ...(activeRes.data || []), ...(completedRes.data || [])].forEach(s => { if (s?.id) byId[s.id] = s; });
+  const pendingLocalSession = offlineWorkoutSyncState().pending_session?.row;
+  if (pendingLocalSession?.id && STATE.currentSession && String(STATE.currentSession.id) === String(pendingLocalSession.id)) {
+    byId[pendingLocalSession.id] = STATE.currentSession;
+  }
   STATE.todaySessions = sortWorkoutSessionsByRecency(Object.values(byId));
   const active = getActiveWorkoutSessionForHome();
   if (active) {
@@ -4701,14 +5112,17 @@ async function loadKnownWorkoutSessions(date = todayISO()) {
     if (!keepAgendaSelection) {
       setCurrentWorkoutSession(active, { remember: true });
       if (changed) await loadSetLogs();
-      await abandonOtherInProgressSessions(active);
+      if (navigator.onLine !== false) await abandonOtherInProgressSessions(active);
     }
   }
+  scheduleOfflineStudentBundleWrite();
   return STATE.todaySessions;
 }
 
 async function loadWorkoutSessionById(sessionId) {
   if (!STATE.profile || !sessionId) return null;
+  if (String(STATE.currentSession?.id || "") === String(sessionId)) return STATE.currentSession;
+  if (navigator.onLine === false) return null;
   const { data, error } = await sb.from("sessions")
     .select("*")
     .eq("id", sessionId)
@@ -4752,7 +5166,20 @@ async function findWorkoutSessionRows(date, workoutCode, workoutId = null) {
 
 async function loadExistingSession(date, workoutCode, workoutId = null) {
   if (!STATE.profile || !workoutCode) return null;
-  const { data, error } = await findWorkoutSessionRows(date, workoutCode, workoutId);
+  const known = findKnownSessionForWorkout(date, workoutCode, workoutId);
+  if (known) {
+    setCurrentWorkoutSession(known, { remember: known.status === "in_progress" });
+    return known;
+  }
+  if (navigator.onLine === false) return null;
+  let result;
+  try {
+    result = await withTimeout(findWorkoutSessionRows(date, workoutCode, workoutId), 1200, "workout session lookup timeout");
+  } catch (error) {
+    console.warn("[workout] Falha ao buscar sessão existente", error);
+    return null;
+  }
+  const { data, error } = result;
   if (error) {
     console.warn("[workout] Falha ao buscar sessão existente", error);
     return null;
@@ -4765,64 +5192,53 @@ async function loadExistingSession(date, workoutCode, workoutId = null) {
 }
 
 async function loadOrCreateSession(date, workoutCode, intensity, workoutId = null) {
-  // procura sessão do dia
   const w = resolveWorkoutRef(workoutCode, workoutId) || STATE.workouts[workoutCode];
-  const { data: existingRows, error: existingError } = await findWorkoutSessionRows(
-    date,
-    workoutCode,
-    workoutId || w?.id || null
-  );
-  if (existingError) {
-    console.error("[workout] Falha ao buscar sessão", existingError);
-    reportOperationalEvent("workout_start_failed", "failure", {
-      source: "session_lookup",
-      error_kind: operationalErrorKind(existingError)
-    });
-    throw existingError;
+  const resolvedWorkoutId = workoutId || w?.id || null;
+  const known = findKnownSessionForWorkout(date, workoutCode, resolvedWorkoutId);
+  if (known?.status === "in_progress") {
+    setCurrentWorkoutSession(known, { remember: true });
+    return STATE.currentSession;
   }
+
+  let existing = null;
+  if (navigator.onLine !== false) {
+    try {
+      const result = await withTimeout(
+        findWorkoutSessionRows(date, workoutCode, resolvedWorkoutId),
+        1200,
+        "workout session lookup timeout"
+      );
+      if (!result.error) existing = pickBestWorkoutSession(result.data || [], resolvedWorkoutId);
+    } catch (error) {
+      // A criação local é deliberada: nunca deixe a pessoa sem conseguir iniciar
+      // o treino porque a rede demorou a responder.
+      console.warn("[workout] Consulta lenta; iniciando localmente.", error);
+    }
+  }
+
   let createdSession = false;
-  const existing = pickBestWorkoutSession(existingRows || [], workoutId || w?.id || null);
   if (existing) {
     setCurrentWorkoutSession(existing, { remember: existing.status === "in_progress" });
   } else {
-    // Uma conta deve ter apenas um treino ativo, inclusive entre abas/dispositivos.
-    // Libera a sessao anterior antes do insert para respeitar o indice parcial do banco.
-    await abandonInProgressSessionsForDate(null);
-    const { data, error } = await sb.from("sessions").insert({
-      student_id: STATE.profile.id, date, workout_code: workoutCode,
-      workout_id: w ? w.id : null, intensity, status: "in_progress"
-    }).select().single();
-    if (error) {
-      if (String(error.code || "") === "23505") {
-        const { data: concurrent } = await sb.from("sessions")
-          .select("*")
-          .eq("student_id", STATE.profile.id)
-          .eq("status", "in_progress")
-          .order("started_at", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (concurrent) {
-          setCurrentWorkoutSession(concurrent, { remember: true });
-          showToast("O treino ativo em outra aba foi retomado.", "success");
-          await loadSetLogs();
-          return STATE.currentSession;
-        }
-      }
-      console.error("[workout] Falha ao iniciar sessão", error);
-      reportOperationalEvent("workout_start_failed", "failure", {
-        source: "session_insert",
-        error_kind: operationalErrorKind(error)
-      });
-      throw error;
-    }
-    setCurrentWorkoutSession(data, { remember: true });
+    const startedAt = new Date().toISOString();
+    const localSession = {
+      id: createOfflineUuid(),
+      student_id: STATE.profile.id,
+      date,
+      workout_code: workoutCode,
+      workout_id: resolvedWorkoutId,
+      intensity,
+      status: "in_progress",
+      started_at: startedAt,
+      exercise_overrides: {}
+    };
+    setCurrentWorkoutSession(localSession, { remember: true });
+    queueOfflineSessionSync(localSession);
     createdSession = true;
   }
-  await abandonOtherInProgressSessions(STATE.currentSession);
-  await loadSetLogs();
+  if (navigator.onLine !== false) void flushOfflineWorkoutSync("workout_start");
   if (createdSession) {
-    reportOperationalEvent("workout_session_started", "success", { source: "session_insert" });
+    reportOperationalEvent("workout_session_started", "success", { source: "local_first" });
     trackProductEvent("workout started", { source: "student_workout" });
   }
   return STATE.currentSession;
@@ -4830,11 +5246,13 @@ async function loadOrCreateSession(date, workoutCode, intensity, workoutId = nul
 
 async function loadSetLogs() {
   if (!STATE.currentSession) { STATE.setLogs = []; return; }
+  if (navigator.onLine === false) return;
   const { data, error } = await sb.from("set_logs")
     .select("*").eq("session_id", STATE.currentSession.id)
     .order("exercise_position").order("set_number");
   if (error) { console.error(error); return; }
-  STATE.setLogs = data || [];
+  STATE.setLogs = mergePendingSetLogOperations(data || []);
+  persistOfflineWorkoutState();
 }
 
 async function loadFeedReactions(postIds) {
@@ -5178,6 +5596,24 @@ async function ensureSetLog(exercise, position, setNum) {
   if (existing) return existing;
   const lastLoad = STATE.lastLoads[exercise.name];
   const scheme = getCurrentTrainingScheme();
+  if (isStudentOfflineEnabled()) {
+    const local = {
+      id: createOfflineUuid(),
+      session_id: STATE.currentSession.id,
+      student_id: STATE.profile.id,
+      exercise_name: exercise.name,
+      exercise_position: position,
+      exercise_cat: exercise.cat || null,
+      set_number: setNum,
+      target_reps: getExerciseTargetReps(exercise, scheme, STATE.setLogs, setNum),
+      load_kg: lastLoad || null,
+      done: false,
+      done_at: null
+    };
+    STATE.setLogs.push(local);
+    queueOfflineSetLogUpsert(local);
+    return local;
+  }
   const { data, error } = await sb.from("set_logs").insert({
     session_id: STATE.currentSession.id,
     student_id: STATE.profile.id,
@@ -5195,10 +5631,19 @@ async function ensureSetLog(exercise, position, setNum) {
 }
 
 async function updateSetLog(logId, patch) {
+  if (isStudentOfflineEnabled()) {
+    const local = STATE.setLogs.find(s => s.id === logId);
+    if (!local) return false;
+    Object.assign(local, patch);
+    queueOfflineSetLogUpsert(local);
+    refreshOfflineWorkoutNotice();
+    return true;
+  }
   const { error } = await sb.from("set_logs").update(patch).eq("id", logId);
   if (error) console.error(error);
   const local = STATE.setLogs.find(s => s.id === logId);
   if (local) Object.assign(local, patch);
+  return !error;
 }
 
 async function updateSessionExerciseOverride(position, patch) {
@@ -5215,6 +5660,17 @@ async function updateSessionExerciseOverride(position, patch) {
   });
   if (Object.keys(next).length) overrides[key] = next;
   else delete overrides[key];
+
+  if (isStudentOfflineEnabled()) {
+    STATE.currentSession.exercise_overrides = overrides;
+    STATE.todaySessions = (STATE.todaySessions || []).map(s =>
+      String(s.id) === String(STATE.currentSession.id)
+        ? { ...s, exercise_overrides: overrides }
+        : s
+    );
+    queueOfflineSessionSync(STATE.currentSession);
+    return true;
+  }
 
   const { data, error } = await sb.from("sessions")
     .update({ exercise_overrides: overrides })
@@ -5283,6 +5739,7 @@ async function toggleSetDone(exercise, position, setIdx) {
   if (newDone) {
     if (STATE.lastLoads[exercise.name] !== log.load_kg && log.load_kg) {
       STATE.lastLoads[exercise.name] = log.load_kg;
+      scheduleOfflineStudentBundleWrite();
     }
     // Em bi/tri-set: se houver proximo exercicio do mesmo grupo, pula
     // direto para ele sem disparar descanso. So o ultimo aciona pausa.
@@ -5307,6 +5764,7 @@ async function toggleSetDone(exercise, position, setIdx) {
   } else {
     showToast("Série desmarcada");
   }
+  persistOfflineWorkoutState();
   if (!syncWorkoutProgressDom()) renderWorkout();
 }
 
@@ -5397,10 +5855,9 @@ window.confirmSerieDone = async function(skipTimer) {
   // Salvar carga ajustada
   if (logId && loadVal != null && !isNaN(loadVal)) {
     try {
-      await sb.from("set_logs").update({ load_kg: loadVal }).eq("id", logId);
-      const local = STATE.setLogs.find(s => s.id === logId);
-      if (local) local.load_kg = loadVal;
+      await updateSetLog(logId, { load_kg: loadVal });
       STATE.lastLoads[exName] = loadVal;
+      scheduleOfflineStudentBundleWrite();
     } catch(e) { console.warn("load save err:", e); }
   }
 
@@ -5473,7 +5930,10 @@ async function updateLoad(exercise, position, setIdx, val) {
   if (!log) return;
   const num = val === "" ? null : parseFloat(val);
   await updateSetLog(log.id, { load_kg: num });
-  if (num) STATE.lastLoads[exercise.name] = num;
+  if (num) {
+    STATE.lastLoads[exercise.name] = num;
+    scheduleOfflineStudentBundleWrite();
+  }
 }
 
 async function updateReps(exercise, position, setIdx, val) {
@@ -5541,16 +6001,21 @@ window.removeManualSet = async function(position) {
     if (!ok) return;
   }
   if (lastLog?.id) {
-    const { error } = await sb.from("set_logs")
-      .delete()
-      .eq("id", lastLog.id)
-      .eq("student_id", STATE.profile.id);
-    if (error) {
-      console.error("[remove set log]", error);
-      showToast("Erro ao remover série.", "error");
-      return;
+    if (isStudentOfflineEnabled()) {
+      STATE.setLogs = (STATE.setLogs || []).filter(l => String(l.id) !== String(lastLog.id));
+      queueOfflineSetLogDelete(lastLog.id);
+    } else {
+      const { error } = await sb.from("set_logs")
+        .delete()
+        .eq("id", lastLog.id)
+        .eq("student_id", STATE.profile.id);
+      if (error) {
+        console.error("[remove set log]", error);
+        showToast("Erro ao remover série.", "error");
+        return;
+      }
+      STATE.setLogs = (STATE.setLogs || []).filter(l => String(l.id) !== String(lastLog.id));
     }
-    STATE.setLogs = (STATE.setLogs || []).filter(l => String(l.id) !== String(lastLog.id));
   }
   const nextTarget = target - 1;
   const baseTarget = getExerciseBaseTargetSets(ex, scheme);
@@ -5574,20 +6039,34 @@ async function completeSession() {
   const totalVolume = STATE.setLogs.filter(s => s.done && s.load_kg).reduce((acc, s) => acc + (s.load_kg || 0), 0);
   const duration = calculateWorkoutDurationSeconds();
   const completedAt = new Date().toISOString();
-  const { error } = await sb.from("sessions").update({
+  const completedSession = {
+    ...STATE.currentSession,
     status: "completed",
     completed_at: completedAt,
     total_volume_kg: totalVolume,
     duration_seconds: duration
-  }).eq("id", STATE.currentSession.id);
-  if (error) {
-    console.error(error);
-    reportOperationalEvent("workout_complete_failed", "failure", {
-      source: "session_update",
-      error_kind: operationalErrorKind(error)
-    });
-    showToast("Erro ao concluir","error");
-    return;
+  };
+  if (isStudentOfflineEnabled()) {
+    STATE.currentSession = completedSession;
+    queueOfflineSessionSync(completedSession);
+    if (navigator.onLine !== false) void flushOfflineWorkoutSync("workout_complete");
+  } else {
+    const { error } = await sb.from("sessions").update({
+      status: "completed",
+      completed_at: completedAt,
+      total_volume_kg: totalVolume,
+      duration_seconds: duration
+    }).eq("id", STATE.currentSession.id);
+    if (error) {
+      console.error(error);
+      reportOperationalEvent("workout_complete_failed", "failure", {
+        source: "session_update",
+        error_kind: operationalErrorKind(error)
+      });
+      showToast("Erro ao concluir","error");
+      return;
+    }
+    STATE.currentSession = completedSession;
   }
   // A sessão foi persistida. Não deixe um descanso desta sessão continuar no
   // aparelho, no Service Worker ou no job remoto depois da conclusão.
@@ -5599,17 +6078,14 @@ async function completeSession() {
     console.warn("[complete session rest timer cancel]", timerCancelError);
   }
   showToast("Treino concluído! ✓", "success");
-  STATE.currentSession = {
-    ...STATE.currentSession,
-    status: "completed",
-    completed_at: completedAt,
-    total_volume_kg: totalVolume,
-    duration_seconds: duration
-  };
   forgetActiveWorkoutSession(STATE.currentSession.id);
   mergeKnownWorkoutSession(STATE.currentSession);
-  await abandonInProgressSessionsForDate(null, STATE.currentSession.id);
-  await loadLastLoads();
+  persistOfflineWorkoutState();
+  scheduleOfflineStudentBundleWrite();
+  if (navigator.onLine !== false) {
+    void abandonInProgressSessionsForDate(null, STATE.currentSession.id);
+    void loadLastLoads();
+  }
   // Metricas de produto usam somente faixas, sem codigo do treino, carga ou dados pessoais.
   const setsDone = STATE.setLogs.filter(s => s.done).length;
   trackProductEvent("workout completed", {
@@ -6282,6 +6758,10 @@ async function handleAppResume(reason = "resume") {
       }
     }
 
+    // Primeiro envia o que foi registrado durante a falta de sinal; so depois
+    // atualiza a tela com dados remotos para nao sobrescrever a acao recente.
+    await flushOfflineWorkoutSync(`resume:${reason}`);
+
     const shouldReconnect = awayMs >= 30_000 || reason === "online" || reason.indexOf("pageshow") === 0;
     if (shouldReconnect) {
       try {
@@ -6353,7 +6833,10 @@ function bindAppResumeHandlers() {
     requestAnimationFrame(() => repairInteractionLayer("pageshow:raf"));
     handleAppResume(e.persisted ? "pageshow-bfcache" : "pageshow");
   });
-  window.addEventListener("online", () => handleAppResume("online"));
+  window.addEventListener("online", () => {
+    void flushOfflineWorkoutSync("online");
+    handleAppResume("online");
+  });
   document.addEventListener("freeze", markAppHiddenForResume);
   document.addEventListener("resume", () => {
     _APP_RESUME_NEEDS_TOUCH_REPAIR = true;
@@ -7644,6 +8127,13 @@ function getPlatformSubscriptionAccess(profile = STATE.profile) {
 async function loadPlatformAccess(profile = STATE.profile) {
   if (!profile || !["coach", "student"].includes(profile.role)) {
     STATE.platformAccess = { locked: false, status: "not_applicable" };
+    return STATE.platformAccess;
+  }
+
+  if (navigator.onLine === false) {
+    STATE.platformAccess = profile.role === "coach"
+      ? getPlatformSubscriptionAccess(profile)
+      : { locked: false, status: "offline_cached" };
     return STATE.platformAccess;
   }
 
@@ -10899,6 +11389,7 @@ async function renderWorkout() {
         </div>
       </div>`;
     })()}
+    ${offlineWorkoutNoticeHTML()}
     <div class="workout-hero">
       <div class="wh-eyebrow">${fmtFullDateBR(date)} · Semana ${(findDayInfo(date)||{}).week || "—"}</div>
       <div class="wh-title">${escape(W.name)}</div>
@@ -11222,8 +11713,12 @@ function syncWorkoutProgressDom() {
     const lbl = fb.querySelector(".wfb-label"); if (lbl) lbl.textContent = doneCount + " de " + totalTarget + " séries";
     const fill = fb.querySelector(".wfb-fill"); if (fill) fill.style.width = pct + "%";
     const p = fb.querySelector(".wfb-pct"); if (p) p.textContent = pct + "% concluído";
-    const hint = fb.querySelector(".wfb-hint"); if (hint) hint.textContent = doneCount > 0 ? "Progresso salvo" : "Pode concluir a qualquer hora";
+    const hint = fb.querySelector(".wfb-hint");
+    if (hint) hint.textContent = doneCount > 0
+      ? (hasPendingOfflineWorkoutChanges() ? "Salvo neste aparelho" : "Progresso salvo")
+      : "Pode concluir a qualquer hora";
   }
+  refreshOfflineWorkoutNotice();
   return true;
 }
 function bindWorkoutSetChecks() {
@@ -13160,7 +13655,12 @@ async function loadPresets() {
   const filters = coachId ? `coach_id.eq.${coachId},coach_id.is.null` : `coach_id.is.null`;
   const { data, error } = await sb.from("intensity_presets")
     .select("*").or(filters).order("position");
-  if (error) { console.warn("loadPresets:", error); _PRESETS = []; return; }
+  if (error) {
+    console.warn("loadPresets:", error);
+    // O plano armazenado localmente tambem inclui os presets para que séries,
+    // reps e descanso nao mudem quando o aparelho perde a internet.
+    return;
+  }
   // mescla: se coach tem preset com mesmo code, usa o dele
   const map = {};
   (data || []).forEach(p => {
@@ -13168,6 +13668,7 @@ async function loadPresets() {
     if (!cur || (p.coach_id && !cur.coach_id)) map[p.code] = p;
   });
   _PRESETS = Object.values(map).sort((a,b)=>(a.position||0)-(b.position||0));
+  scheduleOfflineStudentBundleWrite();
 }
 async function reloadPresets() { await loadPresets(); }
 window.reloadPresets = reloadPresets;
@@ -14273,12 +14774,20 @@ async function loadTodayBlocks() {
   const today = todayISO();
   const future = new Date(); future.setDate(future.getDate()+30);
   const futureISO = future.toISOString().slice(0,10);
-  const { data: days } = await sb.from("periodization_days")
+  const { data: days, error: daysError } = await sb.from("periodization_days")
     .select("id, date").eq("student_id", sid).gte("date", today).lte("date", futureISO);
+  if (daysError) {
+    console.warn("[today blocks]", daysError);
+    return;
+  }
   if (!days || !days.length) { STATE.dayBlocks = {}; return; }
   const ids = days.map(d => d.id);
-  const { data: blocks } = await sb.from("periodization_blocks")
+  const { data: blocks, error: blocksError } = await sb.from("periodization_blocks")
     .select("*").in("day_id", ids).order("position");
+  if (blocksError) {
+    console.warn("[today blocks]", blocksError);
+    return;
+  }
   const byDate = {};
   const idToDate = {};
   days.forEach(d => idToDate[d.id] = d.date);
@@ -14288,6 +14797,7 @@ async function loadTodayBlocks() {
     (byDate[date] = byDate[date] || []).push(b);
   });
   STATE.dayBlocks = byDate;
+  scheduleOfflineStudentBundleWrite();
 }
 window.loadTodayBlocks = loadTodayBlocks;
 
@@ -17581,14 +18091,25 @@ async function postSignIn() {
       await sb.auth.signOut();
       return;
     }
-	    const roleLabel = profile.role === "admin" ? "Admin · " : profile.role === "coach" ? "Treinador · " : "Aluno · ";
+    const roleLabel = profile.role === "admin" ? "Admin · " : profile.role === "coach" ? "Treinador · " : "Aluno · ";
 	    headerSub.textContent = roleLabel + (profile.full_name || profile.email);
 	    if (desktopHeaderSub) desktopHeaderSub.textContent = roleLabel + (profile.full_name || profile.email);
+
+      // Hidrata antes da primeira renderizacao. A rede atual continua sendo a
+      // fonte de verdade, mas um aluno que ja abriu o app consegue ver e usar
+      // seu planejamento quando estiver sem sinal.
+      if (profile.role === "student") {
+        hydrateOfflineStudentBundle(STATE.user?.id);
+        hydrateOfflineWorkoutState(STATE.user?.id);
+      }
+      const offlineStudentBoot = profile.role === "student"
+        && navigator.onLine === false
+        && Object.keys(STATE.workoutsById || {}).length > 0;
 
       STATE.platformCheckoutReturn = consumePlatformCheckoutReturn();
 
       if (profile.role === "student" && profile.status === "blocked") {
-        await safeLoad("branding", loadBranding);
+        if (!offlineStudentBoot) await safeLoad("branding", loadBranding);
         renderBlockedScreen();
         renderHeaderBell();
         return;
@@ -17612,15 +18133,23 @@ async function postSignIn() {
   flushPendingProductAnalyticsEvents();
 
   // === GRUPO 1: dados essenciais para a primeira renderização ===
-  await Promise.all([
-    safeLoad("branding", loadBranding),
-    safeLoad("workouts", loadWorkouts),
-    safeLoad("presets", loadPresets),
-    safeLoad("today blocks", loadTodayBlocks),
-    safeLoad("today sessions", () => loadKnownWorkoutSessions(todayISO())),
-    safeLoad("periodization", loadPeriodization),
-    safeLoad("last loads", loadLastLoads),
-  ]);
+  if (!offlineStudentBoot) {
+    await Promise.all([
+      safeLoad("branding", loadBranding),
+      safeLoad("workouts", loadWorkouts),
+      safeLoad("presets", loadPresets),
+      safeLoad("today blocks", loadTodayBlocks),
+      safeLoad("today sessions", () => loadKnownWorkoutSessions(todayISO())),
+      safeLoad("periodization", loadPeriodization),
+      safeLoad("last loads", loadLastLoads),
+    ]);
+  }
+
+  if (profile.role === "student") {
+    scheduleOfflineStudentBundleWrite();
+    preloadStudentWorkoutAssets();
+    if (navigator.onLine !== false) void flushOfflineWorkoutSync("post_sign_in");
+  }
 
   // === GRUPO 2: dados críticos do perfil ===
   const _criticalRoleLoads = [];
@@ -17640,7 +18169,7 @@ async function postSignIn() {
   renderHeaderBell();
 
   // === GRUPO 3: cargas secundárias em background ===
-  const _backgroundLoads = [
+  const _backgroundLoads = offlineStudentBoot ? [] : [
     safeLoad("follows", loadFollows),
     safeLoad("feed", loadFeed),
     safeLoad("payment status", checkMyPaymentStatus),
@@ -17658,24 +18187,28 @@ async function postSignIn() {
       safeLoad("operational health", loadOperationalHealth, 7000)
     );
   }
-  Promise.all(_backgroundLoads)
-    .then(() => {
-      if (!STATE.view) return;
-      renderBottomNav();
-      if (["home", "feed", "payments", "students", "trainers"].includes(STATE.view)) {
-        renderCurrentView();
-      }
-      renderHeaderBell();
-    })
-    .catch((err) => console.warn("[bootstrap background loads]", err));
+  if (!offlineStudentBoot) {
+    Promise.all(_backgroundLoads)
+      .then(() => {
+        if (!STATE.view) return;
+        renderBottomNav();
+        if (["home", "feed", "payments", "students", "trainers"].includes(STATE.view)) {
+          renderCurrentView();
+        }
+        renderHeaderBell();
+      })
+      .catch((err) => console.warn("[bootstrap background loads]", err));
+  }
 
   // Auto-gera lembretes (não bloqueia)
-  setTimeout(() => {
-    generateOverduePaymentNotifications().catch(()=>{});
-    if (profile.role === "coach") generateCoachNotifications().catch(()=>{});
-    loadNotifications().then(() => { if (STATE.view) renderHeaderBell(); });
-  }, 1000);
-  setupRealtime();
+  if (!offlineStudentBoot) {
+    setTimeout(() => {
+      generateOverduePaymentNotifications().catch(()=>{});
+      if (profile.role === "coach") generateCoachNotifications().catch(()=>{});
+      loadNotifications().then(() => { if (STATE.view) renderHeaderBell(); });
+    }, 1000);
+    setupRealtime();
+  }
   setupPullToRefresh();
 
   // Pré-seleciona treino do dia se for aluno
@@ -17697,7 +18230,14 @@ async function postSignIn() {
   }
 
   // Onboarding + push + chat unread + load history/ranking
-  try { await postLoginInit(); } catch(e) { console.error("postLoginInit", e); }
+  try {
+    if (offlineStudentBoot) {
+      restoreTimerIfActive();
+      bindAppResumeHandlers();
+    } else {
+      await postLoginInit();
+    }
+  } catch(e) { console.error("postLoginInit", e); }
 
   // Deep-link via query string (?chat=USER_ID, ?view=feed, etc)
   try {
@@ -17915,7 +18455,7 @@ async function registerServiceWorker() {
     // Sem scope explícito: defaults para o diretório de sw.js, compatível com qualquer hosting
     // A query de release garante que um PWA já instalado busque o worker novo
     // mesmo quando o navegador ainda associa a URL anterior ao cache antigo.
-    const reg = await navigator.serviceWorker.register("/sw.js?release=20260729-periodization-progress-clarity");
+    const reg = await navigator.serviceWorker.register("/sw.js?release=20260825-offline-workouts");
     // PWA instalado no iOS/Android pode ficar aberto por dias. Força a consulta
     // de uma nova versão em toda abertura, sem depender da janela de 24h do navegador.
     await reg.update().catch(() => {});

@@ -1,19 +1,37 @@
 /* Treinova Service Worker
    - Network-first para HTML/manifest (sempre versão fresca)
-   - Network-first para API Supabase
+   - Sem cache de respostas autenticadas da API Supabase
    - Cache-first com revalidação para assets estáticos (CDN, imagens)
    - Push notifications nativos
 */
 // Alterar a versão a cada release que mexe no shell do app. Isso força a
 // atualização imediata do PWA instalado e elimina HTML antigo do cache.
-const VERSION = "v28-periodization-progress-clarity-20260729";
+const VERSION = "v29-offline-workouts-20260825";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
 const REST_TIMER_HANDLES = new Map();
+const OFFLINE_APP_SHELL = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/analytics-config.js",
+  "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
+];
 
 self.addEventListener("install", (event) => {
-  // Não pré-cacheia HTML — sempre buscar da network
-  self.skipWaiting();
+  // O shell precisa estar disponivel no primeiro uso offline apos uma
+  // atualizacao. Dados autenticados continuam fora deste cache.
+  event.waitUntil((async () => {
+    const cache = await caches.open(SHELL);
+    await Promise.all(OFFLINE_APP_SHELL.map(async (asset) => {
+      try {
+        const request = new Request(asset, { cache: "no-store" });
+        const response = await fetch(request);
+        if (response?.ok || response?.type === "opaque") await cache.put(request, response.clone());
+      } catch (e) {}
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", (event) => {
@@ -29,11 +47,11 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  // Supabase API/Realtime/Auth: network-first
+  // Respostas autenticadas nao entram no Cache Storage: o cache do browser nao
+  // separa de forma confiavel usuarios por Authorization e poderia expor dados
+  // de uma conta a outra no mesmo aparelho. O offline do aluno usa um bundle
+  // local escopado pelo id da conta, gravado pelo app.
   if (url.hostname.includes("supabase.co") || url.hostname.includes("supabase.in")) {
-    event.respondWith(
-      fetch(req).catch(() => caches.match(req))
-    );
     return;
   }
 
