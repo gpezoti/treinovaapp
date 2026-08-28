@@ -55,3 +55,96 @@ test("aluno inicia e registra uma série sem conexão", async ({ page }) => {
   expect(result.synced).toBe(true);
   expect(result.callTypes).toEqual(["abandon", "session", "logs"]);
 });
+
+test("aluno reabre o planejamento salvo sem consultar o perfil quando está offline", async ({ page }) => {
+  await page.goto("/");
+  const result = await page.evaluate(async () => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+    const state = eval("STATE");
+    const studentId = "student-offline-profile";
+    state.user = { id: studentId };
+    state.profile = null;
+    state.workouts = {};
+    state.workoutsById = {};
+    localStorage.setItem(`treinova_student_offline_bundle_v1:${studentId}`, JSON.stringify({
+      version: 1,
+      user_id: studentId,
+      profile: { id: studentId, role: "student", status: "active", full_name: "Aluno offline" },
+      workouts: [{ id: "workout-offline-profile", code: "A", name: "Treino salvo", exercises: [] }],
+      workout_refs: { A: "workout-offline-profile" },
+      periodization: [],
+      day_blocks: {}
+    }));
+    eval("sb = { from() { throw new Error('A consulta remota não deveria acontecer offline'); } }");
+
+    const profile = await eval("loadProfile")();
+    return {
+      profileId: profile?.id,
+      role: profile?.role,
+      workoutName: state.workouts?.A?.name
+    };
+  });
+
+  expect(result).toEqual({
+    profileId: "student-offline-profile",
+    role: "student",
+    workoutName: "Treino salvo"
+  });
+});
+
+test("sincronização pendente é repetida após indisponibilidade temporária", async ({ page }) => {
+  await page.goto("/");
+  const result = await page.evaluate(async () => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+    const state = eval("STATE");
+    state.user = { id: "student-offline-retry" };
+    state.profile = { id: "student-offline-retry", role: "student", status: "active" };
+    state.currentSession = null;
+    state._offlineWorkoutSync = {
+      pending_session: {
+        revision: "session-retry-1",
+        row: {
+          id: "11111111-1111-4111-8111-111111111111",
+          student_id: "student-offline-retry",
+          date: "2026-08-25",
+          workout_code: "A",
+          workout_id: "workout-a",
+          intensity: "yellow",
+          status: "in_progress"
+        }
+      },
+      set_log_ops: [],
+      last_error: null
+    };
+
+    let sessionUpserts = 0;
+    const success = { error: null };
+    const updateChain = { eq() { return this; }, neq() { return success; } };
+    eval(`sb = {
+      from(table) {
+        if (table !== "sessions") throw new Error("Tabela inesperada");
+        return {
+          update() { return updateChain; },
+          upsert() {
+            sessionUpserts += 1;
+            return { error: sessionUpserts === 1 ? new Error("network unavailable") : null };
+          }
+        };
+      }
+    }`);
+
+    const firstAttempt = await eval("flushOfflineWorkoutSync")("playwright-retry");
+    await new Promise(resolve => setTimeout(resolve, 1250));
+    return {
+      firstAttempt,
+      sessionUpserts,
+      pending: !!state._offlineWorkoutSync.pending_session,
+      retryAttempt: eval("_offlineWorkoutRetryAttempt")
+    };
+  });
+
+  expect(result.firstAttempt).toBe(false);
+  expect(result.sessionUpserts).toBe(2);
+  expect(result.pending).toBe(false);
+  expect(result.retryAttempt).toBe(0);
+});

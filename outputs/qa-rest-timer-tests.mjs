@@ -181,8 +181,8 @@ const checks = [
       html.includes('if (view === "workout") prepareWorkoutDeepLinkFromRestTimer()') &&
       html.includes('qs.get("sessionId")') &&
       html.includes('loadWorkoutSessionById(restResume.sessionId)') &&
-      sw.includes('new URL(rawUrl, self.location.origin).href') &&
-      sw.includes('/?view=workout&restTimer=1'),
+      sw.includes('new URL(rawUrl, APP_SCOPE).href') &&
+      sw.includes('?view=workout&restTimer=1'),
   },
   {
     name: "UI exibe contexto e CTA de proximo exercicio",

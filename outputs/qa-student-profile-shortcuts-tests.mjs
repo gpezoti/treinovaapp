@@ -29,8 +29,8 @@ assert.match(html, /root\.dataset\.dismissable !== "true"/, "only explicitly dis
 assert.match(html, /setAttribute\("data-dismissable", "true"\)/, "reaction picker should close when tapping outside");
 assert.doesNotMatch(html, /1777323170543\.jpg/, "app shell should not flash the old hardcoded Supabase branding image");
 assert.doesNotMatch(html, /supabase\.co\/storage\/v1\/object\/public\/branding\/logos/, "app shell should not depend on remote hardcoded branding fallback");
-assert.match(html, /id="brand-logo"[\s\S]*?\/assets\/icon-192\.png\?v=20260505/, "mobile header should start with the local Treinova logo while branding loads");
-assert.match(html, /id="desktop-brand-logo"[\s\S]*?\/assets\/icon-192\.png\?v=20260505/, "desktop header should start with the local Treinova logo while branding loads");
+assert.match(html, /id="brand-logo"[\s\S]*?assets\/icon-192\.png\?v=20260505/, "mobile header should start with the local Treinova logo while branding loads");
+assert.match(html, /id="desktop-brand-logo"[\s\S]*?assets\/icon-192\.png\?v=20260505/, "desktop header should start with the local Treinova logo while branding loads");
 assert.match(html, /data-fallback="\$\{fallback\}"/, "dynamic branding images should fall back to initials on load error");
 assert.match(html, /profile history timeout/, "student profile should not stay stuck forever while progress history loads");
 assert.match(html, /Seu histórico aparece aqui depois do primeiro treino concluído\./, "student profile progress card should have a useful empty state");

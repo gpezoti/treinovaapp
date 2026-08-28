@@ -13,7 +13,7 @@ const checks = [
   ["workout completion is queued offline", /const completedSession = \{[\s\S]*queueOfflineSessionSync\(completedSession\)/.test(html)],
   ["pending changes flush on reconnect", /flushOfflineWorkoutSync\("online"\)/.test(html)],
   ["service worker precaches only the offline app shell", /const OFFLINE_APP_SHELL = \[[\s\S]*?supabase\.min\.js/.test(sw) && /caches\.open\(SHELL\)/.test(sw)],
-  ["service worker does not cache Supabase API responses", /if \(url\.hostname\.includes\("supabase\.co"\)[\s\S]{0,220}return;/.test(sw) && !/fetch\(req\)\.catch\(\(\) => caches\.match\(req\)\)/.test(sw)]
+  ["service worker does not cache Supabase API responses", /const isSupabaseHost = url\.hostname\.includes\("supabase\.co"\)/.test(sw) && /const isPublicSupabaseStorageAsset = isSupabaseHost/.test(sw) && /if \(isSupabaseHost && !isPublicSupabaseStorageAsset\) \{[\s\S]{0,80}return;/.test(sw) && !/fetch\(req\)\.catch\(\(\) => caches\.match\(req\)\)/.test(sw)]
 ];
 
 for (const [label, ok] of checks) assert.equal(ok, true, label);

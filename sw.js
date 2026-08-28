@@ -6,15 +6,17 @@
 */
 // Alterar a versão a cada release que mexe no shell do app. Isso força a
 // atualização imediata do PWA instalado e elimina HTML antigo do cache.
-const VERSION = "v30-auth-recovery-20260825";
+const VERSION = "v32-material-preview-20260828";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
 const REST_TIMER_HANDLES = new Map();
+const APP_SCOPE = self.registration.scope;
+const APP_URL = (path) => new URL(path, APP_SCOPE).toString();
 const OFFLINE_APP_SHELL = [
-  "/",
-  "/index.html",
-  "/manifest.webmanifest",
-  "/analytics-config.js",
+  APP_URL("./"),
+  APP_URL("index.html"),
+  APP_URL("manifest.webmanifest"),
+  APP_URL("analytics-config.js"),
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
 ];
 
@@ -51,14 +53,20 @@ self.addEventListener("fetch", (event) => {
   // separa de forma confiavel usuarios por Authorization e poderia expor dados
   // de uma conta a outra no mesmo aparelho. O offline do aluno usa um bundle
   // local escopado pelo id da conta, gravado pelo app.
-  if (url.hostname.includes("supabase.co") || url.hostname.includes("supabase.in")) {
+  const isSupabaseHost = url.hostname.includes("supabase.co") || url.hostname.includes("supabase.in");
+  // Arquivos de bucket público não carregam Authorization e podem ser
+  // reutilizados offline. REST, Auth e Storage privado seguem fora do cache.
+  const isPublicSupabaseStorageAsset = isSupabaseHost
+    && /^\/storage\/v1\/(?:object|render\/image)\/public\//.test(url.pathname);
+  if (isSupabaseHost && !isPublicSupabaseStorageAsset) {
     return;
   }
 
   // HTML/Manifest do app: NETWORK-FIRST (evita versão antiga grudada)
   const path = url.pathname;
+  const scopePath = new URL(APP_SCOPE).pathname;
   const isShell = url.origin === self.location.origin && (
-    path === "/" || path.endsWith(".html") ||
+    path === scopePath || path === `${scopePath}index.html` || path.endsWith(".html") ||
     path.endsWith("/app/") || path.endsWith("/app") ||
     path.endsWith("manifest.webmanifest") ||
     path.endsWith("sw.js")
@@ -132,8 +140,8 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const notificationData = event.notification.data || {};
-  const rawUrl = notificationData.url || "/?view=workout&restTimer=1";
-  const url = new URL(rawUrl, self.location.origin).href;
+  const rawUrl = notificationData.url || "?view=workout&restTimer=1";
+  const url = new URL(rawUrl, APP_SCOPE).href;
   const timerId = notificationData.timerId || "";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
@@ -161,13 +169,13 @@ self.addEventListener("message", (e) => {
         if (hasVisibleApp) return;
         return self.registration.showNotification("Descanso finalizado", {
           body: `Próximo exercício: ${data.exerciseName || "Próxima série"}`,
-          icon: "/assets/icon-192.png",
-          badge: "/assets/favicon-32x32.png",
+          icon: APP_URL("assets/icon-192.png"),
+          badge: APP_URL("assets/favicon-32x32.png"),
           tag: `treinova-rest-timer-${id}`,
           renotify: true,
           vibrate: [160, 80, 160],
           silent: false,
-          data: { url: data.url || `/?view=workout&restTimer=1&timerId=${encodeURIComponent(id)}`, timerId: id },
+          data: { url: data.url || `?view=workout&restTimer=1&timerId=${encodeURIComponent(id)}`, timerId: id },
         });
       }).catch(()=>{});
     }, delay);
@@ -187,8 +195,8 @@ self.addEventListener("message", (e) => {
     const data = e.data.payload || {};
     e.waitUntil(self.registration.showNotification(data.title || "Treinova", {
       body: data.body || "",
-      icon: data.icon || "/assets/icon-192.png",
-      badge: data.badge || "/assets/favicon-32x32.png",
+      icon: data.icon || APP_URL("assets/icon-192.png"),
+      badge: data.badge || APP_URL("assets/favicon-32x32.png"),
       tag: data.tag || "treinova-local",
       renotify: data.renotify !== false,
       vibrate: data.vibrate || [80, 40, 80],
