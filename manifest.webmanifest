@@ -2,8 +2,8 @@
   "name": "Treinova",
   "short_name": "Treinova",
   "description": "Seu app, seu treino, sua marca.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "portrait",
@@ -13,19 +13,19 @@
   "categories": ["fitness", "health", "lifestyle"],
   "icons": [
     {
-      "src": "/assets/icon-192.png?v=20260505",
+      "src": "assets/icon-192.png?v=20260505",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/assets/icon-512.png?v=20260505",
+      "src": "assets/icon-512.png?v=20260505",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/assets/icon-512.png?v=20260505",
+      "src": "assets/icon-512.png?v=20260505",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -35,13 +35,13 @@
     {
       "name": "Treino de hoje",
       "short_name": "Hoje",
-      "url": "/?view=workout",
+      "url": "./?view=workout",
       "description": "Ir direto para o treino do dia"
     },
     {
       "name": "Feed",
       "short_name": "Feed",
-      "url": "/?view=feed",
+      "url": "./?view=feed",
       "description": "Ver atualizações da rede"
     }
   ]

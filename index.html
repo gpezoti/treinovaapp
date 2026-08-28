@@ -15,11 +15,11 @@
 <link rel="preconnect" href="https://mjftgknutxxgxhwlmsln.supabase.co" crossorigin />
 <link rel="dns-prefetch" href="https://mjftgknutxxgxhwlmsln.supabase.co" />
 <link rel="manifest" href="manifest.webmanifest" />
-<link rel="icon" id="favicon" href="/assets/favicon.ico?v=20260505" />
-<link rel="shortcut icon" href="/assets/favicon.ico?v=20260505" />
-<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png?v=20260505" />
-<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png?v=20260505" />
-<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=20260505" />
+<link rel="icon" id="favicon" href="assets/favicon.ico?v=20260505" />
+<link rel="shortcut icon" href="assets/favicon.ico?v=20260505" />
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png?v=20260505" />
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png?v=20260505" />
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20260505" />
 <style>
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 /* ---------- MATERIAL 3 FOUNDATION / DARK (default) ---------- */
@@ -1147,14 +1147,14 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 
 <!-- Analytics de produto: o projeto pode ser ativado via analytics-config.js.
      Nenhuma captura e iniciada antes do consentimento explicito do usuario. -->
-<script src="/analytics-config.js"></script>
+<script src="analytics-config.js"></script>
 </head>
 <body>
 
 <!-- ============ AUTH PAGE — Marca dinâmica (admin define) ============ -->
 <div id="auth-page" class="auth-page" style="display:none">
   <div class="auth-logo">
-    <div class="brand-logo" id="auth-logo" style="background: linear-gradient(135deg, var(--bg), var(--bg-3)); border-color: var(--brand); color: var(--brand);"><img src="/assets/icon-192.png?v=20260825-login" alt="Treinova" width="60" height="60" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>
+    <div class="brand-logo" id="auth-logo" style="background: linear-gradient(135deg, var(--bg), var(--bg-3)); border-color: var(--brand); color: var(--brand);"><img src="assets/icon-192.png?v=20260825-login" alt="Treinova" width="60" height="60" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>
     <h1 id="auth-title" style="background: linear-gradient(135deg, var(--brand), var(--brand-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">TREINOVA</h1>
     <p id="auth-tagline">Seu App, seu treino, sua marca</p>
   </div>
@@ -1256,7 +1256,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 <div id="app" style="display:none">
   <header class="app-header">
     <div class="brand">
-      <div class="brand-logo" id="brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="/assets/icon-192.png?v=20260505" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="Treinova" onerror="this.parentElement.textContent='TR';this.remove();"></div>
+      <div class="brand-logo" id="brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="assets/icon-192.png?v=20260505" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="Treinova" onerror="this.parentElement.textContent='TR';this.remove();"></div>
       <div class="brand-name">
         <span id="brand-name-text">TREINOVA</span>
         <small id="header-sub"></small>
@@ -1278,7 +1278,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 
   <aside class="desktop-sidebar" id="desktop-sidebar">
     <div class="brand">
-      <div class="brand-logo" id="desktop-brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="/assets/icon-192.png?v=20260505" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="Treinova" onerror="this.parentElement.textContent='TR';this.remove();"></div>
+      <div class="brand-logo" id="desktop-brand-logo" style="background:transparent;border:none;padding:0;overflow:hidden;border-radius:9px"><img src="assets/icon-192.png?v=20260505" style="width:100%;height:100%;object-fit:cover;border-radius:9px" alt="Treinova" onerror="this.parentElement.textContent='TR';this.remove();"></div>
       <div class="brand-name">
         <span id="desktop-brand-name-text">TREINOVA</span>
         <small id="desktop-header-sub"></small>
@@ -2505,7 +2505,7 @@ const MONTH_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho
    ============================================================================= */
 let sb = null;
 const ACTIVE_WORKOUT_SESSION_KEY = "treinova_active_workout_session_v1";
-const AUTH_FALLBACK_LOGO_URL = "/assets/icon-192.png?v=20260825-login";
+const AUTH_FALLBACK_LOGO_URL = "assets/icon-192.png?v=20260825-login";
 // Auth can remain available while the database is recovering, but its response
 // time may temporarily exceed the usual request budget. Do not abort a valid
 // login before the provider has had a reasonable chance to finish it.
@@ -3916,9 +3916,9 @@ function brandLogoHTML() {
 function updateFavicon() {
   const fav = document.getElementById('favicon');
   if (!fav) return;
-  fav.href = "/assets/favicon.ico?v=20260505";
+  fav.href = "assets/favicon.ico?v=20260505";
   document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(el => {
-    el.href = "/assets/apple-touch-icon.png?v=20260505";
+    el.href = "assets/apple-touch-icon.png?v=20260505";
   });
 }
 
@@ -7351,8 +7351,8 @@ async function notifyRestFinished(exerciseName, context = {}) {
     renotify: true,
     silent: false,
     vibrate: [160, 80, 160],
-    icon: "/assets/icon-192.png",
-    badge: "/assets/favicon-32x32.png",
+    icon: "assets/icon-192.png",
+    badge: "assets/favicon-32x32.png",
     data: { url: buildRestTimerWorkoutUrl(context), timerId }
   };
   try {
@@ -18671,7 +18671,7 @@ async function registerServiceWorker() {
     // Sem scope explícito: defaults para o diretório de sw.js, compatível com qualquer hosting
     // A query de release garante que um PWA já instalado busque o worker novo
     // mesmo quando o navegador ainda associa a URL anterior ao cache antigo.
-    const reg = await navigator.serviceWorker.register("/sw.js?release=20260825-offline-workout-assets");
+    const reg = await navigator.serviceWorker.register("sw.js?release=20260828-material-preview");
     // PWA instalado no iOS/Android pode ficar aberto por dias. Força a consulta
     // de uma nova versão em toda abertura, sem depender da janela de 24h do navegador.
     await reg.update().catch(() => {});
@@ -19147,7 +19147,7 @@ function showOnboarding() {
       @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
     </style>
     <div class="onb-step active" data-step="1">
-      <div class="logo-circle"><img src="${escape(branding.logo_url || '/assets/icon-192.png?v=20260505')}" alt="logo" onerror="this.src='/assets/icon-192.png?v=20260505'"></div>
+      <div class="logo-circle"><img src="${escape(branding.logo_url || 'assets/icon-192.png?v=20260505')}" alt="logo" onerror="this.src='assets/icon-192.png?v=20260505'"></div>
       <h1>Bem-vindo${profile.gender === 'F' ? 'a' : ''}, ${(profile.full_name||'').split(' ')[0] || 'aluno'}</h1>
       <p>Você está no app de treino do <b>${escapeHtml(coachName)}</b>. Em 1 minuto você vai aprender o essencial.</p>
       <div class="onb-cta">
@@ -21470,9 +21470,9 @@ async function generateWorkoutCard(wname, totalVolume, duration, setsDone, meta 
     const logoUrl = STATE.branding?.logo_url || null;
     const logoImg = await loadCardImage(logoUrl);
     const studentAvatarImg = await loadCardImage(meta.studentAvatarUrl || STATE.profile?.avatar_url);
-    const treinovaIconUrl = (window.location.origin || "") + "/assets/apple-touch-icon.png";
+    const treinovaIconUrl = new URL("assets/apple-touch-icon.png", window.location.href).href;
     let treinovaLogoImg = await loadCardImage(treinovaIconUrl);
-    if (!treinovaLogoImg) treinovaLogoImg = await loadCardImage((window.location.origin || "") + "/assets/icon-192.png", 3000);
+    if (!treinovaLogoImg) treinovaLogoImg = await loadCardImage(new URL("assets/icon-192.png", window.location.href).href, 3000);
 
     // ---------- utils ----------
     const hexToRgb = (hex) => {

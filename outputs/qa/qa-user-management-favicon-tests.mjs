@@ -23,10 +23,10 @@ assert.match(html, /removeUsersFromLocalLists\(ids\);\s*renderTrainers\(\);/);
 assert.match(html, /removeUsersFromLocalLists\(id\);\s*if \(STATE\.view === "trainers"\) renderTrainers\(\);/);
 
 [
-  "/assets/favicon.ico?v=20260505",
-  "/assets/apple-touch-icon.png?v=20260505",
-  "/assets/favicon-32x32.png?v=20260505",
-  "/assets/favicon-16x16.png?v=20260505"
+  "assets/favicon.ico?v=20260505",
+  "assets/apple-touch-icon.png?v=20260505",
+  "assets/favicon-32x32.png?v=20260505",
+  "assets/favicon-16x16.png?v=20260505"
 ].forEach((assetPath) => {
   assert.ok(html.includes(assetPath), `Missing favicon path ${assetPath}`);
 });
@@ -42,8 +42,8 @@ assert.match(html, /removeUsersFromLocalLists\(id\);\s*if \(STATE\.view === "tra
   assert.ok(fs.existsSync(path.join(root, assetPath)), `Missing asset ${assetPath}`);
 });
 
-assert.equal(manifest.start_url, "/");
-assert.equal(manifest.scope, "/");
-assert.ok(manifest.icons.every((icon) => icon.src.startsWith("/assets/")));
+assert.equal(manifest.start_url, "./");
+assert.equal(manifest.scope, "./");
+assert.ok(manifest.icons.every((icon) => icon.src.startsWith("assets/")));
 
 console.log("QA user management + favicon checks passed.");
