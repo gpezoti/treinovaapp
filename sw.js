@@ -6,7 +6,7 @@
 */
 // Alterar a versão a cada release que mexe no shell do app. Isso força a
 // atualização imediata do PWA instalado e elimina HTML antigo do cache.
-const VERSION = "v30-auth-recovery-20260825";
+const VERSION = "v31-offline-workout-assets-20260825";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
 const REST_TIMER_HANDLES = new Map();
@@ -51,7 +51,12 @@ self.addEventListener("fetch", (event) => {
   // separa de forma confiavel usuarios por Authorization e poderia expor dados
   // de uma conta a outra no mesmo aparelho. O offline do aluno usa um bundle
   // local escopado pelo id da conta, gravado pelo app.
-  if (url.hostname.includes("supabase.co") || url.hostname.includes("supabase.in")) {
+  const isSupabaseHost = url.hostname.includes("supabase.co") || url.hostname.includes("supabase.in");
+  // Arquivos de bucket público não carregam Authorization e podem ser
+  // reutilizados offline. REST, Auth e Storage privado seguem fora do cache.
+  const isPublicSupabaseStorageAsset = isSupabaseHost
+    && /^\/storage\/v1\/(?:object|render\/image)\/public\//.test(url.pathname);
+  if (isSupabaseHost && !isPublicSupabaseStorageAsset) {
     return;
   }
 
