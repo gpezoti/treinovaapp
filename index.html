@@ -17320,40 +17320,74 @@ function reorderEditingExercise(exId, code, workoutId, targetFn) {
     STATE.workouts[code].exercises = list.slice();
   }
   rerenderWorkoutEditorList(code, workoutId);
-  persistEditingExerciseOrder(wId, list, code, workoutId);
+  if (!STATE._workoutEditorOrderRevision) STATE._workoutEditorOrderRevision = {};
+  const revision = (STATE._workoutEditorOrderRevision[wId] || 0) + 1;
+  STATE._workoutEditorOrderRevision[wId] = revision;
+  return persistEditingExerciseOrder(wId, list, code, workoutId, revision);
 }
 function rerenderWorkoutEditorList(code, workoutId) {
   const W = STATE._editingWorkout;
   const cont = document.getElementById("we-ex-list");
   if (W && cont) cont.innerHTML = renderWorkoutEditorExerciseListHTML(W, code, workoutId);
 }
-function persistEditingExerciseOrder(wId, exercises, code, workoutId) {
+function cacheLoadedWorkoutForEditor(workout, code) {
+  if (!workout?.id) return;
+  STATE.workoutsById = STATE.workoutsById || {};
+  STATE.workoutsById[workout.id] = workout;
+  if (code && STATE.workouts?.[code]?.id === workout.id) {
+    STATE.workouts[code] = workout;
+  }
+}
+
+async function refreshWorkoutEditorAfterOrderFailure(wId, code, workoutId, revision) {
+  try {
+    const latest = await loadWorkoutForEditor(code, workoutId || wId);
+    if (!latest || latest.id !== wId) throw new Error("workout refresh mismatch");
+    if ((STATE._workoutEditorOrderRevision?.[wId] || 0) !== revision) return;
+    STATE._editingWorkout = latest;
+    cacheLoadedWorkoutForEditor(latest, code);
+    rerenderWorkoutEditorList(code, workoutId || wId);
+    showToast("A ordem não foi salva. Recarregamos a última versão do treino.", "error");
+  } catch (refreshError) {
+    console.warn("[refreshWorkoutEditorAfterOrderFailure]", refreshError);
+    reportOperationalEvent("critical_load_failed", "failure", {
+      load: "workout editor refresh",
+      error_kind: operationalErrorKind(refreshError)
+    });
+    showToast("Não foi possível confirmar a ordem agora. O editor continua aberto; tente novamente.", "error");
+  }
+}
+
+function persistEditingExerciseOrder(wId, exercises, code, workoutId, revision) {
   if (!wId) return Promise.resolve();
   const snapshot = (exercises || []).map((e, i) => ({ id: e.id, position: i }));
   return waitForWorkoutMutation(wId, async () => {
     if (!snapshot.length) return;
+    const startedAt = Date.now();
     try {
-      // Renumeração em DUAS FASES: o banco tem um índice UNIQUE(workout_id, position),
-      // então gravar as posições finais direto colide (duas linhas com a mesma position
-      // por um instante). Primeiro movemos todos para um range temporário que não
-      // sobrepõe as posições reais, depois gravamos a ordem final. (Mesmo padrão que a
-      // periodização usa com datas temporárias.)
-      const TEMP = 1000000;
-      const r1 = await Promise.all(
-        snapshot.map((s, i) => sb.from("exercises").update({ position: TEMP + i }).eq("id", s.id))
+      // A troca de posições é atômica no banco. A estratégia antiga fazia duas
+      // rodadas HTTP e podia deixar o treino preso em posições temporárias quando
+      // a conexão oscilava entre elas.
+      const { error } = await withTimeout(
+        sb.rpc("reorder_workout_exercises", {
+          p_workout_id: wId,
+          p_exercise_ids: snapshot.map(s => s.id)
+        }),
+        12000,
+        "workout order timeout"
       );
-      const f1 = r1.find(r => r && r.error);
-      if (f1) throw f1.error;
-      const r2 = await Promise.all(
-        snapshot.map(s => sb.from("exercises").update({ position: s.position }).eq("id", s.id))
-      );
-      const f2 = r2.find(r => r && r.error);
-      if (f2) throw f2.error;
+      if (error) throw error;
     } catch (e) {
       console.warn("[persistEditingExerciseOrder]", e);
-      showToast("Não consegui salvar a ordem. O treino será atualizado.", "error");
-      await loadWorkouts();
-      await openWorkoutEditor(code, workoutId || "");
+      reportOperationalEvent("critical_load_failed", "failure", {
+        load: "workout editor order",
+        error_kind: operationalErrorKind(e),
+        duration_ms: Date.now() - startedAt
+      });
+      // Um clique mais recente já representa a ordem desejada. Ele permanece na
+      // fila e não deve ser sobrescrito por uma recarga de um estado anterior.
+      if ((STATE._workoutEditorOrderRevision?.[wId] || 0) !== revision) return;
+      await refreshWorkoutEditorAfterOrderFailure(wId, code, workoutId, revision);
     }
   });
 }
