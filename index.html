@@ -7002,7 +7002,10 @@ async function handleAppResume(reason = "resume") {
         const date = STATE.selectedDate || todayISO();
         const code = STATE.selectedWorkout;
         if (code && !sessionMatchesWorkoutTarget(STATE.currentSession, date, code, STATE.selectedWorkoutId)) {
-          await withTimeout(loadOrCreateSession(date, code, STATE.selectedIntensity, STATE.selectedWorkoutId), 10000, "resume workout session timeout");
+          // Retomar ou voltar ao foco nunca e uma acao de inicio. Ao consultar
+          // um treino pela Agenda, o app so pode recuperar uma sessao que ja
+          // existe para aquele modelo; criar uma nova depende do CTA explicito.
+          await withTimeout(loadExistingSession(date, code, STATE.selectedWorkoutId), 10000, "resume workout session lookup timeout");
         }
         if (code && (!STATE.workouts || !STATE.workouts[code])) {
           await withTimeout(loadWorkouts(), 10000, "resume workouts timeout");
@@ -9700,7 +9703,7 @@ window.openAgendaDay = function(iso) {
     const dayLabel = dt.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
     openSheet(`
     <h3>${escape(dayLabel)}</h3>
-    <p>${blocks.length} atividades programadas para este dia. Escolha qualquer treino para abrir e executar, mesmo fora do dia atual.</p>
+    <p>${blocks.length} atividades programadas para este dia. Consulte qualquer treino ou inicie quando estiver pronto, mesmo fora do dia atual.</p>
     <div style="display:grid;gap:10px;margin-top:12px">
       ${blocks.map((block, idx) => {
         const display = getAgendaBlockDisplay(block, info);
@@ -9712,7 +9715,7 @@ window.openAgendaDay = function(iso) {
           ? "Abrir cardio"
           : (session?.status === "in_progress"
             ? "Continuar"
-            : (session?.status === "completed" ? "Ver treino" : "Executar agora"));
+            : "Ver treino");
         return `
           <button type="button" class="btn-ghost" data-agenda-block-date="${escape(iso)}" data-agenda-block-index="${idx}" style="text-align:left;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
             <span style="min-width:0">
@@ -11560,10 +11563,9 @@ async function renderWorkout() {
     el.innerHTML = `<div class="loading"><div class="spinner"></div>Carregando treino...</div>`;
     await loadSetLogs();
   }
-  if (shouldResumeRestWorkout && !STATE.currentSession) {
-    el.innerHTML = `<div class="loading"><div class="spinner"></div>Retomando treino...</div>`;
-    await loadOrCreateSession(date, code, restResume.intensity || intensity, restResume.workoutId || STATE.selectedWorkoutId);
-  }
+  // Uma notificacao de descanso so pode retomar uma sessao persistida. Se ela
+  // nao estiver mais disponivel, mostramos o treino para consulta e deixamos o
+  // inicio sob controle do aluno, pelo botao "Iniciar treino".
   if (shouldResumeRestWorkout && Number.isFinite(Number(restResume.focusExercisePosition))) {
     STATE.expandedEx = Number(restResume.focusExercisePosition);
   }

@@ -45,8 +45,17 @@ assert(
 
 assert(
   html.includes("sessionMatchesWorkoutTarget(STATE.currentSession, date, code, STATE.selectedWorkoutId)") &&
-    html.includes("loadOrCreateSession(date, code, STATE.selectedIntensity, STATE.selectedWorkoutId)"),
-  "retomada de treino valida date/code/workout_id e repassa workout_id"
+    html.includes("loadExistingSession(date, code, STATE.selectedWorkoutId)"),
+  "retomada de treino valida date/code/workout_id sem criar sessao automaticamente"
+);
+
+const appResumeStart = html.indexOf("async function handleAppResume");
+const appResumeEnd = html.indexOf("function bindAppResumeHandlers", appResumeStart);
+const appResumeSource = html.slice(appResumeStart, appResumeEnd);
+assert(
+  appResumeSource.includes("loadExistingSession(date, code, STATE.selectedWorkoutId)") &&
+    !appResumeSource.includes("loadOrCreateSession("),
+  "retomar o app na tela de treino nunca inicia uma nova sessao"
 );
 
 const agendaBlockStart = html.indexOf("function openAgendaBlockDirect");
@@ -80,14 +89,15 @@ const workoutRenderSource = html.slice(workoutRenderStart, workoutRenderEnd);
 assert(
   html.includes("async function loadWorkoutForAgendaTarget(workoutCode, workoutId = null)") &&
     workoutRenderSource.includes("W = await loadWorkoutForAgendaTarget(code, STATE.selectedWorkoutId);") &&
-    workoutRenderSource.includes("Abrindo treino programado..."),
-  "treino agendado ausente do cache é carregado sob demanda antes de exibir erro"
+    workoutRenderSource.includes("Abrindo treino programado...") &&
+    !workoutRenderSource.includes("loadOrCreateSession(date, code, restResume.intensity || intensity"),
+  "consulta da Agenda e notificacao de descanso nao iniciam sessao automaticamente"
 );
 
 assert(
-  html.includes("Escolha qualquer treino para abrir e executar, mesmo fora do dia atual.") &&
-    html.includes('"Executar agora"'),
-  "agenda deixa explícito que o aluno pode executar qualquer treino planejado"
+  html.includes("Consulte qualquer treino ou inicie quando estiver pronto, mesmo fora do dia atual.") &&
+    html.includes('"Ver treino"'),
+  "agenda deixa explícita a separação entre consultar e iniciar um treino"
 );
 
 assert(

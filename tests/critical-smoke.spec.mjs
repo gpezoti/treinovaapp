@@ -5,7 +5,9 @@ test("abre o login sem tela travada", async ({ page }) => {
   await expect(page.locator("#auth-page")).toBeVisible();
   await expect(page.locator("#auth-submit")).toBeVisible();
   await expect(page.locator("#auth-email")).toBeVisible();
-  await expect(page.locator("#auth-logo img")).toHaveAttribute("src", /icon-192\.png/);
+  const logo = page.locator("#auth-logo img");
+  await expect(logo).toBeVisible();
+  await expect(logo).toHaveAttribute("src", /^(?:assets\/icon-192\.png|https:\/\/[^/]+\/storage\/v1\/object\/public\/branding\/)/);
 });
 
 test("abre cadastro público de treinador", async ({ page }) => {
