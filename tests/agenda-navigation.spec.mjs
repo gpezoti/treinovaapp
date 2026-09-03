@@ -112,3 +112,85 @@ test("Agenda permite escolher qualquer atividade quando o dia tem mais de um tre
   await expect.poll(() => page.evaluate(() => eval("STATE.selectedDate"))).toBe("2026-06-09");
   await expect.poll(() => page.evaluate(() => eval("STATE.selectedWorkout"))).toBe("B");
 });
+
+test("consultar treino da Agenda ou retomar o app nao cria sessao automaticamente", async ({ page }) => {
+  await page.goto("/");
+  const result = await page.evaluate(async () => {
+    localStorage.clear();
+    const state = eval("STATE");
+    const workout = {
+      id: "workout-consult",
+      code: "B",
+      name: "Treino para consulta",
+      exercises: [{ id: "exercise-consult", name: "Remada", position: 1, muscle_group: "Costas" }]
+    };
+    state.user = { id: "student-consult" };
+    state.profile = { id: "student-consult", role: "student", status: "active" };
+    state.platformAccess = { locked: false };
+    state.myPaymentBlocked = false;
+    state.workouts = { B: workout };
+    state.workoutsById = { "workout-consult": workout };
+    state.periodization = [{
+      id: "day-consult",
+      date: "2026-06-11",
+      intensity: "yellow",
+      preset_code: "hipertrofia",
+      workout_code: "B",
+      workout_id: "workout-consult",
+      blocks: [{ position: 0, preset_code: "hipertrofia", workout_code: "B", workout_id: "workout-consult" }]
+    }];
+    state.dayBlocks = { "2026-06-11": state.periodization[0].blocks };
+    state.todaySessions = [];
+    state.currentSession = null;
+    state.setLogs = [];
+    state._offlineWorkoutSync = { pending_session: null, set_log_ops: [], last_error: null };
+    state.view = "calendar";
+    state.agendaWorkoutTarget = null;
+
+    let sessionWrites = 0;
+    const sessionQuery = {
+      select() { return this; },
+      eq() { return this; },
+      is() { return this; },
+      limit() { return Promise.resolve({ data: [], error: null }); },
+      order() { return this; }
+    };
+    eval(`sb = {
+      auth: { getSession() { return Promise.resolve({ data: { session: { user: { id: "student-consult" } } } }); } },
+      from(table) {
+        if (table !== "sessions") throw new Error("Tabela inesperada: " + table);
+        return {
+          ...sessionQuery,
+          insert() { sessionWrites += 1; return Promise.resolve({ error: null }); },
+          upsert() { sessionWrites += 1; return Promise.resolve({ error: null }); },
+          update() { sessionWrites += 1; return sessionQuery; }
+        };
+      }
+    }`);
+
+    eval("openAgendaBlock")("2026-06-11", 0);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const consultedWithoutSession = !state.currentSession;
+    await eval("handleAppResume")("playwright-agenda-consult");
+    state._resumeWorkoutFromRestTimer = {
+      sessionId: null,
+      date: "2026-06-11",
+      workoutCode: "B",
+      workoutId: "workout-consult",
+      intensity: "yellow",
+      focusExercisePosition: null
+    };
+    await eval("renderWorkout")();
+    return {
+      consultedWithoutSession,
+      sessionAfterResume: state.currentSession,
+      sessionWrites,
+      hasStartCta: document.getElementById("view-workout")?.textContent?.includes("Iniciar treino") || false
+    };
+  });
+
+  expect(result.consultedWithoutSession).toBe(true);
+  expect(result.sessionAfterResume).toBeNull();
+  expect(result.sessionWrites).toBe(0);
+  expect(result.hasStartCta).toBe(true);
+});
