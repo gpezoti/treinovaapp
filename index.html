@@ -9818,6 +9818,34 @@ function coachChecklistStudentIds() {
     .sort();
 }
 
+function coachOnboardingChecklistStorageKey(coachId = STATE.profile?.id) {
+  const id = String(coachId || "").trim();
+  return id ? `treinova_coach_setup_checklist_dismissed_v1_${id}` : "";
+}
+
+function isCoachOnboardingChecklistDismissed() {
+  if (STATE.profile?.role !== "coach") return false;
+  const key = coachOnboardingChecklistStorageKey();
+  if (!key) return false;
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch (e) {
+    return false;
+  }
+}
+
+function setCoachOnboardingChecklistDismissed(dismissed) {
+  const key = coachOnboardingChecklistStorageKey();
+  if (!key) return false;
+  try {
+    if (dismissed) localStorage.setItem(key, "1");
+    else localStorage.removeItem(key);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function refreshCoachPeriodizationChecklist() {
   if (STATE.profile?.role !== "coach" || !sb) return;
   const studentIds = coachChecklistStudentIds();
@@ -9861,7 +9889,7 @@ async function refreshCoachPeriodizationChecklist() {
 }
 
 function renderCoachOnboardingChecklist() {
-  if (!STATE.profile || STATE.profile.role !== "coach") return "";
+  if (!STATE.profile || STATE.profile.role !== "coach" || isCoachOnboardingChecklistDismissed()) return "";
   void refreshCoachPeriodizationChecklist();
   const myId = STATE.profile.id;
   const branding = STATE.branding || {};
@@ -9906,12 +9934,17 @@ function renderCoachOnboardingChecklist() {
   }
   return `
   <div class="card mb-12" style="border-color:rgba(0,180,255,.30);background:linear-gradient(135deg,var(--brand-soft),var(--bg-card))">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">
       <div>
         <div class="fw-700 text-sm" style="color:var(--brand)">Configure seu app</div>
         <div class="text-xs muted" style="margin-top:2px">${done} de ${total} passos concluídos</div>
       </div>
-      <div style="font-size:18px;font-weight:900;color:var(--brand)">${pct}%</div>
+      <div style="display:flex;align-items:center;gap:4px;flex:0 0 auto">
+        <div style="font-size:18px;font-weight:900;color:var(--brand)">${pct}%</div>
+        <button type="button" class="icon-btn" data-testid="dismiss-coach-onboarding-checklist" title="Ocultar checklist" aria-label="Ocultar checklist de configuração" onclick="dismissCoachOnboardingChecklist()" style="width:44px;height:44px;min-width:44px;min-height:44px;border-radius:12px;background:transparent">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
     </div>
     <div style="height:6px;border-radius:999px;background:var(--bg-3);overflow:hidden;margin-bottom:12px">
       <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--brand),var(--brand-2));border-radius:999px;transition:width .3s ease"></div>
@@ -9929,6 +9962,23 @@ function renderCoachOnboardingChecklist() {
     </div>
   </div>`;
 }
+window.dismissCoachOnboardingChecklist = function() {
+  if (!setCoachOnboardingChecklistDismissed(true)) {
+    showToast("Não foi possível salvar essa preferência neste dispositivo.", "error");
+    return;
+  }
+  if (STATE.view === "home") renderHome();
+  showToast("Checklist ocultado. Você pode reexibi-lo no Perfil.", "success");
+};
+window.restoreCoachOnboardingChecklist = function() {
+  if (!setCoachOnboardingChecklistDismissed(false)) {
+    showToast("Não foi possível atualizar essa preferência neste dispositivo.", "error");
+    return;
+  }
+  document.getElementById("coach-checklist-restore")?.remove();
+  if (STATE.view === "home") renderHome();
+  showToast("Checklist exibido novamente na tela inicial.", "success");
+};
 window.trackCoachSharedLink = function() {
   try {
     const myId = STATE.profile?.id || "global";
@@ -12601,6 +12651,11 @@ async function renderProfile() {
       <div class="section-title">Configurações</div>
       <div class="card mb-8">
         <button class="btn-ghost" style="width:100%" onclick="openPresetEditor()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Editar tipos de treino (reps, pausa)</button>
+        ${isCoach && isCoachOnboardingChecklistDismissed() ? `
+          <div id="coach-checklist-restore" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">
+            <button class="btn-ghost" style="width:100%" onclick="restoreCoachOnboardingChecklist()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0 2 5.5"/><path d="M20 4v7h-7"/></svg> Mostrar checklist na tela inicial</button>
+          </div>
+        ` : ""}
       </div>
       ${isAdmin ? `
         <div class="section-title">Vínculo como aluno</div>

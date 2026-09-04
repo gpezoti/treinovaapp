@@ -9,6 +9,14 @@ assert.match(html, /typeof s\.has_periodization === "boolean"/);
 assert.match(html, /\.from\("periodization_days"\)\s*\.select\("student_id"\)/);
 assert.match(html, /openCoachFirstStudentPeriodization\(\)/);
 assert.doesNotMatch(html, /const hasPeriod = \(STATE\.students \|\| \[\]\)\.some\(s => Number\(s\.sessions_done \|\| 0\) > 0 \|\| s\.last_session_at\)/);
+assert.match(html, /function coachOnboardingChecklistStorageKey\(coachId = STATE\.profile\?\.id\)/);
+assert.match(html, /treinova_coach_setup_checklist_dismissed_v1_\$\{id\}/);
+assert.match(html, /function isCoachOnboardingChecklistDismissed\(\)/);
+assert.match(html, /STATE\.profile\.role !== "coach" \|\| isCoachOnboardingChecklistDismissed\(\)\) return ""/);
+assert.match(html, /data-testid="dismiss-coach-onboarding-checklist"/);
+assert.match(html, /aria-label="Ocultar checklist de configuração"/);
+assert.match(html, /window\.restoreCoachOnboardingChecklist = function\(\)/);
+assert.match(html, /Mostrar checklist na tela inicial/);
 
 assert.match(html, /const parentNav = HOME_SUBVIEWS\.includes\(view\) \|\| view === "calendar" \? "home" : view/);
 assert.match(html, /STATE\._focusCurrentCalendarWeek = true/);
