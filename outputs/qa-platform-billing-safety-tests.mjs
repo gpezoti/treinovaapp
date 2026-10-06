@@ -36,7 +36,11 @@ assert.ok(webhook.includes("O acesso so e liberado pelos eventos de pagamento co
   "webhook: subscription creation must not grant access");
 assert.ok(webhook.includes('const wasAlreadyActive = row.status === "active";'),
   "webhook: existing active subscription must be preserved when events arrive out of order");
-assert.ok(webhook.includes('update.status = wasAlreadyActive ? "active" : "checkout_pending";'),
-  "webhook: pending checkout must stay pending until payment confirmation");
+// Fase 1 (2026-10-06): quem ainda está no trial continua "trialing"; os demais ficam
+// "checkout_pending". Em nenhum caso a criação da assinatura vira "active".
+assert.ok(webhook.includes('update.status = wasAlreadyActive ? "active" : trialValid ? "trialing" : "checkout_pending";'),
+  "webhook: pending checkout must stay pending (or trialing) until payment confirmation");
+assert.ok(webhook.includes('if (keep === "expired") profileUpdate.subscription_locked_at'),
+  "webhook: abandoned checkout must not lock a coach that is still in trial");
 
 console.log("qa-platform-billing-safety-tests: OK");

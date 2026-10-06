@@ -68,7 +68,7 @@ const checks = [
     pass: html.includes("prepareWorkoutDeepLinkFromRestTimer") &&
       html.includes("hydrateTimerFromPersisted(saved)") &&
       html.includes('if (view === "workout") prepareWorkoutDeepLinkFromRestTimer()') &&
-      sw.includes('new URL(rawUrl, APP_SCOPE).href') &&
+      sw.includes('new URL(rawUrl, APP_SCOPE)') && sw.includes('parsed.origin === self.location.origin') &&
       sw.includes('?view=workout&restTimer=1'),
   },
   {

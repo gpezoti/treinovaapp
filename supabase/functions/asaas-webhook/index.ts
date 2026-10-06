@@ -109,8 +109,10 @@ async function updatePlatformSubscription(params: {
   } else if (event === "SUBSCRIPTION_CREATED" || event === "SUBSCRIPTION_UPDATED") {
     // Criar/atualizar uma assinatura no Asaas nao prova que a primeira cobrança
     // foi paga. O acesso so e liberado pelos eventos de pagamento confirmados.
+    // Quem ainda esta no trial continua "trialing" ate o pagamento confirmar.
     const wasAlreadyActive = row.status === "active";
-    update.status = wasAlreadyActive ? "active" : "checkout_pending";
+    const trialValid = row.trial_ends_at && new Date(row.trial_ends_at).getTime() > Date.now();
+    update.status = wasAlreadyActive ? "active" : trialValid ? "trialing" : "checkout_pending";
     update.current_period_ends_at = subscription?.nextDueDate ? addDaysIso(subscription.nextDueDate, 0) : row.current_period_ends_at;
     profileUpdate.subscription_status = update.status;
     profileUpdate.subscription_current_period_ends_at = update.current_period_ends_at || null;
@@ -120,17 +122,25 @@ async function updatePlatformSubscription(params: {
     profileUpdate.subscription_status = "past_due";
     profileUpdate.subscription_locked_at = profileUpdate.subscription_locked_at || new Date().toISOString();
   } else if (event === "CHECKOUT_CANCELED" || event === "CHECKOUT_EXPIRED") {
-    update.status = row.status === "active" ? row.status : "expired";
-    profileUpdate.subscription_status = row.status === "active" ? "active" : "expired";
-    if (row.status !== "active") profileUpdate.subscription_locked_at = new Date().toISOString();
-  } else if (event === "SUBSCRIPTION_INACTIVATED" || event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_DELETED" || event === "PAYMENT_REFUNDED") {
+    // Checkout abandonado não pode tirar o acesso de quem ainda está no trial
+    // nem de quem já é assinante.
+    const trialValid = row.trial_ends_at && new Date(row.trial_ends_at).getTime() > Date.now();
+    const keep = ["active", "legacy"].includes(row.status) ? row.status : trialValid ? "trialing" : "expired";
+    update.status = keep;
+    profileUpdate.subscription_status = keep;
+    if (keep === "expired") profileUpdate.subscription_locked_at = new Date().toISOString();
+  } else if (event === "SUBSCRIPTION_INACTIVATED" || event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_REFUNDED") {
+    // O gate mantém o acesso até current_period_ends_at.
     update.status = "canceled";
     profileUpdate.subscription_status = "canceled";
     profileUpdate.subscription_locked_at = new Date().toISOString();
   }
+  // PAYMENT_DELETED (cobrança pendente removida no Asaas) apenas registra o evento.
 
-  await sb.from("coach_subscriptions").update(update).eq("id", row.id);
-  await sb.from("profiles").update(profileUpdate).eq("id", row.coach_id);
+  const { error: subErr } = await sb.from("coach_subscriptions").update(update).eq("id", row.id);
+  if (subErr) throw new Error(`coach_subscriptions update: ${subErr.message}`);
+  const { error: profErr } = await sb.from("profiles").update(profileUpdate).eq("id", row.coach_id);
+  if (profErr) throw new Error(`profiles update: ${profErr.message}`);
   return true;
 }
 
@@ -205,11 +215,13 @@ serve(async (req) => {
       update.status = "cancelled";
     }
 
-    await sb.from("payments").update(update).eq("id", our.id);
+    const { error: payErr } = await sb.from("payments").update(update).eq("id", our.id);
+    // Erro de banco → 500 para o Asaas reenviar o evento depois.
+    if (payErr) throw new Error(`payments update: ${payErr.message}`);
 
     return new Response("ok", { status: 200 });
   } catch (e) {
     console.error(e);
-    return new Response("err: " + e.message, { status: 500 });
+    return new Response("err: " + (e?.message || String(e)), { status: 500 });
   }
 });

@@ -92,8 +92,12 @@ function asaasErrorResponse(e: any) {
   }, e?.status && e.status >= 400 && e.status < 500 ? e.status : 500);
 }
 
+// Checkout aberto pelo app nas ultimas 24h (status "checkout_pending", ou "trialing"
+// quando o treinador ainda esta no teste) pode ser reaproveitado.
 function hasReusableCheckout(subscription: any) {
-  if (subscription?.status !== "checkout_pending" || !subscription?.asaas_checkout_url) return false;
+  if (!subscription?.asaas_checkout_url) return false;
+  if (!["checkout_pending", "trialing"].includes(subscription?.status)) return false;
+  if (subscription?.last_webhook_event !== "CHECKOUT_CREATED_LOCAL" && subscription?.status !== "checkout_pending") return false;
   const openedAt = new Date(subscription.last_webhook_at || subscription.updated_at || subscription.created_at || 0).getTime();
   return Number.isFinite(openedAt) && openedAt > 0 && (Date.now() - openedAt) < CHECKOUT_TTL_MS;
 }
@@ -157,8 +161,30 @@ serve(async (req) => {
       .eq("coach_id", profile.id)
       .maybeSingle();
 
+    if (sub?.status === "blocked" || profile.subscription_status === "blocked") {
+      return json({ error: "Conta bloqueada pela administração. Fale com o suporte." }, 403);
+    }
+
     if (sub?.status === "active" && sub.current_period_ends_at && new Date(sub.current_period_ends_at).getTime() > Date.now()) {
       return json({ ok: true, already_active: true, current_period_ends_at: sub.current_period_ends_at });
+    }
+
+    // Já existe assinatura no Asaas com cobrança em aberto (cartão recusado etc.):
+    // devolve a fatura pendente em vez de criar uma 2ª assinatura (cobrança dupla).
+    const existingSubscriptionId = sub?.asaas_subscription_id || profile.asaas_subscription_id;
+    if (existingSubscriptionId && ["active", "past_due", "checkout_pending"].includes(sub?.status || "")) {
+      try {
+        const list = await asaasFetch(`/subscriptions/${encodeURIComponent(existingSubscriptionId)}/payments?limit=20`);
+        const open = (list?.data || [])
+          .filter((p: any) => ["OVERDUE", "PENDING"].includes(p?.status) && p?.invoiceUrl)
+          .sort((a: any, b: any) => String(a.dueDate).localeCompare(String(b.dueDate)));
+        if (open.length) {
+          return json({ ok: true, reused_invoice: true, checkout_url: open[0].invoiceUrl, amount: open[0].value, status: sub?.status });
+        }
+      } catch (e) {
+        // Assinatura removida/inválida no Asaas: segue para um checkout novo.
+        console.warn("[platform-create-checkout] subscription lookup failed", e);
+      }
     }
 
     // O link do checkout e valido por 24 horas. Reutiliza-lo evita criar duas
@@ -170,9 +196,15 @@ serve(async (req) => {
         checkout_id: sub.asaas_checkout_id,
         checkout_url: sub.asaas_checkout_url,
         amount: PLAN_AMOUNT,
-        status: "checkout_pending",
+        status: sub.status,
       });
     }
+
+    const trialEndsAt = sub?.trial_ends_at || profile.trial_ends_at || null;
+    const trialStillValid = Boolean(trialEndsAt && new Date(trialEndsAt).getTime() > Date.now());
+    // Checkout aberto durante o trial não muda o status: o treinador continua no teste
+    // até o webhook confirmar o pagamento.
+    const pendingStatus = trialStillValid ? "trialing" : "checkout_pending";
 
     const externalReference = `platform:${profile.id}:${Date.now()}`;
     const successUrl = `${APP_SITE_URL}?billing=success`;
@@ -225,7 +257,7 @@ serve(async (req) => {
 
     const subPayload = {
       coach_id: profile.id,
-      status: "checkout_pending",
+      status: pendingStatus,
       plan_code: PLAN_CODE,
       amount: PLAN_AMOUNT,
       trial_started_at: profile.trial_started_at || sub?.trial_started_at || null,
@@ -247,7 +279,7 @@ serve(async (req) => {
     const { error: profileUpdateErr } = await sbAdmin
       .from("profiles")
       .update({
-        subscription_status: "checkout_pending",
+        subscription_status: pendingStatus,
         subscription_plan: PLAN_CODE,
         subscription_price: PLAN_AMOUNT,
         asaas_checkout_id: checkout.id,
@@ -262,7 +294,7 @@ serve(async (req) => {
       checkout_id: checkout.id,
       checkout_url: checkoutUrl,
       amount: PLAN_AMOUNT,
-      status: "checkout_pending",
+      status: pendingStatus,
     });
   } catch (e: any) {
     console.error("[platform-create-checkout]", e);
