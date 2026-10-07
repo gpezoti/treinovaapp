@@ -6,7 +6,7 @@
 */
 // Alterar a versão a cada release que mexe no shell do app. Isso força a
 // atualização imediata do PWA instalado e elimina HTML antigo do cache.
-const VERSION = "v32-material-preview-20260828";
+const VERSION = "v33-billing-phase1-20261006";
 const SHELL = `treinova-shell-${VERSION}`;
 const RUNTIME = `treinova-runtime-${VERSION}`;
 const REST_TIMER_HANDLES = new Map();
@@ -141,7 +141,12 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const notificationData = event.notification.data || {};
   const rawUrl = notificationData.url || "?view=workout&restTimer=1";
-  const url = new URL(rawUrl, APP_SCOPE).href;
+  // Só abre páginas do próprio app (evita redirecionar o usuário para outro site).
+  let url = new URL(APP_SCOPE).href;
+  try {
+    const parsed = new URL(rawUrl, APP_SCOPE);
+    if (parsed.origin === self.location.origin) url = parsed.href;
+  } catch (e) {}
   const timerId = notificationData.timerId || "";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {

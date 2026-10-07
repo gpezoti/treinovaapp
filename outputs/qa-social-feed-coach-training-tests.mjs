@@ -30,7 +30,7 @@ assert.match(html, /personDisplayName\(p\.student, "Usuário"\)/);
 assert.match(html, /\^\(aluno\|usu\[aá\]rio\|student\)\$/);
 assert.match(html, /Encontrar pessoas/);
 assert.match(html, /sb\.functions\.invoke\("social-people"/);
-assert.match(html, /student:profiles!feed_posts_student_id_fkey\(id, full_name, avatar_emoji, avatar_url, role\)/);
+assert.match(html, /student:profiles!feed_posts_student_id_fkey\(id, full_name, avatar_emoji, avatar_url, role, coach_id\)/);
 assert.doesNotMatch(html, /student:profiles!feed_posts_student_id_fkey\(id, email/);
 assert.match(html, /function peopleRow\(p, context = "sheet"\)/);
 assert.doesNotMatch(html, /const sub = \[roleLabel, p\.email\]/);

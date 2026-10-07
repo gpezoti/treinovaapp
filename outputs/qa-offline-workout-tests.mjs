@@ -11,7 +11,7 @@ assert.match(html, /onclick="retryOfflineWorkoutSync\(\)"/);
 assert.match(html, /bundle\.profile\?\.id !== userId/);
 assert.match(html, /function canUseOfflineStudentProfileForFailure\(userId, error\)/);
 assert.match(html, /serviceWorker\.register\("sw\.js\?release=20260828-material-preview"\)/);
-assert.match(worker, /v32-material-preview-20260828/);
+assert.match(worker, /v33-billing-phase1-20261006/);
 assert.match(worker, /const APP_SCOPE = self\.registration\.scope/);
 assert.ok(worker.includes("storage\\/v1\\/(?:object|render\\/image)\\/public\\/"));
 assert.match(worker, /if \(isSupabaseHost && !isPublicSupabaseStorageAsset\)/);

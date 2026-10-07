@@ -164,13 +164,16 @@ async function findAuthUserByEmail(email: string) {
   return null;
 }
 
+class ConflictError extends Error {}
+
 async function createAuthUserOrReuseProfile(params: {
   email: string;
   password: string;
   fullName: string;
   role: "student" | "coach";
+  caller: { id: string; role: string };
 }) {
-  const { email, password, fullName, role } = params;
+  const { email, password, fullName, role, caller } = params;
   const { data: existingProfile } = await sbAdmin
     .from("profiles")
     .select("id,email,role,coach_id")
@@ -178,6 +181,16 @@ async function createAuthUserOrReuseProfile(params: {
     .maybeSingle();
 
   if (existingProfile?.id) {
+    // SEGURANÇA: reaproveitar conta existente redefine a senha dela. Só é permitido
+    // para o mesmo tipo de conta e, no caso do professor, apenas para aluno dele.
+    // Antes, qualquer professor podia "criar aluno" com o email do ADM e assumir a conta.
+    const sameRole = existingProfile.role === role;
+    const allowed = caller.role === "admin"
+      ? sameRole
+      : sameRole && role === "student" && existingProfile.coach_id === caller.id;
+    if (!allowed) {
+      throw new ConflictError("Já existe uma conta com este email. Use outro email ou peça para o aluno se vincular a você.");
+    }
     await sbAdmin.auth.admin.updateUserById(existingProfile.id, {
       email,
       password,
@@ -199,6 +212,10 @@ async function createAuthUserOrReuseProfile(params: {
 
   const message = createErr?.message || "Falha ao criar usuário.";
   if (/already|registered|exists|duplicate/i.test(message)) {
+    // Login sem perfil (resto de cadastro antigo): só o ADM pode reaproveitar.
+    if (caller.role !== "admin") {
+      throw new ConflictError("Já existe um login com este email. Fale com o suporte para liberar.");
+    }
     const orphanAuthUser = await findAuthUserByEmail(email);
     if (orphanAuthUser?.id) {
       const { error: updateErr } = await sbAdmin.auth.admin.updateUserById(orphanAuthUser.id, {
@@ -288,7 +305,7 @@ serve(async (req) => {
         }
       }
 
-      const created = await createAuthUserOrReuseProfile({ email, password, fullName, role: "student" });
+      const created = await createAuthUserOrReuseProfile({ email, password, fullName, role: "student", caller });
 
       const { error: profileErr } = await sbAdmin
         .from("profiles")
@@ -325,7 +342,7 @@ serve(async (req) => {
         return json({ error: "CPF/CNPJ inválido." }, 400);
       }
 
-      const created = await createAuthUserOrReuseProfile({ email, password, fullName, role: "coach" });
+      const created = await createAuthUserOrReuseProfile({ email, password, fullName, role: "coach", caller });
 
       const { error: profileErr } = await sbAdmin
         .from("profiles")
@@ -545,6 +562,7 @@ serve(async (req) => {
     return json({ error: `Ação desconhecida: ${action}` }, 400);
 
   } catch (e: any) {
+    if (e instanceof ConflictError) return json({ error: e.message }, 409);
     console.error("[admin-user] Erro inesperado:", e);
     return json({ error: e.message || String(e) }, 500);
   }
